@@ -30,6 +30,7 @@
 #include "output.h"
 #include "declip.h"
 #include "eq.h"
+#include "compand.h"
 
 extern int input_size;
 sig_atomic_t playback_active=0;
@@ -54,6 +55,7 @@ void pipeline_reset(){
   input_reset();  /* clear any persistent lapping state */
   declip_reset();  /* clear any persistent lapping state */
   eq_reset();      /* clear any persistent lapping state */
+  compand_reset();      /* clear any persistent lapping state */
   output_reset(); /* clear any persistent lapping state */
 }
 
@@ -228,6 +230,8 @@ void *playback_thread(void *dummy){
     link=declip_read(link);
     result|=link->samples;
     link=eq_read(link);
+    result|=link->samples;
+    link=compand_read(link);
     result|=link->samples;
     
     if(!result)break;

@@ -44,6 +44,7 @@ int main(int argc, char **argv){
   /* set up filter chains */
   if(declip_load())exit(1);
   if(eq_load())exit(1);
+  if(compand_load())exit(1);
 
   /* look at stdout... do we have a file or device? */
   if(!isatty(STDOUT_FILENO)){

@@ -255,18 +255,26 @@ static void feedback_work(double *peak,double *rms,
   }
 }
 
-static void lap_work(double *work,double *lap,double *out,freq_state *f){
+static void lap_work(double *work,double *lap,double *out,freq_state *f,int bypass){
   double *workoff=work+f->blocksize/2;
   int i,j;
   
   /* lap and out */
-  if(out)
-    for(i=0;i<f->blocksize/2;i++)
-      out[i]=lap[i]+workoff[i]*f->window[i];
-  
-  for(i=f->blocksize/2,j=0;i<f->blocksize;i++)
-    lap[j++]=workoff[i]*f->window[i];
-
+  if(bypass){
+    if(out)
+      for(i=0;i<f->blocksize/2;i++)
+	out[i]=lap[i]+workoff[i]*f->window[i]*f->window[i];
+    
+    for(i=f->blocksize/2,j=0;i<f->blocksize;i++)
+      lap[j++]=workoff[i]*f->window[i]*f->window[i];
+  }else{
+    if(out)
+      for(i=0;i<f->blocksize/2;i++)
+	out[i]=lap[i]+workoff[i]*f->window[i];
+    
+    for(i=f->blocksize/2,j=0;i<f->blocksize;i++)
+      lap[j++]=workoff[i]*f->window[i];
+  }
 }
 
 
@@ -311,7 +319,7 @@ time_linkage *freq_read(time_linkage *in, freq_state *f,
 	  feedback_work(peak,rms,feedback_peak[i],feedback_rms[i]);
 	  drft_backward(&f->fft,work);
 	}
-	lap_work(work,f->lap[i],0,f);
+	lap_work(work,f->lap[i],0,f,bypass);
 	blocks++;	
 
 	memset(f->cache[i],0,sizeof(**f->cache)*input_size);
@@ -343,7 +351,7 @@ time_linkage *freq_read(time_linkage *in, freq_state *f,
 	    feedback_work(peak,rms,feedback_peak[i],feedback_rms[i]);
 	    drft_backward(&f->fft,work);
 	  }
-	  lap_work(work,f->lap[i],f->out.data[i]+j,f);
+	  lap_work(work,f->lap[i],f->out.data[i]+j,f,bypass);
 	  blocks++;	
 	}
 
@@ -358,7 +366,7 @@ time_linkage *freq_read(time_linkage *in, freq_state *f,
 	  feedback_work(peak,rms,feedback_peak[i],feedback_rms[i]);
 	  drft_backward(&f->fft,work);
 	}
-	lap_work(work,f->lap[i],f->out.data[i]+j,f);
+	lap_work(work,f->lap[i],f->out.data[i]+j,f,bypass);
 	blocks++;	
 	
 	f->cache[i]=in->data[i];

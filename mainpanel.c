@@ -84,6 +84,7 @@ static void action_zero(GtkWidget *widget,postfish_mainpanel *p){
   multibar_reset(MULTIBAR(p->outbar));
   clippanel_reset();
   eqpanel_reset();
+  compandpanel_reset();
 }
 
 static void action_end(GtkWidget *widget,postfish_mainpanel *p){
@@ -98,6 +99,7 @@ static void action_end(GtkWidget *widget,postfish_mainpanel *p){
   multibar_reset(MULTIBAR(p->outbar));
   clippanel_reset();
   eqpanel_reset();
+  compandpanel_reset();
 }
 
 static void action_bb(GtkWidget *widget,postfish_mainpanel *p){
@@ -890,6 +892,7 @@ static gboolean feedback_process(postfish_mainpanel *panel){
       pull_input_feedback(NULL,NULL,NULL);
       clippanel_feedback(0);
       eqpanel_feedback(0);
+      compandpanel_feedback(0);
       pull_output_feedback(NULL,NULL);
 
 
@@ -935,6 +938,7 @@ static gboolean feedback_process(postfish_mainpanel *panel){
 	
 	clippanel_feedback(1);
 	eqpanel_feedback(1);
+	compandpanel_feedback(1);
 	
       }
     }
