@@ -209,7 +209,7 @@ void compute_iir_fast_attack2(float *x, int n, iir_state *is,
       while(i<n){
 	double ya= (x[i]+x0*2.+x1)/a_g + y0*a_c0+y1*a_c1;
     
-	if(ya<y0){
+	if(x[i]<y0 && ya<y0){
 	  state=1; 
 	  break;
 	}
@@ -248,6 +248,70 @@ void compute_iir_fast_attack2(float *x, int n, iir_state *is,
   
 }
 
+/* this one is designed for fast decay, slow attack */
+void compute_iir_fast_decay2(float *x, int n, iir_state *is, 
+			     iir_filter *attack, iir_filter *decay){
+  double a_c0=attack->c[0],d_c0=decay->c[0];
+  double a_c1=attack->c[1],d_c1=decay->c[1];
+  double a_g=attack->g, d_g=decay->g;
+  
+  double x0=is->x[0],x1=is->x[1];
+  double y0=is->y[0],y1=is->y[1];
+  int state=is->state;
+  int i=0;
+
+  if(zerome(y0) && zerome(y1)){
+    y0=y1=0.;
+  }
+
+  if(x[0]<y0)state=1; 
+      
+  while(i<n){
+    
+    if(state==1){
+      /* decay case */
+      while(i<n){
+	double yd= (x[i]+x0*2.+x1)/d_g + y0*d_c0+y1*d_c1;
+    
+	if(x[i]>y0 && yd>y0){
+	  state=0; 
+	  break;
+	}
+	x1=x0;x0=x[i];
+	y1=y0;x[i]=y0=yd;
+	i++;
+      }
+    }
+
+    if(state==0){
+      /* attack case */
+      if(y1>y0){
+	/* attack fixup needed because we're in discontinuous time */
+	  y1=y0;
+      }
+
+      while(1){
+	double ya = (x[i]+x0*2.+x1)/a_g + y0*a_c0+y1*a_c1;
+
+	x1=x0;x0=x[i];
+	y1=y0;x[i]=y0=ya;
+	i++;
+
+	if(i>=n)break;
+	if(x[i]<y0){
+	  state=1;
+	  break;
+	}
+      }
+    }
+  }
+  
+  is->x[0]=x0;is->x[1]=x1;
+  is->y[0]=y0;is->y[1]=y1;
+  is->state=state;
+  
+}
+
 /* allow decay to proceed in freefall */
 void compute_iir_freefall1(float *x, int n, iir_state *is, 
 			   iir_filter *decay){
@@ -264,12 +328,17 @@ void compute_iir_freefall1(float *x, int n, iir_state *is,
   while(i<n){
     double yd;
 
-     yd = y0*d_c0;
-
-    if(x[i]>yd)yd=x[i];
-
+    yd = y0*d_c0;
     x0=x[i];
-    x[i]=y0=yd;
+    
+    /* if we're not in freefall, be sure x[i]_out == x[i]_in  */
+    if(x[i]>yd){
+      yd=x[i];
+    }else{
+      x[i]=yd;
+    }
+
+    y0=yd;
     i++;
   }
   

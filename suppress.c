@@ -88,9 +88,9 @@ static void filter_set(subband_state *ss,
   
   /* make sure the chosen frequency doesn't require a lookahead
      greater than what's available */
-  if(impulse_freq4(input_size*2-ss->qblocksize*3)*1.01>corner_freq && 
+  if(impulse_freq2(input_size*2-ss->qblocksize*3)*1.01>corner_freq && 
      attackp)
-    corner_freq=impulse_freq4(input_size*2-ss->qblocksize*3);
+    corner_freq=impulse_freq2(input_size*2-ss->qblocksize*3);
   
   alpha=corner_freq/input_rate;
   filter->g=mkbessel(alpha,order,filter->c);
@@ -129,11 +129,11 @@ static void suppress_work_helper(void *vs, suppress_settings *sset){
   iir_filter *release=&sss->release;
   int ahead;
 
-  if(smoothms!=smooth->ms)filter_set(ss,smoothms,smooth,1,4);
-  if(triggerms!=trigger->ms)filter_set(ss,triggerms,trigger,0,1);
-  if(releasems!=release->ms)filter_set(ss,releasems,release,0,1);
+  if(smoothms!=smooth->ms)filter_set(ss,smoothms,smooth,1,2);
+  if(triggerms!=trigger->ms)filter_set(ss,triggerms,trigger,0,2);
+  if(releasems!=release->ms)filter_set(ss,releasems,release,0,2);
 
-  ahead=impulse_ahead4(smooth->alpha);
+  ahead=impulse_ahead2(smooth->alpha);
   
   for(i=0;i<suppress_freqs;i++){
     int firstlink=0;
@@ -171,16 +171,13 @@ static void suppress_work_helper(void *vs, suppress_settings *sset){
 	
 	if(sset->linkp==0 || firstlink==1){
 	  
-	  compute_iir_symmetric4(fast, input_size, &sss->iirS[i][j],
-				 smooth);
-	  
-	  //_analysis("smooth",i,fast,input_size,1,offset);
-	  
-	  compute_iir_freefall1(fast, input_size, &sss->iirT[i][j],
-				trigger);
 	  memcpy(slow,fast,sizeof(slow));
-	  compute_iir_freefall1(slow, input_size, &sss->iirR[i][j],
-				release);
+
+	  
+	  compute_iir_fast_attack2(fast, input_size, &sss->iirT[i][j],
+				smooth,trigger);
+	  compute_iir_fast_attack2(slow, input_size, &sss->iirR[i][j],
+				smooth,release);
 	  
 	  //_analysis("fast",i,fast,input_size,1,offset);
 	  //_analysis("slow",i,slow,input_size,1,offset);

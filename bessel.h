@@ -73,6 +73,8 @@ typedef struct {
 extern double mkbessel(double raw_alpha,int order,double *ycoeff);
 extern void compute_iir_fast_attack2(float *x, int n, iir_state *is, 
 				     iir_filter *attack, iir_filter *decay);
+extern void compute_iir_fast_decay2(float *x, int n, iir_state *is, 
+				     iir_filter *attack, iir_filter *decay);
 extern void compute_iir_symmetric2(float *x, int n, iir_state *is, 
 				  iir_filter *filter);
 extern void compute_iir_symmetric3(float *x, int n, iir_state *is, 
