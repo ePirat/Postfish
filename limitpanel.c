@@ -115,7 +115,7 @@ void limitpanel_create(postfish_mainpanel *mp,
   
   GtkWidget *slidertable=gtk_table_new(4,4,0);
 
-  GtkWidget *label1=gtk_label_new("hard limit");
+  GtkWidget *label1=gtk_label_new("knee bend");
   GtkWidget *label2=gtk_label_new("knee depth");
   GtkWidget *label3=gtk_label_new("decay speed");
   GtkWidget *label4=gtk_label_new("attenuation");
@@ -188,6 +188,4 @@ void limitpanel_reset(void){
   multibar_reset(MULTIBAR(t_slider));
   multibar_reset(MULTIBAR(a_slider));
 }
-
-
 
