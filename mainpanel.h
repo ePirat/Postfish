@@ -30,7 +30,7 @@ typedef struct postfish_mainpanel postfish_mainpanel;
 #include "eqpanel.h"
 #include "compandpanel.h"
 #include "singlepanel.h"
-#include "suppresspanel.h"
+#include "deverbpanel.h"
 #include "limitpanel.h"
 #include "mixpanel.h"
 #include "reverbpanel.h"

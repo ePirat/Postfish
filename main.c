@@ -37,7 +37,7 @@
 #include "output.h"
 #include "declip.h"
 #include "eq.h"
-#include "suppress.h"
+#include "deverb.h"
 #include "multicompand.h"
 #include "singlecomp.h"
 #include "limit.h"
@@ -336,7 +336,7 @@ int main(int argc, char **argv){
   /* set up filter chains */
   if(declip_load())exit(1);
   if(eq_load(OUTPUT_CHANNELS))exit(1);
-  if(suppress_load())exit(1);
+  if(deverb_load())exit(1);
   if(multicompand_load(OUTPUT_CHANNELS))exit(1);
   if(singlecomp_load(OUTPUT_CHANNELS))exit(1);
   if(limit_load(OUTPUT_CHANNELS))exit(1);

@@ -64,7 +64,7 @@ static void mainpanel_state_to_config(int bank){
   clippanel_state_to_config(bank);
   compandpanel_state_to_config(bank);
   singlepanel_state_to_config(bank);
-  suppresspanel_state_to_config(bank);
+  deverbpanel_state_to_config(bank);
   eqpanel_state_to_config(bank);
   reverbpanel_state_to_config(bank);
   limitpanel_state_to_config(bank);
@@ -99,7 +99,7 @@ static void mainpanel_state_from_config(int bank){
   clippanel_state_from_config(bank);
   compandpanel_state_from_config(bank);
   singlepanel_state_from_config(bank);
-  suppresspanel_state_from_config(bank);
+  deverbpanel_state_from_config(bank);
   eqpanel_state_from_config(bank);
   reverbpanel_state_from_config(bank);
   limitpanel_state_from_config(bank);
@@ -1060,7 +1060,7 @@ void mainpanel_create(postfish_mainpanel *panel,char **chlabels){
   }
 
   mainpanel_chentry(panel,channeltable,"_Declip ",0,clippanel_create,0);
-  mainpanel_chentry(panel,channeltable,"De_verb ",1,suppresspanel_create_channel,0);
+  mainpanel_chentry(panel,channeltable,"De_verb ",1,deverbpanel_create_channel,0);
   mainpanel_chentry(panel,channeltable,"_Multicomp ",2,0,compandpanel_create_channel);
   mainpanel_chentry(panel,channeltable,"_Singlecomp ",3,0,singlepanel_create_channel);
   mainpanel_chentry(panel,channeltable,"_EQ ",4,0,eqpanel_create_channel);

@@ -26,19 +26,19 @@
 #include <fftw3.h>
 #include "subband.h"
 #include "bessel.h"
-#include "suppress.h"
+#include "deverb.h"
 
-/* (since this one is kinda unique) The Reverberation Suppressor....
+/* (since this one is kinda unique) The Deverberation Filter....
    
    Reverberation in a measurably live environment displays
    log amplitude decay with time (linear decay when plotted on a dB
    scale).
    
-   In its simplest form, the suppressor follows actual RMS amplitude
+   In its simplest form, the deverber follows actual RMS amplitude
    attacks but chooses a slower-than-actual decay, then expands
    according to the dB distance between the slow and actual decay.
    
-   Thus, the suppressor can be used to 'dry out' a very 'wet'
+   Thus, the deverber can be used to 'dry out' a very 'wet'
    reverberative track. */
     
 extern int input_size;
@@ -51,23 +51,23 @@ typedef struct {
   iir_filter smooth;
   iir_filter release;
   
-  iir_state *iirS[suppress_freqs];
-  iir_state *iirR[suppress_freqs];
+  iir_state *iirS[deverb_freqs];
+  iir_state *iirR[deverb_freqs];
 
-  float prevratio[suppress_freqs];
+  float prevratio[deverb_freqs];
 
-} suppress_state;
+} deverb_state;
 
-suppress_settings suppress_channel_set;
-static suppress_state channel_state;
+deverb_settings deverb_channel_set;
+static deverb_state channel_state;
 static subband_window sw;
 
-void suppress_reset(){
+void deverb_reset(){
   int i,j;
   
   subband_reset(&channel_state.ss);
   
-  for(i=0;i<suppress_freqs;i++){
+  for(i=0;i<deverb_freqs;i++){
     for(j=0;j<input_ch;j++){
       memset(&channel_state.iirS[i][j],0,sizeof(iir_state));
       memset(&channel_state.iirR[i][j],0,sizeof(iir_state));
@@ -96,17 +96,17 @@ static void filter_set(subband_state *ss,
   filter->ms=msec;
 }
 
-int suppress_load(void){
+int deverb_load(void){
   int i;
   int qblocksize=input_size/16;
   memset(&channel_state,0,sizeof(channel_state));
 
-  suppress_channel_set.active=calloc(input_ch,sizeof(*suppress_channel_set.active));
+  deverb_channel_set.active=calloc(input_ch,sizeof(*deverb_channel_set.active));
 
-  subband_load(&channel_state.ss,suppress_freqs,qblocksize,input_ch);
-  subband_load_freqs(&channel_state.ss,&sw,suppress_freq_list,suppress_freqs);
+  subband_load(&channel_state.ss,deverb_freqs,qblocksize,input_ch);
+  subband_load_freqs(&channel_state.ss,&sw,deverb_freq_list,deverb_freqs);
    
-  for(i=0;i<suppress_freqs;i++){
+  for(i=0;i<deverb_freqs;i++){
     channel_state.iirS[i]=calloc(input_ch,sizeof(iir_state));
     channel_state.iirR[i]=calloc(input_ch,sizeof(iir_state));
   }
@@ -134,8 +134,8 @@ static void _analysis(char *base,int seq, float *data, int n,int dB,
 }
 
 
-static void suppress_work_helper(void *vs, suppress_settings *sset){
-  suppress_state *sss=(suppress_state *)vs;
+static void deverb_work_helper(void *vs, deverb_settings *sset){
+  deverb_state *sss=(deverb_state *)vs;
   subband_state *ss=&sss->ss;
   int i,j,k,l;
   float smoothms=sset->smooth*.1;
@@ -150,7 +150,7 @@ static void suppress_work_helper(void *vs, suppress_settings *sset){
 
   ahead=impulse_ahead2(smooth->alpha);
   
-  for(i=0;i<suppress_freqs;i++){
+  for(i=0;i<deverb_freqs;i++){
     int firstlink=0;
     float fast[input_size];
     float slow[input_size];
@@ -192,7 +192,7 @@ static void suppress_work_helper(void *vs, suppress_settings *sset){
 	  compute_iir_symmetric_freefall2(fast, input_size, &sss->iirS[i][j],
 				smooth);
 	  memcpy(slow,fast,sizeof(slow));
-	  compute_iir_freefall1(slow, input_size, &sss->iirR[i][j],
+	  compute_iir_only_freefall1(slow, input_size, &sss->iirR[i][j],
 				release);
 	  
 	  //_analysis("fast",i,fast,input_size,1,offset);
@@ -248,11 +248,11 @@ static void suppress_work_helper(void *vs, suppress_settings *sset){
   offset+=input_size;
 }
 
-static void suppress_work_channel(void *vs){
-  suppress_work_helper(vs,&suppress_channel_set);
+static void deverb_work_channel(void *vs){
+  deverb_work_helper(vs,&deverb_channel_set);
 }
 
-time_linkage *suppress_read_channel(time_linkage *in){
+time_linkage *deverb_read_channel(time_linkage *in){
   int visible[input_ch];
   int active [input_ch];
   subband_window *w[input_ch];
@@ -260,10 +260,10 @@ time_linkage *suppress_read_channel(time_linkage *in){
   
   for(i=0;i<input_ch;i++){
     visible[i]=0;
-    active[i]=suppress_channel_set.active[i];
+    active[i]=deverb_channel_set.active[i];
     w[i]=&sw;
   }
   
   return subband_read(in, &channel_state.ss, w, visible, active, 
-		      suppress_work_channel, &channel_state);
+		      deverb_work_channel, &channel_state);
 }

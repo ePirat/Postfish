@@ -50,6 +50,20 @@
 #include <signal.h>
 #include <fcntl.h>
 
+#if 0
+extern void ef_free(void * address);
+extern void *ef_realloc(void * oldBuffer, size_t newSize);
+extern void *ef_malloc(size_t size);
+extern void *ef_calloc(size_t nelem, size_t elsize);
+extern void *ef_valloc (size_t size);
+
+#define free ef_free
+#define realloc ef_realloc
+#define malloc ef_malloc
+#define calloc ef_calloc
+#define valloc ef_valloc
+#endif 
+
 #define OUTPUT_CHANNELS 8     // UI code assumes this is <=8
 #define MAX_INPUT_CHANNELS 32 // engine code requires <= 32 
 

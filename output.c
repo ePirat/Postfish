@@ -32,7 +32,7 @@
 #include "eq.h"
 #include "multicompand.h"
 #include "singlecomp.h"
-#include "suppress.h"
+#include "deverb.h"
 #include "limit.h"
 #include "mute.h"
 #include "mix.h"
@@ -67,7 +67,7 @@ void pipeline_reset(){
   eq_reset();      /* clear any persistent lapping state */
   multicompand_reset(); /* clear any persistent lapping state */
   singlecomp_reset(); /* clear any persistent lapping state */
-  suppress_reset(); /* clear any persistent lapping state */
+  deverb_reset(); /* clear any persistent lapping state */
   limit_reset(); /* clear any persistent lapping state */
   output_reset(); /* clear any persistent lapping state */
   mix_reset();
@@ -833,7 +833,7 @@ void *playback_thread(void *dummy){
     result|=link->samples;
     link=declip_read(link);
     result|=link->samples;
-    link=suppress_read_channel(link);
+    link=deverb_read_channel(link);
     result|=link->samples;
     link=multicompand_read_channel(link);
     result|=link->samples;

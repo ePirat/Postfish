@@ -21,31 +21,4 @@
  * 
  */
 
-#include "postfish.h"
-
-#define suppress_freqs 8
-static const float suppress_freq_list[suppress_freqs+1]={
-  125,250,500,1000,2000,4000,8000,16000,9e10
-};
-
-static char * const suppress_freq_labels[suppress_freqs]={
-  "125","250","500","1k","2k","4k","8k","16k"
-};
-
-typedef struct {
-  sig_atomic_t ratio[suppress_freqs];
-  sig_atomic_t smooth;
-  sig_atomic_t trigger;
-  sig_atomic_t release;
-  sig_atomic_t linkp;
-
-  sig_atomic_t *active;
-  sig_atomic_t panel_visible;
-} suppress_settings;
-
-extern void suppress_reset();
-extern int suppress_load(void);
-extern time_linkage *suppress_read_channel(time_linkage *in);
-
-extern suppress_settings suppress_channel_set;
-
+extern float *window_get(int type,int n);

@@ -29,14 +29,14 @@
 #include "mainpanel.h"
 #include "subpanel.h"
 #include "feedback.h"
-#include "suppress.h"
-#include "suppresspanel.h"
+#include "deverb.h"
+#include "deverbpanel.h"
 #include "config.h"
 
 typedef struct {
   GtkWidget *cslider;
   Readout *readoutc;
-  struct suppress_panel_state *sp;
+  struct deverb_panel_state *sp;
   sig_atomic_t *v;
   int number;
 } tbar;
@@ -49,45 +49,45 @@ typedef struct{
   sig_atomic_t *v1;
 } callback_arg_rv2;
 
-typedef struct suppress_panel_state{
+typedef struct deverb_panel_state{
   subpanel_generic *panel;
 
   GtkWidget        *link;
   callback_arg_rv2  timing;
-  tbar              bars[suppress_freqs];
-} suppress_panel_state;
+  tbar              bars[deverb_freqs];
+} deverb_panel_state;
 
-static suppress_panel_state *channel_panel;
+static deverb_panel_state *channel_panel;
 
-void suppresspanel_state_to_config(int bank){
-  config_set_vector("suppresspanel_active",bank,0,0,0,input_ch,suppress_channel_set.active);
-  config_set_vector("suppresspanel_ratio",bank,0,0,0,suppress_freqs,suppress_channel_set.ratio);
-  config_set_integer("suppresspanel_set",bank,0,0,0,0,suppress_channel_set.linkp);
-  config_set_integer("suppresspanel_set",bank,0,0,0,1,suppress_channel_set.smooth);
-  config_set_integer("suppresspanel_set",bank,0,0,0,3,suppress_channel_set.release);
+void deverbpanel_state_to_config(int bank){
+  config_set_vector("deverbpanel_active",bank,0,0,0,input_ch,deverb_channel_set.active);
+  config_set_vector("deverbpanel_ratio",bank,0,0,0,deverb_freqs,deverb_channel_set.ratio);
+  config_set_integer("deverbpanel_set",bank,0,0,0,0,deverb_channel_set.linkp);
+  config_set_integer("deverbpanel_set",bank,0,0,0,1,deverb_channel_set.smooth);
+  config_set_integer("deverbpanel_set",bank,0,0,0,3,deverb_channel_set.release);
 }
 
-void suppresspanel_state_from_config(int bank){
+void deverbpanel_state_from_config(int bank){
   int i;
 
-  config_get_vector("suppresspanel_active",bank,0,0,0,input_ch,suppress_channel_set.active);
+  config_get_vector("deverbpanel_active",bank,0,0,0,input_ch,deverb_channel_set.active);
   for(i=0;i<input_ch;i++)
     gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(channel_panel->panel->subpanel_activebutton[i]),
-				 suppress_channel_set.active[i]);
+				 deverb_channel_set.active[i]);
 
-  config_get_vector("suppresspanel_ratio",bank,0,0,0,suppress_freqs,suppress_channel_set.ratio);
-  for(i=0;i<suppress_freqs;i++)
+  config_get_vector("deverbpanel_ratio",bank,0,0,0,deverb_freqs,deverb_channel_set.ratio);
+  for(i=0;i<deverb_freqs;i++)
     multibar_thumb_set(MULTIBAR(channel_panel->bars[i].cslider),
-		       1000./suppress_channel_set.ratio[i],0);
+		       1000./deverb_channel_set.ratio[i],0);
 
-  config_get_sigat("suppresspanel_set",bank,0,0,0,0,&suppress_channel_set.linkp);
-  gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(channel_panel->link),suppress_channel_set.linkp);
+  config_get_sigat("deverbpanel_set",bank,0,0,0,0,&deverb_channel_set.linkp);
+  gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(channel_panel->link),deverb_channel_set.linkp);
   
-  config_get_sigat("suppresspanel_set",bank,0,0,0,1,&suppress_channel_set.smooth);
-  multibar_thumb_set(MULTIBAR(channel_panel->timing.s),suppress_channel_set.smooth*.1,0);
+  config_get_sigat("deverbpanel_set",bank,0,0,0,1,&deverb_channel_set.smooth);
+  multibar_thumb_set(MULTIBAR(channel_panel->timing.s),deverb_channel_set.smooth*.1,0);
 
-  config_get_sigat("suppresspanel_set",bank,0,0,0,3,&suppress_channel_set.release);
-  multibar_thumb_set(MULTIBAR(channel_panel->timing.s),suppress_channel_set.release*.1,1);
+  config_get_sigat("deverbpanel_set",bank,0,0,0,3,&deverb_channel_set.release);
+  multibar_thumb_set(MULTIBAR(channel_panel->timing.s),deverb_channel_set.release*.1,1);
 }
 
 static void compand_change(GtkWidget *w,gpointer in){
@@ -137,14 +137,14 @@ static void timing_change(GtkWidget *w,gpointer in){
   *ca->v1=rint(release*10.);
 }
 
-static void suppress_link(GtkToggleButton *b,gpointer in){
+static void deverb_link(GtkToggleButton *b,gpointer in){
   int mode=gtk_toggle_button_get_active(b);
   *((sig_atomic_t *)in)=mode;
 }
 
-static suppress_panel_state *suppresspanel_create_helper(postfish_mainpanel *mp,
+static deverb_panel_state *deverbpanel_create_helper(postfish_mainpanel *mp,
 							 subpanel_generic *panel,
-							 suppress_settings *sset){
+							 deverb_settings *sset){
   int i;
   float compand_levels[5]={1,1.5,2,3,5};
   char  *compand_labels[5]={"","1.5","2","3","5"};
@@ -152,17 +152,17 @@ static suppress_panel_state *suppresspanel_create_helper(postfish_mainpanel *mp,
   float timing_levels[5]={1, 10, 100, 1000, 10000};
   char  *timing_labels[5]={"","10ms","     100ms","1s","10s"};
 
-  GtkWidget *table=gtk_table_new(suppress_freqs+4,4,0);
-  GtkWidget *timinglabel=gtk_label_new("suppressor filter timing");
+  GtkWidget *table=gtk_table_new(deverb_freqs+4,4,0);
+  GtkWidget *timinglabel=gtk_label_new("deverberator filter timing");
   GtkWidget *releaselabel=gtk_label_new("release");
   GtkWidget *smoothlabel=gtk_label_new("smooth");
-  GtkWidget *compandlabel=gtk_label_new("suppression depth");
+  GtkWidget *compandlabel=gtk_label_new("deverb depth");
 
   GtkWidget *linkbutton=
     gtk_check_button_new_with_mnemonic("_link channels into single image");
   GtkWidget *linkbox=gtk_hbox_new(0,0);
 
-  suppress_panel_state *ps=calloc(1,sizeof(suppress_panel_state));
+  deverb_panel_state *ps=calloc(1,sizeof(deverb_panel_state));
   ps->panel=panel;
 
   gtk_container_add(GTK_CONTAINER(panel->subpanel_box),table);
@@ -186,8 +186,8 @@ static suppress_panel_state *suppresspanel_create_helper(postfish_mainpanel *mp,
 		   GTK_EXPAND|GTK_FILL,
 		   0,5);
   if(input_ch>1)
-    gtk_table_attach(GTK_TABLE(table),linkbox,0,4,suppress_freqs+3,
-		     suppress_freqs+4,GTK_FILL|GTK_EXPAND,0,0,10);
+    gtk_table_attach(GTK_TABLE(table),linkbox,0,4,deverb_freqs+3,
+		     deverb_freqs+4,GTK_FILL|GTK_EXPAND,0,0,10);
 
   gtk_table_set_row_spacing(GTK_TABLE(table),1,5);
   
@@ -201,7 +201,7 @@ static suppress_panel_state *suppresspanel_create_helper(postfish_mainpanel *mp,
   gtk_widget_set_name(compandlabel,"framelabel");
 
   g_signal_connect (G_OBJECT (linkbutton), "clicked",
-		    G_CALLBACK (suppress_link), &sset->linkp);
+		    G_CALLBACK (deverb_link), &sset->linkp);
   gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(linkbutton),1);
   ps->link=linkbutton;
 
@@ -232,8 +232,8 @@ static suppress_panel_state *suppresspanel_create_helper(postfish_mainpanel *mp,
 
   /* threshold controls */
 
-  for(i=0;i<suppress_freqs;i++){
-    GtkWidget *label=gtk_label_new(suppress_freq_labels[i]);
+  for(i=0;i<deverb_freqs;i++){
+    GtkWidget *label=gtk_label_new(deverb_freq_labels[i]);
     gtk_widget_set_name(label,"scalemarker");
     
     ps->bars[i].readoutc=READOUT(readout_new("1.55:1"));
@@ -260,15 +260,15 @@ static suppress_panel_state *suppresspanel_create_helper(postfish_mainpanel *mp,
   return ps;
 }
 
-void suppresspanel_create_channel(postfish_mainpanel *mp,
+void deverbpanel_create_channel(postfish_mainpanel *mp,
 				  GtkWidget **windowbutton,
 				  GtkWidget **activebutton){
 	     
   subpanel_generic *panel=subpanel_create(mp,windowbutton[0],activebutton,
-					  suppress_channel_set.active,
-					  &suppress_channel_set.panel_visible,
+					  deverb_channel_set.active,
+					  &deverb_channel_set.panel_visible,
 					  "De_verberation filter",0,
 					  0,input_ch);
   
-  channel_panel=suppresspanel_create_helper(mp,panel,&suppress_channel_set);
+  channel_panel=deverbpanel_create_helper(mp,panel,&deverb_channel_set);
 }
