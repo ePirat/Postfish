@@ -146,8 +146,8 @@ void limitpanel_create(postfish_mainpanel *mp,
 
   active=activebutton;
 
-  t_slider=multibar_new(9,labels,levels,1,HI_DECAY);
-  a_slider=multibar_new(4,rlabels,rlevels,0,0);
+  t_slider=multibar_new(9,labels,levels,1,HI_DECAY|PEAK_FOLLOW);
+  a_slider=multibar_new(4,rlabels,rlevels,0,PEAK_FOLLOW);
 
   k_slider=slider2;
   d_slider=slider3;

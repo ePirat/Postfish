@@ -965,7 +965,7 @@ static multi_panel_state *compandpanel_create(postfish_mainpanel *mp,
     
     ps->bars[i].readoutu=readout_new("  +0");
     ps->bars[i].readouto=readout_new("  +0");
-    ps->bars[i].slider=multibar_new(15,labels,levels,2,HI_DECAY|LO_DECAY|LO_ATTACK);
+    ps->bars[i].slider=multibar_new(15,labels,levels,2,HI_DECAY|LO_DECAY|LO_ATTACK|PEAK_FOLLOW);
     ps->bars[i].number=i;
     ps->bars[i].mp=ps;
     ps->bars[i].label=label;

@@ -662,7 +662,7 @@ static singlecomp_panel_state *singlepanel_create_helper (postfish_mainpanel *mp
   {
     ps->bar.readoutu=readout_new("  +0");
     ps->bar.readouto=readout_new("  +0");
-    ps->bar.slider=multibar_new(15,labels,levels,2,HI_DECAY|LO_DECAY|LO_ATTACK);
+    ps->bar.slider=multibar_new(15,labels,levels,2,HI_DECAY|LO_DECAY|LO_ATTACK|PEAK_FOLLOW);
     ps->bar.vu=&ps->ms->u_thresh;
     ps->bar.vo=&ps->ms->o_thresh;
 

@@ -292,11 +292,11 @@ void clippanel_create(postfish_mainpanel *mp,
     clipslider *cs=calloc(1,sizeof(*cs));
     GtkWidget *label;
     GtkWidget *slider=multibar_new(9,slabels,slevels,1,
-				   HI_DECAY|ZERO_DAMP);
+				   HI_DECAY|ZERO_DAMP|PEAK_FOLLOW);
     GtkWidget *readout=readout_new("0.00");
     GtkWidget *readoutdB=readout_new("-40dB");
     GtkWidget *bar=multibar_new(3,labels,levels,0,
-				HI_DECAY|ZERO_DAMP);
+				HI_DECAY|ZERO_DAMP|PEAK_FOLLOW);
 
     cs->slider=slider;
     cs->readout=readout;
