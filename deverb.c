@@ -57,23 +57,35 @@ typedef struct {
 
   float prevratio[deverb_freqs];
 
+  int inactive_delay[deverb_freqs];
+
 } deverb_state;
 
 deverb_settings deverb_channel_set;
 static deverb_state channel_state;
 static subband_window sw;
 
+static void deverb_reset_band(int freq){
+  int j;
+  for(j=0;j<input_ch;j++)
+    memset(&channel_state.iirS[freq][j],0,sizeof(iir_state));
+  for(j=0;j<input_ch;j++)
+    memset(&channel_state.iirR[freq][j],0,sizeof(iir_state));
+  channel_state.inactive_delay[freq]=2;
+}
+
+static void deverb_reset_one(int freq,int ch){
+  memset(&channel_state.iirS[freq][ch],0,sizeof(iir_state));
+  memset(&channel_state.iirR[freq][ch],0,sizeof(iir_state));
+}
+
 void deverb_reset(){
   int i,j;
   
   subband_reset(&channel_state.ss);
   
-  for(i=0;i<deverb_freqs;i++){
-    for(j=0;j<input_ch;j++){
-      memset(&channel_state.iirS[i][j],0,sizeof(iir_state));
-      memset(&channel_state.iirR[i][j],0,sizeof(iir_state));
-    }
-  }
+  for(i=0;i<deverb_freqs;i++)
+      deverb_reset_band(i);
 }
 
 static void filter_set(subband_state *ss,
@@ -110,6 +122,7 @@ int deverb_load(void){
   for(i=0;i<deverb_freqs;i++){
     channel_state.iirS[i]=calloc(input_ch,sizeof(iir_state));
     channel_state.iirR[i]=calloc(input_ch,sizeof(iir_state));
+    channel_state.inactive_delay[i]=2;
   }
   return 0;
 }
@@ -137,95 +150,112 @@ static void deverb_work_helper(void *vs, deverb_settings *sset){
     int firstlink=0;
     float fast[input_size];
     float slow[input_size];
-    float multiplier = 1.-1000./sset->ratio[i];
-    
-    for(j=0;j<input_ch;j++){
-      int active=(ss->effect_active1[j] || 
-		  ss->effect_active0[j] || 
-		  ss->effect_activeC[j]);
+    int ratio=sset->ratio[i];
+    float multiplier = (sss->inactive_delay[i]>0 ? 0. : 1.-1000./ratio);
+
+    if(ratio==1000 && sss->prevratio[i]==0.){
+
+      /* although the effect is active, this band is set to unity.
+	 Save CPU: Do not run the filters.  This is not tied into the
+	 subbanding 'active' indicator as that's by channel, not by
+	 band. */
+
+      deverb_reset_band(i);
+
+    }else{
+      sss->inactive_delay[i]--;
+      if(sss->inactive_delay[i]<0)sss->inactive_delay[i]=0;
       
-      if(active){
-	if(sset->linkp){
-	  if(!firstlink){
-	    firstlink++;
-	    memset(fast,0,sizeof(fast));
-	    float scale=1./input_ch;
-	    for(l=0;l<input_ch;l++){
-	      float *x=sss->ss.lap[i][l]+ahead;
-	      for(k=0;k<input_size;k++)
-		fast[k]+=x[k]*x[k];
-	    }
-	    for(k=0;k<input_size;k++)
-	      fast[k]*=scale;
-	    
-	  }
-	  
+      for(j=0;j<input_ch;j++){
+	int active=(ss->effect_active1[j] || 
+		    ss->effect_active0[j] || 
+		    ss->effect_activeC[j]);
+	
+	if(!active){
+	  deverb_reset_one(i,j);
 	}else{
-	  float *x=sss->ss.lap[i][j]+ahead;
-	  for(k=0;k<input_size;k++)
-	    fast[k]=x[k]*x[k];
-	}
-	
-	
-	if(sset->linkp==0 || firstlink==1){
+
+	  /* run the filters */
 	  
-	  compute_iir_freefall_limited(fast, input_size, &sss->iirS[i][j],
-					smooth,smoothlimit);
-	  
-	  memcpy(slow,fast,sizeof(slow));
-	  compute_iir_freefallonly1(slow, input_size, &sss->iirR[i][j],
-				    release);
-	  
-	  //_analysis("fast3",i,fast,input_size,1,offset);
-
-	  if(multiplier==sss->prevratio[i]){
-
-	    for(k=0;k<input_size;k++)
-	      fast[k]=fromdB_a((todB_a(slow+k)-todB_a(fast+k))*.5*multiplier);
-
-	  }else{
-	    float multiplier_add=(multiplier-sss->prevratio[i])/input_size;
-	    multiplier=sss->prevratio[i];
-
-	    for(k=0;k<input_size;k++){
-	      fast[k]=fromdB_a((todB_a(slow+k)-todB_a(fast+k))*.5*multiplier);
-	      multiplier+=multiplier_add;
+	  if(sset->linkp){
+	    if(!firstlink){
+	      firstlink++;
+	      memset(fast,0,sizeof(fast));
+	      float scale=1./input_ch;
+	      for(l=0;l<input_ch;l++){
+		float *x=sss->ss.lap[i][l]+ahead;
+		for(k=0;k<input_size;k++)
+		  fast[k]+=x[k]*x[k];
+	      }
+	      for(k=0;k<input_size;k++)
+		fast[k]*=scale;
+	      
 	    }
-
+	    
+	  }else{
+	    float *x=sss->ss.lap[i][j]+ahead;
+	    for(k=0;k<input_size;k++)
+	      fast[k]=x[k]*x[k];
 	  }
-
-	  //_analysis("adj3",i,fast,input_size,1,offset);
-
-	  if(sset->linkp && firstlink==1){
-
-	    for(l=0;l<input_ch;l++){
-	      if(l!=j){
-		memcpy(&sss->iirS[i][l],&sss->iirS[i][j],sizeof(iir_state));
-		memcpy(&sss->iirR[i][l],&sss->iirR[i][j],sizeof(iir_state));
+	  
+	  
+	  if(sset->linkp==0 || firstlink==1){
+	    
+	    compute_iir_freefall_limited(fast, input_size, &sss->iirS[i][j],
+					 smooth,smoothlimit);
+	    
+	    memcpy(slow,fast,sizeof(slow));
+	    compute_iir_freefallonly1(slow, input_size, &sss->iirR[i][j],
+				      release);
+	    
+	    //_analysis("fast3",i,fast,input_size,1,offset);
+	    
+	    if(multiplier==sss->prevratio[i]){
+	      
+	      for(k=0;k<input_size;k++)
+		fast[k]=fromdB_a((todB_a(slow+k)-todB_a(fast+k))*.5*multiplier);
+	      
+	    }else{
+	      float multiplier_add=(multiplier-sss->prevratio[i])/input_size;
+	      multiplier=sss->prevratio[i];
+	      
+	      for(k=0;k<input_size;k++){
+		fast[k]=fromdB_a((todB_a(slow+k)-todB_a(fast+k))*.5*multiplier);
+		multiplier+=multiplier_add;
+	      }
+	      
+	    }
+	    
+	    //_analysis("adj3",i,fast,input_size,1,offset);
+	  
+	    if(sset->linkp && firstlink==1){
+	      
+	      for(l=0;l<input_ch;l++){
+		if(l!=j){
+		  memcpy(&sss->iirS[i][l],&sss->iirS[i][j],sizeof(iir_state));
+		  memcpy(&sss->iirR[i][l],&sss->iirR[i][j],sizeof(iir_state));
+		}
 	      }
 	    }
+	    
+	    firstlink++;
 	  }
-
-	  firstlink++;
+	  
+	  
+	  {
+	    float *x=sss->ss.lap[i][j];
+	    for(k=0;k<input_size;k++)
+	      if(fast[k]<1.)
+		x[k]*=fast[k];
+	  }
 	}
-	
-	
-	{
-	  float *x=sss->ss.lap[i][j];
-	  for(k=0;k<input_size;k++)
-	    if(fast[k]<1.)
-	      x[k]*=fast[k];
-	}
-      }else{
-	/* reset filters to sane inactive default */
-	memset(&sss->iirS[i][j],0,sizeof(iir_state));
-	memset(&sss->iirR[i][j],0,sizeof(iir_state));
       }
     }
-
+    
     sss->prevratio[i]=multiplier;
+
   }
-  //offset+=input_size;
+
 }
 
 static void deverb_work_channel(void *vs){
