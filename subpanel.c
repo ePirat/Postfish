@@ -104,17 +104,45 @@ static gboolean forward_events(GtkWidget *widget,
 			       GdkEvent *event,
 			       gpointer in){
 
+  subpanel_generic *p=in;
+  GdkEventKey *kevent=(GdkEventKey *)event;
+  
   /* if this is a shortcutless panel, check first for a numeral
      keypress; the intent of this mechanism is to handle focus
      rotation on the activation buttons on a panel handling > 10
      channels with multiple activation buttons. */
+    
+  int keych=kevent->keyval-GDK_0,active;
+  if(keych==0)
+    keych=9;
+  else 
+    keych--;
+  
+  if(keych>=0 && keych<=9){
+    if(input_ch>9){
+      int actualch=keych+p->rotation[keych]*10;
 
+      if(actualch<p->active_button_start)return TRUE;
+      if(actualch>=p->active_button_start+p->active_button_count)return TRUE;
 
+      gtk_widget_grab_focus(p->subpanel_activebutton[actualch-p->active_button_start]);
 
-  subpanel_generic *p=in;
-  GdkEvent copy=*(GdkEvent *)event;
-  copy.any.window=p->mainpanel->toplevel->window;
-  gtk_main_do_event((GdkEvent *)(&copy));
+      p->rotation[keych]++;
+      if(keych+p->rotation[keych]*10+p->active_button_start>=input_ch)p->rotation[keych]=0;
+
+    }else{
+      if(keych<p->active_button_start)return TRUE;
+      if(keych>=p->active_button_start+p->active_button_count)return TRUE;
+
+      active=gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(p->subpanel_activebutton[keych-p->active_button_start]));
+      gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->subpanel_activebutton[keych-p->active_button_start]),!active);
+
+    }
+  }else{
+    GdkEvent copy=*(GdkEvent *)event;
+    copy.any.window=p->mainpanel->toplevel->window;
+    gtk_main_do_event((GdkEvent *)(&copy));
+  }
   return TRUE;
 }
 
@@ -165,7 +193,7 @@ subpanel_generic *subpanel_create(postfish_mainpanel *mp,
   
   gtk_box_pack_start(GTK_BOX(toplabel),toplabelwb,0,0,5);
   for(i=num-1;i>=0;i--)
-    gtk_box_pack_end(GTK_BOX(toplabel),toplabelab[i],0,0,5);
+    gtk_box_pack_end(GTK_BOX(toplabel),toplabelab[i],0,0,1);
 
   gtk_widget_set_name(toplabelwb,"panelbutton");
   gtk_widget_set_name(toplabelbox,"panelbox");

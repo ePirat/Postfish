@@ -33,6 +33,7 @@ typedef struct{
 
   int active_button_count; /* silliness around the rotating non-alt-shortcut */
   int active_button_start; /* silliness around the rotating non-alt-shortcut */
+  int rotation[10];
 
   sig_atomic_t *mappedvar;
 
