@@ -25,12 +25,9 @@
 #include <fftw3.h>
 
 typedef struct {
-  time_linkage out;
-  feedback_generic_pool feedpool;
-
-  float **fftwf_buffer; // need one for each channel
-  fftwf_plan *fftwf_forward;   // need one for each channel
-  fftwf_plan *fftwf_backward;  // need one for each channel
+  float       *fftwf_buffer; 
+  fftwf_plan  fftwf_forward; 
+  fftwf_plan  fftwf_backward;
   
   int qblocksize;
   int bands;
@@ -39,24 +36,45 @@ typedef struct {
   float  *ho_area;
   
   float *window;
-  float **lap;
-  float **cache;
+} freq_class_setup;
+
+
+typedef struct {
+  time_linkage out;
+  feedback_generic_pool feedpool;
+  freq_class_setup *fc;
+
+  int *activeP;
+  int *active1;
+  int *active0;
+
+  u_int32_t mutemask0;
+  u_int32_t mutemask1;
+  u_int32_t mutemaskP;
+
+  float **lap1;
+  float **lap0;
+  float **lapC;
+
+  float **cache1;
+  float **cache0;
   int cache_samples;
   int fillstate;     /* 0: uninitialized
 			1: half-primed
 			2: nominal
 			3: eof processed */
+  float **peak;
+  float **rms;
 } freq_state;
 
-extern void freq_transform_work(float *work,freq_state *f);
-extern int pull_freq_feedback(freq_state *ff,float **peak,float **rms);
-extern int freq_load(freq_state *f,const float *frequencies, int bands);
-extern int freq_reset(freq_state *f);
-extern time_linkage *freq_read(time_linkage *in, freq_state *f,
-			       void (*func)(freq_state *f,
-					    float **data,
-					    float **peak, float **rms),
-			       int bypassp);
 
-extern void freq_metric_work(float *work,freq_state *f,
-			     float *sq_mags,float *peak,float *rms);
+
+extern int pull_freq_feedback(freq_state *ff,float **peak,float **rms);
+extern int freq_class_load(freq_class_setup *f,const float *frequencies, int bands);
+extern int freq_load(freq_state *f,freq_class_setup *fc);
+
+extern int freq_reset(freq_state *f);
+extern time_linkage *freq_read(time_linkage *in, 
+			       freq_state *f, 
+			       int *visible, int *active,
+			       void (*func)(float *,int i));

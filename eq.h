@@ -25,6 +25,15 @@
 
 #define eq_freqs 30
 
+typedef struct {
+  sig_atomic_t settings[eq_freqs];
+  sig_atomic_t panel_active;
+  sig_atomic_t panel_visible;
+  sig_atomic_t curve_dirty;
+  float *curve_cache; 
+
+} eq_settings;
+
 static const float eq_freq_list[eq_freqs+1]={
   25,31.5,40,50,63,80,
   100,125,160,200,250,315,
@@ -40,8 +49,10 @@ static char * const eq_freq_labels[eq_freqs]={
   "8k","10k","12.5k","16k","20k"
 };
 
-extern int pull_eq_feedback(float **peak,float **rms);
+extern int pull_eq_feedback_master(float **peak,float **rms);
+extern int pull_eq_feedback_ch(float **peak,float **rms);
 extern int eq_load(void);
 extern int eq_reset();
-extern void eq_set(int freq, float value);
-extern time_linkage *eq_read(time_linkage *in);
+extern void eq_set(eq_settings *eq,int freq, float value);
+extern time_linkage *eq_read_master(time_linkage *in);
+extern time_linkage *eq_read_channel(time_linkage *in);

@@ -250,11 +250,7 @@ void *playback_thread(void *dummy){
     link=singlecomp_read_master(link);
     result|=link->samples;
 
-    for(i=0;i<input_ch;i++)
-      if(mute_channel_muted(link->active,i))
-	memset(link->data[i],0,sizeof(**link->data)*input_size);
-
-    link=eq_read(link);
+    link=eq_read_master(link);
     result|=link->samples;
     
     if(!result)break;
@@ -271,6 +267,10 @@ void *playback_thread(void *dummy){
 
 
     /* the limiter is single-block zero additional latency */
+    for(i=0;i<input_ch;i++)
+      if(mute_channel_muted(link->active,i))
+	memset(link->data[i],0,sizeof(**link->data)*input_size);
+
     link=limit_read(link);
 
     /************/
@@ -392,6 +392,7 @@ void *playback_thread(void *dummy){
     } 
     fclose(playback_fd);
   }
+  pipeline_reset();
   playback_active=0;
   playback_exit=0;
   if(audiobuf)free(audiobuf);

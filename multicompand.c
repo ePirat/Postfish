@@ -526,12 +526,14 @@ static void push_feedback(multicompand_state *ms,int bypass,int maxmaxbands){
 
 static void multicompand_work_master(void *vs){
   multicompand_state *ms=(multicompand_state *)vs;
-  int i,bypass_visible=1;
+  int i,j,bypass_visible=1;
   int maxmaxbands=0;
 
   for(i=0;i<multicomp_freqs_max;i++){
-    memset(ms->peak[i],0,input_ch*sizeof(**ms->peak));
-    memset(ms->rms[i],0,input_ch*sizeof(**ms->rms));
+    for(j=0;j<input_ch;j++){
+      ms->peak[i][j]=-150.;
+      ms->rms[i][j]=-150;
+    }
   }
  
   for(i=0;i<input_ch;i++){
@@ -546,12 +548,14 @@ static void multicompand_work_master(void *vs){
 
 static void multicompand_work_channel(void *vs){
   multicompand_state *ms=(multicompand_state *)vs;
-  int i,bypass_visible=1;
+  int i,j,bypass_visible=1;
   int maxmaxbands=0;
 
   for(i=0;i<multicomp_freqs_max;i++){
-    memset(ms->peak[i],0,input_ch*sizeof(**ms->peak));
-    memset(ms->rms[i],0,input_ch*sizeof(**ms->rms));
+    for(j=0;j<input_ch;j++){
+      ms->peak[i][j]=-150.;
+      ms->rms[i][j]=-150;
+    }
   }
  
   for(i=0;i<input_ch;i++){

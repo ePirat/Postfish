@@ -33,7 +33,7 @@ profile:
 	$(MAKE) target CFLAGS="-pg -g -O3 -ffast-math $(GCF) $(ADD_DEF)" LIBS="-lgprof-helper"
 
 clean:
-	rm -f $(OBJ) *.d gmon.out
+	rm -f $(OBJ) *.d *.d.* gmon.out
 
 %.d: %.c
 	$(CC) -M $(GCF) $< > $@.$$$$; sed 's,\($*\)\.o[ :]*,\1.o $@ : ,g' < $@.$$$$ > $@; rm -f $@.$$$$

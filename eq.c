@@ -29,71 +29,117 @@
 
 extern int input_size;
 
-sig_atomic_t eq_active;
-sig_atomic_t eq_visible;
+typedef struct{
 
-sig_atomic_t curve_dirty=1;
+  freq_state eq;
 
-freq_state eq;
+} eq_state;
+
+eq_settings eq_master_set;
+eq_settings *eq_channel_set;
+
+static freq_class_setup fc;
+static eq_state master_state;
+static eq_state channel_state;
+
 
 /* accessed only in playback thread/setup */
-int pull_eq_feedback(float **peak,float **rms){
-  return pull_freq_feedback(&eq,peak,rms);
+int pull_eq_feedback_master(float **peak,float **rms){
+  return pull_freq_feedback(&master_state.eq,peak,rms);
+}
+
+int pull_eq_feedback_channel(float **peak,float **rms){
+  return pull_freq_feedback(&channel_state.eq,peak,rms);
 }
 
 /* called only by initial setup */
 int eq_load(void){
-  return freq_load(&eq,eq_freq_list,eq_freqs);
+  int i;
+
+  eq_channel_set=calloc(input_ch,sizeof(*eq_channel_set));
+
+  freq_class_load(&fc,eq_freq_list,eq_freqs);
+
+  freq_load(&master_state.eq,&fc);
+  freq_load(&channel_state.eq,&fc);
+
+  eq_master_set.curve_dirty=1;
+
+  for(i=0;i<input_ch;i++)
+    eq_channel_set[i].curve_dirty=1;
+
+  return 0;
 }
 
 /* called only in playback thread */
 int eq_reset(){
-  return freq_reset(&eq);
+  freq_reset(&master_state.eq);
+  freq_reset(&channel_state.eq);
+  return 0;
 }
 
-static sig_atomic_t settings[eq_freqs];
-
-void eq_set(int freq, float value){
-  settings[freq]=rint(value*10.);
-  curve_dirty=1;
+void eq_set(eq_settings *set, int freq, float value){
+  set->settings[freq]=rint(value*10.);
+  set->curve_dirty=1;
 }
  
-static float *curve_cache=0;
- 
-static void workfunc(freq_state *f,float **data,float **peak, float **rms){
-  int h,i,j;
-  float sq_mags[f->qblocksize*2+1];
+static void workfunc(float *data, eq_settings *set){
+  int i,j;
   
-  if(curve_dirty || !curve_cache){
-    curve_dirty=0;
+  if(set->curve_dirty || !set->curve_cache){
+    set->curve_dirty=0;
     
-    if(!curve_cache)curve_cache=malloc((f->qblocksize*2+1)*sizeof(*curve_cache));
-    memset(curve_cache,0,(f->qblocksize*2+1)*sizeof(*curve_cache));
+    if(!set->curve_cache)
+      set->curve_cache=malloc((fc.qblocksize*2+1)*sizeof(*set->curve_cache));
+    memset(set->curve_cache,0,(fc.qblocksize*2+1)*sizeof(*set->curve_cache));
     
     for(i=0;i<eq_freqs;i++){
-      float set=fromdB(settings[i]*.1);
-      for(j=0;j<f->qblocksize*2+1;j++)
-	curve_cache[j]+=f->ho_window[i][j]*set;
+      float v=fromdB_a(set->settings[i]*.1);
+      for(j=0;j<fc.qblocksize*2+1;j++)
+	set->curve_cache[j]+=fc.ho_window[i][j]*v;
     }
   }
   
-  for(h=0;h<input_ch;h++){
-    
-    if(eq_active){
-      
-      for(i=0;i<f->qblocksize*2+1;i++){
-	data[h][i*2]*=curve_cache[i];
-	data[h][i*2+1]*=curve_cache[i];
-      }
-    }
-    
-    freq_metric_work(data[h],f,sq_mags,peak[h],rms[h]);
+  for(i=0;i<fc.qblocksize*2+1;i++){
+    data[i*2]*=set->curve_cache[i];
+    data[i*2+1]*=set->curve_cache[i];
   }
-
+  
   return;
 }
 
-/* called only by playback thread */
-time_linkage *eq_read(time_linkage *in){
-  return freq_read(in,&eq,workfunc,!(eq_visible||eq_active));
+static void workfunc_ch(float *data, int ch){
+  workfunc(data,eq_channel_set+ch);
 }
+
+static void workfunc_m(float *data, int ch){
+  workfunc(data,&eq_master_set);
+}
+
+/* called only by playback thread */
+time_linkage *eq_read_master(time_linkage *in){
+  int active[input_ch];
+  int visible[input_ch];
+  int i;
+  
+  for(i=0;i<input_ch;i++){
+    active[i]=eq_master_set.panel_active;
+    visible[i]=eq_master_set.panel_visible;
+  }
+
+  return freq_read(in,&master_state.eq,visible,active,workfunc_m);
+}
+
+time_linkage *eq_read_channel(time_linkage *in){
+  int active[input_ch];
+  int visible[input_ch];
+  int i;
+  
+  for(i=0;i<input_ch;i++){
+    active[i]=eq_channel_set[i].panel_active;
+    visible[i]=eq_channel_set[i].panel_visible;
+  }
+
+  return freq_read(in,&master_state.eq,visible,active,workfunc_ch);
+}
+

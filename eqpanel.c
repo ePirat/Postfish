@@ -32,11 +32,12 @@
 #include "freq.h"
 #include "eq.h"
 
-extern sig_atomic_t eq_active;
-extern sig_atomic_t eq_visible;
 extern int input_ch;
 extern int input_size;
 extern int input_rate;
+
+extern eq_settings eq_master_set;
+extern eq_settings *eq_channel_set;
 
 typedef struct {
   GtkWidget *slider;
@@ -54,7 +55,7 @@ static void slider_change(GtkWidget *w,gpointer in){
   sprintf(buffer,"%+3.0fdB",val);
   readout_set(READOUT(b->readout),buffer);
   
-  eq_set(b->number,val);
+  eq_set(&eq_master_set,b->number,val);
 
 }
 
@@ -69,8 +70,8 @@ void eqpanel_create(postfish_mainpanel *mp,
   char *shortcut[]={" e "};
 
   subpanel_generic *panel=subpanel_create(mp,windowbutton,&activebutton,
-					  &eq_active,
-					  &eq_visible,
+					  &eq_master_set.panel_active,
+					  &eq_master_set.panel_visible,
 					  "_Equalization filter",shortcut,
 					  0,1);
   
@@ -122,10 +123,10 @@ void eqpanel_feedback(int displayit){
     }
   }
   
-  if(pull_eq_feedback(peakfeed,rmsfeed)==1)
+  if(pull_eq_feedback_master(peakfeed,rmsfeed)==1)
     for(i=0;i<eq_freqs;i++)
       multibar_set(MULTIBAR(bars[i].slider),rmsfeed[i],peakfeed[i],
-		   input_ch,(displayit && eq_visible));
+		   input_ch,(displayit && eq_master_set.panel_visible));
   
 }
 
