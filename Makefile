@@ -10,10 +10,12 @@ BINDIR=$PREFIX/bin
 ETCDIR=/etc
 MANDIR=$PREFIX/man
 
-SRC = main.c mainpanel.c multibar.c readout.c input.c output.c clippanel.c declip.c \
-	reconstruct.c smallft.c windowbutton.c subpanel.c feedback.c
-OBJ = main.o mainpanel.o multibar.o readout.o input.o output.o clippanel.o declip.o \
-	reconstruct.o smallft.o windowbutton.o subpanel.o feedback.o
+SRC = main.c mainpanel.c multibar.c readout.c input.c output.c clippanel.c \
+	declip.c reconstruct.c smallft.c windowbutton.c subpanel.c \
+	feedback.c freq.c eq.c eqpanel.c
+OBJ = main.o mainpanel.o multibar.o readout.o input.o output.o clippanel.o \
+	declip.o reconstruct.o smallft.o windowbutton.o subpanel.o \
+	feedback.o freq.o eq.o eqpanel.o
 GCF = `pkg-config --cflags gtk+-2.0` -DG_DISABLE_DEPRECATED -DGDK_DISABLE_DEPRECATED -DGTK_DISABLE_DEPRECATED -DGDK_PIXBUF_DISABLE_DEPRECATED
 
 all:	

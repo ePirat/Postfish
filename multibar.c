@@ -1,3 +1,26 @@
+/*
+ *
+ *  postfish
+ *    
+ *      Copyright (C) 2002-2004 Monty
+ *
+ *  Postfish is free software; you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation; either version 2, or (at your option)
+ *  any later version.
+ *   
+ *  Postfish is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *   
+ *  You should have received a copy of the GNU General Public License
+ *  along with Postfish; see the file COPYING.  If not, write to the
+ *  Free Software Foundation, 675 Mass Ave, Cambridge, MA 02139, USA.
+ *
+ * 
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
@@ -352,27 +375,55 @@ static void draw(GtkWidget *widget,int n){
     /* blank side padding to bg of parent */
     gdk_draw_rectangle(m->backing,gc,1,0,0,xpad,height);
     gdk_draw_rectangle(m->backing,gc,1,width,0,xpad,height);
-    
-    /* dark trough */
-    gdk_draw_rectangle(m->backing,mid_gc,1,
-		       xpad,height-lpad,width-xpad,lpad);
 
+
+    /* blank sides of trough */
+    gdk_draw_rectangle(m->backing,gc,1,
+		       0,height-lpad,
+		       m->thumblo_x+xpad,lpad);
+    gdk_draw_rectangle(m->backing,gc,1,
+		       m->thumbhi_x+xpad,height-lpad,
+		       width-m->thumbhi_x,lpad);
+    
     /* frame */
     gdk_draw_line(m->backing,dark_gc,xpad-1,0,width,0);
-    gdk_draw_line(m->backing,dark_gc,xpad-1,0,xpad-1,height-2);
-
-    gdk_draw_line(m->backing,light_gc,xpad-1,height-1,width+1,height-1);
-    gdk_draw_line(m->backing,light_gc,width+1,0,width+1,height-1);
-
+    gdk_draw_line(m->backing,dark_gc,xpad-1,0,xpad-1,height-lpad);
     gdk_draw_line(m->backing,dark_gc,xpad,height-lpad,width,height-lpad);
     gdk_draw_line(m->backing,dark_gc,width,height-lpad,width,1);
 
-
+    gdk_draw_line(m->backing,light_gc,xpad-1,height-lpad+1,
+		  width+1,height-lpad+1);
+    gdk_draw_line(m->backing,light_gc,width+1,0,width+1,height-lpad+1);
     gdk_draw_line(m->backing,light_gc,xpad,1,width-1,1);
-    if(lpad>2)
-      gdk_draw_line(m->backing,light_gc,xpad,1,xpad,height-lpad);
-    else
-      gdk_draw_line(m->backing,light_gc,xpad,1,xpad,height-lpad-1);
+    gdk_draw_line(m->backing,light_gc,xpad,1,xpad,height-lpad-1);
+
+
+
+    /* dark trough */
+    if(lpad>2){
+      gdk_draw_rectangle(m->backing,mid_gc,1,
+			 xpad+m->thumblo_x,height-lpad+1,
+			 m->thumbhi_x-m->thumblo_x+1,lpad-1);
+
+      gdk_draw_line(m->backing,dark_gc,
+		    m->thumblo_x+xpad-1,height-lpad+1,
+		    m->thumblo_x+xpad-1,height-1);
+
+      gdk_draw_line(m->backing,light_gc,
+		    m->thumblo_x+xpad-1,height-1,
+		    m->thumbhi_x+xpad+1,height-1);
+
+      gdk_draw_line(m->backing,light_gc,
+		    m->thumbhi_x+xpad+1,height-1,
+		    m->thumbhi_x+xpad+1,height-lpad+1);
+
+      dark_gc=widget->style->dark_gc[GTK_STATE_ACTIVE];
+      gdk_draw_line(m->backing,dark_gc,
+		    m->thumblo_x+xpad,height-lpad,
+		    m->thumbhi_x+xpad,height-lpad);
+      
+
+    }
 
   }
 
@@ -718,6 +769,9 @@ static gboolean configure(GtkWidget *widget, GdkEventConfigure *event){
   compute(widget,0,0,0);
   for(i=0;i<m->thumbs;i++)
     m->thumbpixel[i]=val_to_pixel(widget,m->thumbval[i]);
+  m->thumblo_x=val_to_pixel(widget,m->thumblo);
+  m->thumbhi_x=val_to_pixel(widget,m->thumbhi);
+
   draw_and_expose(widget);
 
   return TRUE;
@@ -914,9 +968,7 @@ gboolean key_press(GtkWidget *w,GdkEventKey *event){
 static GtkDrawingAreaClass *parent_class = NULL;
 
 static void multibar_class_init (MultibarClass *class){
-  GObjectClass   *gobject_class = G_OBJECT_CLASS (class);
   GtkWidgetClass *widget_class = GTK_WIDGET_CLASS (class);
-  GdkWindow *root=gdk_get_default_root_window();
   parent_class = g_type_class_peek_parent (class);
 
   widget_class->expose_event = expose;
@@ -985,6 +1037,8 @@ GtkWidget* multibar_new (int n, char **labels, double *levels, int thumbs,
   m->thumbgrab=-1;
   m->thumblo=levels[0];
   m->thumbhi=levels[n];
+  m->thumblo_x=val_to_pixel(ret,m->thumblo);
+  m->thumbhi_x=val_to_pixel(ret,m->thumbhi);
 
   if(thumbs<0)thumbs=0;
   if(thumbs>3)thumbs=3;
@@ -1094,12 +1148,22 @@ double multibar_get_value(Multibar *m,int n){
 void multibar_thumb_bounds(Multibar *m,double lo, double hi){
   GtkWidget *w=GTK_WIDGET(m);
   if(lo>hi)return;
+
+  if(lo<m->levels[0])lo=m->levels[0];
+  if(hi<m->levels[0])hi=m->levels[0];
+  if(lo>m->levels[m->labels])lo=m->levels[m->labels];
+  if(hi>m->levels[m->labels])hi=m->levels[m->labels];
+
   m->thumblo=lo;
   m->thumbhi=hi;
+
+  m->thumblo_x=val_to_pixel(w,lo);
+  m->thumbhi_x=val_to_pixel(w,hi);
 
   vals_bound(m);
   if(m->callback)m->callback(GTK_WIDGET(m),m->callbackp);
   draw_and_expose(w);
 }
+
 
 

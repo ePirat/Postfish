@@ -2,7 +2,7 @@
  *
  *  postfish
  *    
- *      Copyright (C) 2002-2004 Monty
+ *      Copyright (C) 2002-2004 Monty and Xiph.Org
  *
  *  Postfish is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -23,8 +23,7 @@
 
 #include "postfish.h"
 
-extern void clippanel_create(postfish_mainpanel *mp,
-			     GtkWidget *windowbutton,
-			     GtkWidget *activebutton);
-extern void clippanel_feedback(void);
-extern void clippanel_reset(void);
+extern int pull_eq_feedback(double **peak,double **rms);
+extern int eq_load(void);
+extern int eq_reset();
+extern time_linkage *eq_read(time_linkage *in);

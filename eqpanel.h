@@ -22,9 +22,8 @@
  */
 
 #include "postfish.h"
-
-extern void clippanel_create(postfish_mainpanel *mp,
-			     GtkWidget *windowbutton,
-			     GtkWidget *activebutton);
-extern void clippanel_feedback(void);
-extern void clippanel_reset(void);
+extern void eqpanel_create(postfish_mainpanel *mp,
+			   GtkWidget *windowbutton,
+			   GtkWidget *activebutton);
+extern void eqpanel_feedback(void);
+extern void eqpanel_reset(void);

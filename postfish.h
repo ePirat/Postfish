@@ -53,6 +53,7 @@
 #define todB(x)   ((x)==0?-400.f:log((x)*(x))*4.34294480f)
 #define fromdB(x) (exp((x)*.11512925f))  
 #define toOC(n)     (log(n)*1.442695f-5.965784f)
+#define fromOC(o)   (exp(((o)+5.965784f)*.693147f))
 #define toBark(n)   (13.1f*atan(.00074f*(n))+2.24f*atan((n)*(n)*1.85e-8f)+1e-4f*(n))
 #define fromBark(z) (102.f*(z)-2.f*pow(z,2.f)+.4f*pow(z,3.f)+pow(1.46f,z)-1.f)
 

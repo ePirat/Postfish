@@ -50,7 +50,7 @@ style "multibar" {
 
         text[NORMAL]="#c0c0d0" 
         text[ACTIVE]="#ffb0b0" 
-        font_name = "sans 8"    
+        font_name = "sans 6"    
 }
 
 style "clipbar" {
@@ -67,11 +67,7 @@ style "readout" {
 	bg[NORMAL]="#ffffff" 
 	bg[ACTIVE]="#ffffff" 
 
-	font_name = "fixed 8"	
-	GtkMisc::xpad = 10
-	GtkMisc::xalign = 1.0
-	GtkWidget::width-request=100
-	GtkLabel::justify = right
+	font_name = "Nimbus Mono L, Courier New, Monospace 8"	
 }
 
 style "darkpanel" {

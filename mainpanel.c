@@ -1,3 +1,25 @@
+/*
+ *
+ *  postfish
+ *    
+ *      Copyright (C) 2002-2004 Monty
+ *
+ *  Postfish is free software; you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation; either version 2, or (at your option)
+ *  any later version.
+ *   
+ *  Postfish is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *   
+ *  You should have received a copy of the GNU General Public License
+ *  along with Postfish; see the file COPYING.  If not, write to the
+ *  Free Software Foundation, 675 Mass Ave, Cambridge, MA 02139, USA.
+ *
+ * 
+ */
 
 #include "postfish.h"
 #include <gtk/gtk.h>
@@ -61,6 +83,7 @@ static void action_zero(GtkWidget *widget,postfish_mainpanel *p){
   multibar_reset(MULTIBAR(p->inbar));
   multibar_reset(MULTIBAR(p->outbar));
   clippanel_reset();
+  eqpanel_reset();
 }
 
 static void action_end(GtkWidget *widget,postfish_mainpanel *p){
@@ -74,6 +97,7 @@ static void action_end(GtkWidget *widget,postfish_mainpanel *p){
   multibar_reset(MULTIBAR(p->inbar));
   multibar_reset(MULTIBAR(p->outbar));
   clippanel_reset();
+  eqpanel_reset();
 }
 
 static void action_bb(GtkWidget *widget,postfish_mainpanel *p){
@@ -631,16 +655,20 @@ void mainpanel_create(postfish_mainpanel *panel,char **chlabels){
     {
       GtkWidget *box=gtk_hbox_new(0,0);
 
-      panel->masterdB_a=gtk_toggle_button_new_with_label("[m]aster");
+      GtkWidget *masterlabel=gtk_label_new("master:");
+      panel->masterdB_a=gtk_toggle_button_new_with_label("[m] active");
       panel->masterdB_r=readout_new("  0.0 dB");
       panel->masterdB_s=gtk_hscale_new_with_range(-50,50,.1);
+
+      gtk_misc_set_alignment(GTK_MISC(masterlabel),1,.5);
 
       gtk_range_set_value(GTK_RANGE(panel->masterdB_s),0);
       gtk_scale_set_draw_value(GTK_SCALE(panel->masterdB_s),FALSE);
     
-      gtk_table_attach(GTK_TABLE(ttable),panel->masterdB_a,0,1,3,4,
+      gtk_table_attach(GTK_TABLE(ttable),masterlabel,0,1,3,4,
 		       GTK_FILL,GTK_FILL,0,0);
       
+      gtk_box_pack_start(GTK_BOX(box),panel->masterdB_a,0,0,2);
       gtk_box_pack_start(GTK_BOX(box),panel->masterdB_r,0,0,0);
       gtk_box_pack_start(GTK_BOX(box),panel->masterdB_s,1,1,0);
       
@@ -826,7 +854,7 @@ void mainpanel_create(postfish_mainpanel *panel,char **chlabels){
   mainpanel_panelentry(panel,"_Declip ","[d]",0,clippanel_create);
   mainpanel_panelentry(panel,"Cross_Talk ","[t]",1,0);
   mainpanel_panelentry(panel,"_Noise Filter ","[n]",2,0);
-  mainpanel_panelentry(panel,"_Equalizer ","[e]",3,0);
+  mainpanel_panelentry(panel,"_Equalizer ","[e]",3,eqpanel_create);
   mainpanel_panelentry(panel,"_Compander ","[c]",4,0);
   mainpanel_panelentry(panel,"_Limiter ","[l]",5,0);
   mainpanel_panelentry(panel,"_Output Cal. ","[o]",6,0);
@@ -896,6 +924,7 @@ static gboolean feedback_process(postfish_mainpanel *panel){
       }
 
       clippanel_feedback();
+      eqpanel_feedback();
       
     }
   }
