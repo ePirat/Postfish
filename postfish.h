@@ -92,6 +92,7 @@ typedef struct time_linkage {
   int channels;
   int rate;
   float **data;
+  u_int32_t active; /* active channel bitmask */
 } time_linkage;
 
 extern pthread_mutex_t master_mutex;
@@ -107,5 +108,7 @@ extern int eventpipe[2];
 extern int input_ch;
 
 extern void mainpanel_go(int n,char *list[],int ch);
+extern int mute_channel_muted(u_int32_t bitmap,int i);
 
 #endif
+

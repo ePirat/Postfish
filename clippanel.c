@@ -326,20 +326,22 @@ void clippanel_create(postfish_mainpanel *mp,
 }
 
 void clippanel_feedback(int displayit){
-  int clip[input_ch],count;
+  int clip[input_ch],count[input_ch];
   float peak[input_ch];
-  if(pull_declip_feedback(clip,peak,&count)){
+
+  if(pull_declip_feedback(clip,peak,count)){
     int i;
     for(i=0;i<input_ch;i++){
       float val[2],zero[2];
+
       val[0]=-1.,zero[0]=-1.;
-      val[1]=(count?clip[i]*100./count-.1:-1);
+      val[1]=(count[i]?clip[i]*100./count[i]-.1:-1);
       zero[1]=-1.;
 
       multibar_set(MULTIBAR(feedback_bars[i]),zero,val,2,
 		   (displayit && declip_visible));
       
-      val[0]=(count?peak[i]:-1);
+      val[0]=peak[i];
       multibar_set(MULTIBAR(trigger_bars[i]),zero,val,1,
 		   (displayit && declip_visible));
 

@@ -462,7 +462,6 @@ static void draw(GtkWidget *widget,int n){
   if(m->thumbs){
     int height=widget->allocation.height,i,j;
     GdkGC *black_gc=widget->style->black_gc;
-    int y=height/2-3;
     int y0=height/3-1;
     int y1=height-3;
 

@@ -43,12 +43,13 @@ static void meterhold_reset(postfish_mainpanel *p){
 }
 
 static void action_zero(GtkWidget *widget,postfish_mainpanel *p){
-  const char *time=gtk_entry_get_text(GTK_ENTRY(p->entry_a));
-  off_t cursor=input_time_to_cursor(time);
+  char buf[14];
+  off_t cursor;
 
   output_halt_playback();
-  input_seek(cursor);
-  readout_set(READOUT(p->cue),(char *)time);
+  cursor=input_seek(0);
+  input_cursor_to_time(cursor,buf);
+  readout_set(READOUT(p->cue),buf);
   multibar_reset(MULTIBAR(p->inbar));
   multibar_reset(MULTIBAR(p->outbar));
   clippanel_reset();
@@ -60,8 +61,8 @@ static void action_zero(GtkWidget *widget,postfish_mainpanel *p){
 }
 
 static void action_end(GtkWidget *widget,postfish_mainpanel *p){
-  off_t cursor=input_time_to_cursor("9999:59:59.99");
   char buf[14];
+  off_t cursor=input_time_to_cursor("9999:59:59.99");
 
   output_halt_playback();
   cursor=input_seek(cursor);
@@ -246,20 +247,6 @@ static void action_setb(GtkWidget *widget,postfish_mainpanel *p){
       gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->cue_b),0);
     }
   }
-}
-
-static void action_reseta(GtkWidget *widget,postfish_mainpanel *p){
-  char time[14];
-  input_cursor_to_time(0,time);
-  gtk_entry_set_text(GTK_ENTRY(p->entry_a),time);
-  input_Acursor_set(0);
-}
-
-static void action_resetb(GtkWidget *widget,postfish_mainpanel *p){
-  char time[14];
-  input_cursor_to_time(0.,time);
-  gtk_entry_set_text(GTK_ENTRY(p->entry_b),time);
-  gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->cue_b),0);
 }
 
 static void shutdown(void){
@@ -879,13 +866,6 @@ void mainpanel_create(postfish_mainpanel *panel,char **chlabels){
 			G_CALLBACK (action_seta), panel);
       gtk_box_pack_start(GTK_BOX(cuebox),temp,0,0,0);
       
-      temp=gtk_button_new_with_label("^A");
-      gtk_widget_add_accelerator (temp, "activate", panel->group, GDK_a, GDK_CONTROL_MASK, 0);
-      g_signal_connect (G_OBJECT (temp), "clicked",
-			G_CALLBACK (action_reseta), panel);
-      gtk_widget_set_name(temp,"reseta");
-      gtk_box_pack_start(GTK_BOX(cuebox),temp,0,0,0);
-
       panel->cue_b=temp=gtk_toggle_button_new_with_label(" b ");
       gtk_widget_add_accelerator (temp, "activate", panel->group, GDK_b, 0, 0);
       g_signal_connect (G_OBJECT (temp), "clicked",
@@ -899,14 +879,6 @@ void mainpanel_create(postfish_mainpanel *panel,char **chlabels){
 			G_CALLBACK (action_setb), panel);
       gtk_box_pack_start(GTK_BOX(cuebox),panel->entry_b,0,0,0);
       gtk_box_pack_start(GTK_BOX(cuebox),temp,0,0,0);
-
-      temp=gtk_button_new_with_label("^B");
-      gtk_widget_add_accelerator (temp, "activate", panel->group, GDK_b, GDK_CONTROL_MASK, 0);
-      g_signal_connect (G_OBJECT (temp), "clicked",
-			G_CALLBACK (action_resetb), panel);
-      gtk_widget_set_name(temp,"resetb");
-      gtk_box_pack_start(GTK_BOX(cuebox),temp,0,0,0);
-
 
       gtk_entry_set_width_chars(GTK_ENTRY(panel->entry_a),13);
       gtk_entry_set_width_chars(GTK_ENTRY(panel->entry_b),13);
@@ -943,7 +915,7 @@ void mainpanel_create(postfish_mainpanel *panel,char **chlabels){
       gtk_table_attach_defaults(GTK_TABLE(ttable),conflabel,0,1,6,7);
       gtk_table_attach(GTK_TABLE(ttable),confbox,1,2,6,7,
 		       GTK_EXPAND|GTK_FILL,GTK_EXPAND|GTK_FILL,0,3);
-      gtk_table_attach(GTK_TABLE(ttable),panel,2,3,6,7,0,0,0,0);
+      gtk_table_attach_defaults(GTK_TABLE(ttable),panel,2,3,6,7);
 
       gtk_box_pack_start(GTK_BOX(confbox),conf,1,1,0);
     }
@@ -975,7 +947,7 @@ void mainpanel_create(postfish_mainpanel *panel,char **chlabels){
     gtk_table_attach_defaults(GTK_TABLE(channeltable),temp,1,2+input_ch*2,0,1);
   }
 
-  mainpanel_chentry(panel,channeltable,"Mute ",0,0,0,0);
+  mainpanel_chentry(panel,channeltable,"Mute ",0,0,0,mutedummy_create);
   mainpanel_chentry(panel,channeltable,"_Declip ",1,1,0,clippanel_create);
   mainpanel_chentry(panel,channeltable,"_Multicomp ",2,0,1,0);
   mainpanel_chentry(panel,channeltable,"_Onecomp ",3,0,1,0);

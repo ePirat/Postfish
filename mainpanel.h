@@ -31,6 +31,7 @@ typedef struct postfish_mainpanel postfish_mainpanel;
 #include "compandpanel.h"
 #include "singlepanel.h"
 #include "limitpanel.h"
+#include "mutedummy.h"
 
 struct postfish_mainpanel{
   GtkWidget *twirlimage;

@@ -34,6 +34,7 @@
 #include "singlecomp.h"
 #include "suppress.h"
 #include "limit.h"
+#include "mute.h"
 
 extern int input_size;
 sig_atomic_t playback_active=0;
@@ -232,8 +233,13 @@ void *playback_thread(void *dummy){
     /* get data */
     link=input_read();
     result=link->samples;
+
+    link=mute_read(link);
+    result|=link->samples;
+
     link=declip_read(link);
     result|=link->samples;
+
     link=multicompand_read(link);
     result|=link->samples;
     link=singlecomp_read(link);
