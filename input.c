@@ -50,8 +50,8 @@ typedef struct {
 typedef struct input_feedback{
   feedback_generic parent_class;
   off_t   cursor;
-  double *rms;
-  double *peak;
+  float *rms;
+  float *peak;
 } input_feedback;
 
 static feedback_generic_pool feedpool;
@@ -385,7 +385,7 @@ off_t input_seek(off_t pos){
   return cursor;
 }
 
-off_t input_time_seek_rel(double s){
+off_t input_time_seek_rel(float s){
   off_t ret;
   pthread_mutex_lock(&master_mutex);
   ret=input_seek(cursor+input_rate*inbytes*input_ch*s);
@@ -400,7 +400,7 @@ static feedback_generic *new_input_feedback(void){
   return (feedback_generic *)ret;
 }
 
-static void push_input_feedback(double *peak,double *rms, off_t cursor){
+static void push_input_feedback(float *peak,float *rms, off_t cursor){
   int i,n=input_ch+2;
   input_feedback *f=(input_feedback *)
     feedback_new(&feedpool,new_input_feedback);
@@ -410,7 +410,7 @@ static void push_input_feedback(double *peak,double *rms, off_t cursor){
   feedback_push(&feedpool,(feedback_generic *)f);
 }
 
-int pull_input_feedback(double *peak,double *rms,off_t *cursor){
+int pull_input_feedback(float *peak,float *rms,off_t *cursor){
   input_feedback *f=(input_feedback *)feedback_pull(&feedpool);
   int i,j,n=input_ch+2;
   if(!f)return 0;
@@ -425,8 +425,8 @@ time_linkage *input_read(void){
   int read_b=0,i,j,k;
   int toread_b=out.size*out.channels*inbytes;
   unsigned char *readbuf;
-  double *rms=alloca(sizeof(*rms)*(out.channels+2));
-  double *peak=alloca(sizeof(*peak)*(out.channels+2));
+  float *rms=alloca(sizeof(*rms)*(out.channels+2));
+  float *peak=alloca(sizeof(*peak)*(out.channels+2));
 
   memset(rms,0,sizeof(*rms)*(out.channels+2));
   memset(peak,0,sizeof(*peak)*(out.channels+2));
@@ -495,12 +495,12 @@ time_linkage *input_read(void){
   
   k=0;
   for(i=0;i<out.samples;i++){
-    double mean=0.;
-    double div=0.;
-    double divrms=0.;
+    float mean=0.;
+    float div=0.;
+    float divrms=0.;
 
     for(j=0;j<out.channels;j++){
-      double dval;
+      float dval;
       long val=0;
       switch(inbytes){
       case 1:
@@ -535,7 +535,7 @@ time_linkage *input_read(void){
 
     /* div */
     for(j=0;j<out.channels;j++){
-      double dval=mean-out.data[j][i];
+      float dval=mean-out.data[j][i];
       if(fabs(dval)>peak[out.channels+1])peak[out.channels+1]=fabs(dval);
       divrms+=dval*dval;
     }

@@ -22,38 +22,42 @@
  */
 
 #include "postfish.h"
-#include "smallft.h"
-
-#define freqs 30
+#include <fftw3.h>
 
 typedef struct {
-  drft_lookup fft;
   time_linkage out;
   feedback_generic_pool feedpool;
+
+  float **fftwf_buffer; // need one for each channel
+  fftwf_plan *fftwf_forward;   // need one for each channel
+  fftwf_plan *fftwf_backward;  // need one for each channel
   
-  int blocksize;
-  double **ho_window;
-  double   ho_area[freqs];
-  int      ho_bin_lo[freqs];
-  int      ho_bin_hi[freqs];
+  int qblocksize;
+  int bands;
+  float *frequencies;
+
+  float **ho_window;
+  float  *ho_area;
   
-  double *window;
-  double **lap;
-  double **cache;
+  float *window;
+  float **lap;
+  float **cache;
   int cache_samples;
   int fillstate;     /* 0: uninitialized
 			1: normal
 			2: eof processed */
 } freq_state;
 
-extern int pull_freq_feedback(freq_state *ff,double **peak,double **rms);
-extern int freq_load(freq_state *f,int blocksize);
+extern void freq_transform_work(float *work,freq_state *f);
+extern int pull_freq_feedback(freq_state *ff,float **peak,float **rms);
+extern int freq_load(freq_state *f,float *frequencies, int bands, 
+		     int blocksize);
 extern int freq_reset(freq_state *f);
-extern const char *freq_frequency_label(int n);
 extern time_linkage *freq_read(time_linkage *in, freq_state *f,
-			       void (*func)(double *data,freq_state *f,
-					    double *peak, double *rms),
+			       void (*func)(freq_state *f,
+					    float **data,
+					    float **peak, float **rms),
 			       int bypassp);
 
-extern void freq_metric_work(double *work,freq_state *f,
-			    double *sq_mags,double *peak,double *rms);
+extern void freq_metric_work(float *work,freq_state *f,
+			     float *sq_mags,float *peak,float *rms);

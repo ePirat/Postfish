@@ -23,9 +23,9 @@
 
 extern int declip_load(void);
 extern int declip_setblock(int n);
-extern int declip_settrigger(double trigger,int ch);
-extern int declip_setiterations(double x);
-extern int declip_setconvergence(double x);
+extern int declip_settrigger(float trigger,int ch);
+extern int declip_setiterations(float x);
+extern int declip_setconvergence(float x);
 extern int declip_reset(void);
 extern time_linkage *declip_read(time_linkage *in);
-extern int pull_declip_feedback(int *clip,double *peak,int *total);
+extern int pull_declip_feedback(int *clip,float *peak,int *total);

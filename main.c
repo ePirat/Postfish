@@ -28,6 +28,7 @@
 
 /* sound playback code is OSS-specific for now */
 #include "postfish.h"
+#include <fftw3.h>
 #include "input.h"
 #include "output.h"
 
@@ -44,7 +45,7 @@ int main(int argc, char **argv){
   /* set up filter chains */
   if(declip_load())exit(1);
   if(eq_load())exit(1);
-  if(compand_load())exit(1);
+  if(multicompand_load())exit(1);
 
   /* look at stdout... do we have a file or device? */
   if(!isatty(STDOUT_FILENO)){
@@ -77,6 +78,7 @@ int main(int argc, char **argv){
 
   //save_settings(configfd);
   if(configfd>=0)close(configfd);
+
   return(0);
 }
 

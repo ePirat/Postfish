@@ -35,44 +35,6 @@
 #include "windowbutton.h"
 
 
-gboolean slider_keymodify(GtkWidget *w,GdkEventKey *event,gpointer in){
-  GtkWidget *toplevel=gtk_widget_get_toplevel(w);
-  GtkAdjustment *adj=gtk_range_get_adjustment(GTK_RANGE(w));
-  if(event->state&GDK_MOD1_MASK) return FALSE;
-  if(event->state&GDK_CONTROL_MASK) return FALSE;
-
-  switch(event->keyval){
-  case GDK_minus:
-    gtk_range_set_value(GTK_RANGE(w),adj->value-adj->step_increment);
-    break;
-  case GDK_underscore:
-    gtk_range_set_value(GTK_RANGE(w),adj->value-adj->page_increment);
-    break;
-  case GDK_equal:
-    gtk_range_set_value(GTK_RANGE(w),adj->value+adj->step_increment);
-    break;
-  case GDK_plus:
-    gtk_range_set_value(GTK_RANGE(w),adj->value+adj->page_increment);
-    break;
-
-  case GDK_Left:
-    gtk_widget_child_focus(toplevel,GTK_DIR_LEFT);
-    break;
-  case GDK_Up:
-    gtk_widget_child_focus(toplevel,GTK_DIR_UP);
-    break;
-  case GDK_Right:
-    gtk_widget_child_focus(toplevel,GTK_DIR_RIGHT);
-    break;
-  case GDK_Down:
-    gtk_widget_child_focus(toplevel,GTK_DIR_DOWN);
-    break;
-  default:
-    return FALSE;
-  }
-  return TRUE;
-}
-
 static void action_zero(GtkWidget *widget,postfish_mainpanel *p){
   const char *time=gtk_entry_get_text(GTK_ENTRY(p->entry_a));
   off_t cursor=input_time_to_cursor(time);
@@ -263,7 +225,7 @@ sig_atomic_t master_att;
 static void masterdB_change(GtkWidget *dummy, gpointer in){
   postfish_mainpanel *p=in;
   char buf[80];
-  gdouble val=multibar_get_value(MULTIBAR(p->masterdB_s),0);
+  float val=multibar_get_value(MULTIBAR(p->masterdB_s),0);
   sprintf(buf,"%.1fdB",val);
   readout_set(READOUT(p->masterdB_r),buf);
 
@@ -556,6 +518,7 @@ void mainpanel_create(postfish_mainpanel *panel,char **chlabels){
   for(i=0;i<19;i++)
     panel->ff[i]=gdk_pixmap_create_from_xpm_d(root,
 					      panel->fb+i,NULL,ff_xpm[i]);
+
   xpm_bar[0]=gdk_pixmap_create_from_xpm_d(root,
 					  xbm_bar,NULL,bar_home_xpm);
   xpm_bar[1]=gdk_pixmap_create_from_xpm_d(root,
@@ -610,7 +573,7 @@ void mainpanel_create(postfish_mainpanel *panel,char **chlabels){
   {
     char *labels[12]={"-96","-72","-60","-48","-36","-24",
 		      "-16","-8","-3","0","+3","+6"};
-    double levels[13]={-140.,-96.,-72.,-60.,-48.,-36.,-24.,
+    float levels[13]={-140.,-96.,-72.,-60.,-48.,-36.,-24.,
 		       -16.,-8.,-3.,0.,+3.,+6.};
 
     GtkWidget *ttable=gtk_table_new(7,2,0);
@@ -658,7 +621,7 @@ void mainpanel_create(postfish_mainpanel *panel,char **chlabels){
     /* master dB slider */
     {
       char *sliderlabels[10]={"-40","-30","-20","-10","0","+10","+20","+30","+40","+50"};
-      double sliderlevels[11]={-50,-40,-30,-20,-10,0,10,20,30,40,50};
+      float sliderlevels[11]={-50,-40,-30,-20,-10,0,10,20,30,40,50};
       
       GtkWidget *box=gtk_hbox_new(0,0);
 
@@ -887,25 +850,33 @@ static gboolean feedback_process(postfish_mainpanel *panel){
   /* second order of business; update the input meter if data is
      available and not dirtied by a seek */
   if(!playback_seeking){
-    if(output_feedback_deep()){
+    int     current_p=!output_feedback_deep();
+    off_t   time_cursor;
+    int     n=(input_ch>1?input_ch+2:input_ch);
+    float *rms=alloca(sizeof(*rms)*(input_ch+2));
+    float *peak=alloca(sizeof(*peak)*(input_ch+2));
+    
+    if(pull_output_feedback(peak,rms)){
+      char buffer[14];
+      int i;
 
-      pull_input_feedback(NULL,NULL,NULL);
-      clippanel_feedback(0);
-      eqpanel_feedback(0);
-      compandpanel_feedback(0);
-      pull_output_feedback(NULL,NULL);
+      for(i=0;i<n;i++){
+	if(i<input_ch && peak[i]>=1.)
+	  multibar_setwarn(MULTIBAR(panel->outbar),current_p);
 
-
-    }else{
-      off_t   time_cursor;
-      int     n=(input_ch>1?input_ch+2:input_ch);
-      double *rms=alloca(sizeof(*rms)*(input_ch+2));
-      double *peak=alloca(sizeof(*peak)*(input_ch+2));
-      
-      if(pull_output_feedback(peak,rms)){
-	char buffer[14];
-	int i;
+	if(gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(panel->channelshow[i]))){
+	  peak[i]=todB(peak[i]);
+	  rms[i]=todB(rms[i]);
+	}else{
+	  peak[i]=-400;
+	  rms[i]=-400;
+	}
 	
+      }
+      
+      multibar_set(MULTIBAR(panel->outbar),rms,peak,n,current_p);
+      
+      if(pull_input_feedback(peak,rms,&time_cursor)){
 	for(i=0;i<n;i++){
 	  if(gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(panel->channelshow[i]))){
 	    peak[i]=todB(peak[i]);
@@ -914,36 +885,19 @@ static gboolean feedback_process(postfish_mainpanel *panel){
 	    peak[i]=-400;
 	    rms[i]=-400;
 	  }
-
-	  if(i<input_ch && peak[i]>=0.)multibar_setwarn(MULTIBAR(panel->outbar));
-	}
-      
-	multibar_set(MULTIBAR(panel->outbar),rms,peak,n);
-	
-	if(pull_input_feedback(peak,rms,&time_cursor)){
-	  for(i=0;i<n;i++){
-	    if(gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(panel->channelshow[i]))){
-	      peak[i]=todB(peak[i]);
-	      rms[i]=todB(rms[i]);
-	    }else{
-	      peak[i]=-400;
-	      rms[i]=-400;
-	    }
-	  }
-	  
-	  multibar_set(MULTIBAR(panel->inbar),rms,peak,n);
-	  input_cursor_to_time(time_cursor,buffer);
-	  readout_set(READOUT(panel->cue),buffer);
 	}
 	
-	clippanel_feedback(1);
-	eqpanel_feedback(1);
-	compandpanel_feedback(1);
-	
+	multibar_set(MULTIBAR(panel->inbar),rms,peak,n,current_p);
+	input_cursor_to_time(time_cursor,buffer);
+	readout_set(READOUT(panel->cue),buffer);
       }
+      
+      clippanel_feedback(current_p);
+      eqpanel_feedback(current_p);
+      compandpanel_feedback(current_p);
+      
     }
   }
-  
 }
 
 static gboolean async_event_handle(GIOChannel *channel,

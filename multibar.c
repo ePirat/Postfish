@@ -30,9 +30,9 @@
 static GdkBitmap *stipple=NULL;
 static GdkBitmap *stippleB=NULL;
 
-static double compute_dampening(double width, double target,double current,double delta,int zerodamp){
-  double raw_delta=target-current;
-  double testdelta=delta+(raw_delta*.2);
+static float compute_dampening(float width, float target,float current,float delta,int zerodamp){
+  float raw_delta=target-current;
+  float testdelta=delta+(raw_delta*.2);
 
   if(target<0 && !zerodamp){
     if(current>0)
@@ -57,10 +57,10 @@ static double compute_dampening(double width, double target,double current,doubl
 
 
 /* call me roughly 10-20fps */
-static void compute(Multibar *m,double *lowvals, double *highvals, int n){
+static void compute(Multibar *m,float *lowvals, float *highvals, int n){
   int i,j,xpad;
   GtkWidget *widget=GTK_WIDGET(m);
-  double max=-400;
+  float max=-400;
   int height=widget->allocation.height;
   int width=widget->allocation.width;
 
@@ -128,7 +128,7 @@ static void compute(Multibar *m,double *lowvals, double *highvals, int n){
 	for(j=0;j<=m->labels;j++)
 	  if(lowvals[i]>=m->levels[j]){
 	    if(lowvals[i]<=m->levels[j+1]){
-	      double del=(lowvals[i]-m->levels[j])/(m->levels[j+1]-m->levels[j]);
+	      float del=(lowvals[i]-m->levels[j])/(m->levels[j+1]-m->levels[j]);
 	      pixlo[i]=(j+del)/m->labels*(widget->allocation.width-xpad*2)-xpad;
 	      break;
 	    }else if(j==m->labels){
@@ -141,7 +141,7 @@ static void compute(Multibar *m,double *lowvals, double *highvals, int n){
 	for(;j<=m->labels;j++)
 	  if(highvals[i]>=m->levels[j]){
 	    if(highvals[i]<=m->levels[j+1]){
-	      double del=(highvals[i]-m->levels[j])/(m->levels[j+1]-m->levels[j]);
+	      float del=(highvals[i]-m->levels[j])/(m->levels[j+1]-m->levels[j]);
 	      pixhi[i]=(j+del)/m->labels*(widget->allocation.width-xpad*2)+xpad;
 	      break;
 	    }else if(j==m->labels){
@@ -155,10 +155,10 @@ static void compute(Multibar *m,double *lowvals, double *highvals, int n){
       /* dampen movement according to setup */
       
       for(i=0;i<n;i++){
-	double trackhi=m->bartrackers[i].pixelposhi;
-	double tracklo=m->bartrackers[i].pixelposlo;
-	double delhi=m->bartrackers[i].pixeldeltahi;
-	double dello=m->bartrackers[i].pixeldeltalo;
+	float trackhi=m->bartrackers[i].pixelposhi;
+	float tracklo=m->bartrackers[i].pixelposlo;
+	float delhi=m->bartrackers[i].pixeldeltahi;
+	float dello=m->bartrackers[i].pixeldeltalo;
 	
 	/* hi */
 	delhi = compute_dampening(width-xpad*2,pixhi[i],trackhi,delhi,m->dampen_flags & ZERO_DAMP);
@@ -195,7 +195,7 @@ static void draw(GtkWidget *widget,int n){
   GtkWidget *parent=gtk_widget_get_parent(widget);
 
   if(m->thumbs>0){
-    int leftover=height-widget->requisition.height;
+    int leftover=height-widget->requisition.height+3;
     if(leftover<height/4)
       lpad+=leftover;
     else
@@ -310,7 +310,7 @@ static void draw(GtkWidget *widget,int n){
       for(j=0;j<=m->labels+1;j++)
 	if(m->peak>=m->levels[j]){
 	  if(m->peak<=m->levels[j+1]){
-	    double del=(m->peak-m->levels[j])/(m->levels[j+1]-m->levels[j]);
+	    float del=(m->peak-m->levels[j])/(m->levels[j+1]-m->levels[j]);
 	    x=(j+del)/m->labels*(widget->allocation.width-xpad*2)+xpad;
 	    break;
 	  }else if (j==m->labels){
@@ -355,7 +355,7 @@ static void draw(GtkWidget *widget,int n){
   }
 
   for(i=0;i<m->labels+1;i++){
-    int x=rint(((double)i)/m->labels*(widget->allocation.width-xpad*2))+xpad;
+    int x=rint(((float)i)/m->labels*(widget->allocation.width-xpad*2))+xpad;
     int y=widget->allocation.height-lpad-upad;
     int px,py;
     int gc=0;
@@ -634,6 +634,7 @@ static void size_request (GtkWidget *widget,GtkRequisition *requisition){
   if(m->thumbs==0){
     xpad=2;
   }else{
+    maxy+=3;
     if(m->thumbs>1)
       xpad=maxy+(maxy/2-1)/2-1+2;
     else
@@ -704,7 +705,7 @@ static gboolean multibar_focus (GtkWidget         *widget,
 static gint determine_thumb(Multibar *m,int ix, int iy){
   GtkWidget *widget=GTK_WIDGET(m);
   int height=widget->allocation.height;
-  double distances[3]={-1,-1,-1};
+  float distances[3]={-1,-1,-1};
   int thumb=-1;
 
   /* lower thumb */
@@ -748,24 +749,24 @@ static int pixel_bound(Multibar *m,int x){
   return x;
 }
 
-static double pixel_to_val(Multibar *m,int x){
+static float pixel_to_val(Multibar *m,int x){
   GtkWidget *w=GTK_WIDGET(m);
   int j;
 
   for(j=0;j<=m->labels;j++){
-    int pixlo=rint((double)j/m->labels*(w->allocation.width-m->xpad*2));
-    int pixhi=rint((double)(j+1)/m->labels*(w->allocation.width-m->xpad*2));
+    int pixlo=rint((float)j/m->labels*(w->allocation.width-m->xpad*2));
+    int pixhi=rint((float)(j+1)/m->labels*(w->allocation.width-m->xpad*2));
 
     if(x>=pixlo && x<=pixhi){
       if(pixlo==pixhi)return m->levels[j];
-      double del=(double)(x-pixlo)/(pixhi-pixlo);
+      float del=(float)(x-pixlo)/(pixhi-pixlo);
       return (1.-del)*m->levels[j] + del*m->levels[j+1];
     }
   }
   return 0.;
 }
 
-static int val_to_pixel(Multibar *m,double v){
+static int val_to_pixel(Multibar *m,float v){
   GtkWidget *w=GTK_WIDGET(m);
   int j,ret=0;
 
@@ -776,9 +777,9 @@ static int val_to_pixel(Multibar *m,double v){
   }else{
     for(j=0;j<=m->labels;j++){
       if(v>=m->levels[j] && v<=m->levels[j+1]){
-	double del=(v-m->levels[j])/(m->levels[j+1]-m->levels[j]);
-	int pixlo=rint((double)j/m->labels*(w->allocation.width-m->xpad*2));
-	int pixhi=rint((double)(j+1)/m->labels*(w->allocation.width-m->xpad*2));
+	float del=(v-m->levels[j])/(m->levels[j+1]-m->levels[j]);
+	int pixlo=rint((float)j/m->labels*(w->allocation.width-m->xpad*2));
+	int pixhi=rint((float)(j+1)/m->labels*(w->allocation.width-m->xpad*2));
 	ret=rint(pixlo*(1.-del)+pixhi*del);
 	break;
       }
@@ -828,7 +829,7 @@ static void vals_bound(Multibar *m){
   }
 
   if(m->thumbfocus>=0){
-    double v=m->thumbval[m->thumbfocus];
+    float v=m->thumbval[m->thumbfocus];
     int    x=m->thumbpixel[m->thumbfocus];
     
     if(m->thumbfocus==2){
@@ -875,7 +876,7 @@ static gint multibar_motion(GtkWidget        *w,
   if(m->thumbgrab>=0){
     
     int x=event->x+m->thumbx;
-    double v;
+    float v;
 
     x=pixel_bound(m,x);
     m->thumbval[m->thumbgrab]=pixel_to_val(m,x);
@@ -1086,7 +1087,7 @@ GType multibar_get_type (void){
   return m_type;
 }
 
-GtkWidget* multibar_new (int n, char **labels, double *levels, int thumbs,
+GtkWidget* multibar_new (int n, char **labels, float *levels, int thumbs,
 			 int flags){
   int i;
   GtkWidget *ret= GTK_WIDGET (g_object_new (multibar_get_type (), NULL));
@@ -1131,7 +1132,7 @@ GtkWidget* multibar_new (int n, char **labels, double *levels, int thumbs,
   return ret;
 }
 
-GtkWidget* multibar_slider_new (int n, char **labels, double *levels, 
+GtkWidget* multibar_slider_new (int n, char **labels, float *levels, 
 				int thumbs){
   int i;
   GtkWidget *ret= multibar_new(n,labels,levels,thumbs,0);
@@ -1142,13 +1143,14 @@ GtkWidget* multibar_slider_new (int n, char **labels, double *levels,
   return ret;
 }
 
-void multibar_set(Multibar *m,double *lo, double *hi, int n){
+void multibar_set(Multibar *m,float *lo, float *hi, int n, int draw){
   GtkWidget *widget=GTK_WIDGET(m);
   compute(m,lo,hi,n);
-  draw_and_expose(widget);
+
+  if(draw)draw_and_expose(widget);
 }
 
-void multibar_thumb_set(Multibar *m,double v, int n){
+void multibar_thumb_set(Multibar *m,float v, int n){
   GtkWidget *w=GTK_WIDGET(m);
   int x;
 
@@ -1204,15 +1206,15 @@ void multibar_reset(Multibar *m){
   m->peakdelta=0;
   m->peakdelay=0;
   m->clipdelay=0;
-  multibar_set(m,NULL,NULL,0);
+  multibar_set(m,NULL,NULL,0,1);
 }
 
-void multibar_setwarn(Multibar *m){
+void multibar_setwarn(Multibar *m,int draw){
   GtkWidget *widget=GTK_WIDGET(m);
   if(!m->clipdelay){
     m->clipdelay=15*10;
 
-    draw_and_expose(widget);
+    if(draw)draw_and_expose(widget);
   }else
     m->clipdelay=15*10; /* ~ ten second hold */
 }
@@ -1224,13 +1226,13 @@ void multibar_callback(Multibar *m,void (*callback)(GtkWidget *,gpointer),
   m->callbackp=p;
 }
   
-double multibar_get_value(Multibar *m,int n){
+float multibar_get_value(Multibar *m,int n){
   if(n<0)return 0.;
   if(n>m->thumbs)return 0.;
   return m->thumbval[n];
 }
 
-void multibar_thumb_bounds(Multibar *m,double lo, double hi){
+void multibar_thumb_bounds(Multibar *m,float lo, float hi){
   GtkWidget *w=GTK_WIDGET(m);
   if(lo>hi)return;
 
@@ -1250,7 +1252,7 @@ void multibar_thumb_bounds(Multibar *m,double lo, double hi){
   draw_and_expose(w);
 }
 
-void multibar_thumb_increment(Multibar *m,double small, double large){
+void multibar_thumb_increment(Multibar *m,float small, float large){
   GtkWidget *w=GTK_WIDGET(m);
   if(small>large)return;
 

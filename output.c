@@ -30,7 +30,7 @@
 #include "output.h"
 #include "declip.h"
 #include "eq.h"
-#include "compand.h"
+#include "multicompand.h"
 
 extern int input_size;
 sig_atomic_t playback_active=0;
@@ -55,14 +55,14 @@ void pipeline_reset(){
   input_reset();  /* clear any persistent lapping state */
   declip_reset();  /* clear any persistent lapping state */
   eq_reset();      /* clear any persistent lapping state */
-  compand_reset();      /* clear any persistent lapping state */
+  multicompand_reset(); /* clear any persistent lapping state */
   output_reset(); /* clear any persistent lapping state */
 }
 
 typedef struct output_feedback{
   feedback_generic parent_class;
-  double *rms;
-  double *peak;
+  float *rms;
+  float *peak;
 } output_feedback;
 
 static feedback_generic_pool feedpool;
@@ -74,7 +74,7 @@ static feedback_generic *new_output_feedback(void){
   return (feedback_generic *)ret;
 }
 
-static void push_output_feedback(double *peak,double *rms){
+static void push_output_feedback(float *peak,float *rms){
   int i,n=input_ch+2;
   output_feedback *f=(output_feedback *)
     feedback_new(&feedpool,new_output_feedback);
@@ -84,7 +84,7 @@ static void push_output_feedback(double *peak,double *rms){
   feedback_push(&feedpool,(feedback_generic *)f);
 }
 
-int pull_output_feedback(double *peak,double *rms){
+int pull_output_feedback(float *peak,float *rms){
   output_feedback *f=(output_feedback *)feedback_pull(&feedpool);
   int i,j,n=input_ch+2;
   if(!f)return 0;
@@ -213,8 +213,8 @@ void *playback_thread(void *dummy){
   long rate=-1;
 
   /* for output feedback */
-  double *rms=alloca(sizeof(*rms)*(input_ch+2));
-  double *peak=alloca(sizeof(*peak)*(input_ch+2));
+  float *rms=alloca(sizeof(*rms)*(input_ch+2));
+  float *peak=alloca(sizeof(*peak)*(input_ch+2));
 
   while(1){
     if(playback_seeking){
@@ -229,9 +229,9 @@ void *playback_thread(void *dummy){
     result=link->samples;
     link=declip_read(link);
     result|=link->samples;
-    link=eq_read(link);
+    link=multicompand_read(link);
     result|=link->samples;
-    link=compand_read(link);
+    link=eq_read(link);
     result|=link->samples;
     
     if(!result)break;
@@ -241,7 +241,7 @@ void *playback_thread(void *dummy){
     
     /* temporary; this would be frequency domain in the finished postfish */
     if(link->samples>0){
-      double scale=fromdB(master_att/10.);
+      float scale=fromdB(master_att/10.);
       for(i=0;i<link->samples;i++)
 	for(j=0;j<link->channels;j++)
 	  link->data[j][i]*=scale;
@@ -279,12 +279,12 @@ void *playback_thread(void *dummy){
       /* final limiting and conversion */
 
       for(k=0,i=0;i<link->samples;i++){
-	double mean=0.;
-	double div=0.;
-	double divrms=0.;
+	float mean=0.;
+	float div=0.;
+	float divrms=0.;
 	
 	for(j=0;j<link->channels;j++){
-	  double dval=link->data[j][i];
+	  float dval=link->data[j][i];
 
 	  switch(outbytes){
 	  case 3:
@@ -333,7 +333,7 @@ void *playback_thread(void *dummy){
 	
 	/* div */
 	for(j=0;j<link->channels;j++){
-	  double dval=mean-link->data[j][i];
+	  float dval=mean-link->data[j][i];
 	  if(fabs(dval)>peak[input_ch+1])peak[input_ch+1]=fabs(dval);
 	  divrms+=dval*dval;
 	}

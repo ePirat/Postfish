@@ -6,6 +6,6 @@ extern void time_fix(char *buffer);
 extern off_t input_seek(off_t pos);
 extern time_linkage *input_read(void);
 extern int input_load(int n,char *list[]);
-extern int pull_input_feedback(double *peak,double *rms,off_t *cursor);
+extern int pull_input_feedback(float *peak,float *rms,off_t *cursor);
 extern void input_reset(void);
-extern off_t input_time_seek_rel(double s);
+extern off_t input_time_seek_rel(float s);

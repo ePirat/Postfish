@@ -62,7 +62,7 @@ typedef struct time_linkage {
   int samples;  /* normally same as size; exception is EOF */
   int channels;
   int rate;
-  double **data;
+  float **data;
 } time_linkage;
 
 extern pthread_mutex_t master_mutex;

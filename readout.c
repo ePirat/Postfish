@@ -46,7 +46,7 @@ static void draw(GtkWidget *widget){
   pango_layout_get_pixel_size(r->layout,&px,&py);
 
   gdk_draw_layout (r->backing,text_gc,
-		   width-2-px-(py/2),(height-py)/2,
+		   width-2-px-(py/4),(height-py)/2,
 		   r->layout);
   
   /* draw frame */
@@ -94,7 +94,7 @@ static void size_request (GtkWidget *widget,GtkRequisition *requisition){
   
   pango_layout_get_pixel_size(r->layout,&x,&y);
   
-  requisition->width = x+4+y;
+  requisition->width = x+4+y/2;
   requisition->height = y+6;
 
 }

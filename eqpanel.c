@@ -44,12 +44,12 @@ typedef struct {
   int number;
 } bar;
 
-static bar bars[freqs];
+static bar bars[eq_freqs];
 
 static void slider_change(GtkWidget *w,gpointer in){
   char buffer[80];
   bar *b=(bar *)in;
-  gdouble val=multibar_get_value(MULTIBAR(b->slider),0);
+  float val=multibar_get_value(MULTIBAR(b->slider),0);
   
   sprintf(buffer,"%+3.0fdB",val);
   readout_set(READOUT(b->readout),buffer);
@@ -62,9 +62,9 @@ void eqpanel_create(postfish_mainpanel *mp,
 		    GtkWidget *windowbutton,
 		    GtkWidget *activebutton){
   int i;
-  char *labels[15]={"-110","-100","-90","-80","-70","-60","-50","-40",
-		    "-30","-20","-10","0","+10","+20","+30"};
-  double levels[16]={-120,-110,-100,-90,-80,-70,-60,-50,-40,
+  char *labels[15]={"110","100","90","80","70","60","50","40",
+		    "30","20","10","0","+10","+20","+30"};
+  float levels[16]={-120,-110,-100,-90,-80,-70,-60,-50,-40,
 		     -30,-20,-10,0,10,20,30};
 
   subpanel_generic *panel=subpanel_create(mp,windowbutton,activebutton,
@@ -72,10 +72,10 @@ void eqpanel_create(postfish_mainpanel *mp,
 					  &eq_visible,
 					  "_Equalization filter"," [e] ");
   
-  GtkWidget *slidertable=gtk_table_new(freqs,3,0);
+  GtkWidget *slidertable=gtk_table_new(eq_freqs,3,0);
 
-  for(i=0;i<freqs;i++){
-    const char *labeltext=freq_frequency_label(i);
+  for(i=0;i<eq_freqs;i++){
+    const char *labeltext=eq_freq_labels[i];
 
     GtkWidget *label=gtk_label_new(labeltext);
     gtk_widget_set_name(label,"smallmarker");
@@ -87,7 +87,7 @@ void eqpanel_create(postfish_mainpanel *mp,
 
     multibar_callback(MULTIBAR(bars[i].slider),slider_change,bars+i);
     multibar_thumb_set(MULTIBAR(bars[i].slider),0.,0);
-    multibar_thumb_bounds(MULTIBAR(bars[i].slider),-40,30);
+    multibar_thumb_bounds(MULTIBAR(bars[i].slider),-60,30);
     multibar_thumb_increment(MULTIBAR(bars[i].slider),1,10);
 
     gtk_misc_set_alignment(GTK_MISC(label),1,.5);
@@ -104,35 +104,31 @@ void eqpanel_create(postfish_mainpanel *mp,
 
 }
 
-static double **peakfeed=0;
-static double **rmsfeed=0;
+static float **peakfeed=0;
+static float **rmsfeed=0;
 
 void eqpanel_feedback(int displayit){
   int i;
   if(!peakfeed){
-    peakfeed=malloc(sizeof(*peakfeed)*freqs);
-    rmsfeed=malloc(sizeof(*rmsfeed)*freqs);
+    peakfeed=malloc(sizeof(*peakfeed)*eq_freqs);
+    rmsfeed=malloc(sizeof(*rmsfeed)*eq_freqs);
 
-    for(i=0;i<freqs;i++){
+    for(i=0;i<eq_freqs;i++){
       peakfeed[i]=malloc(sizeof(**peakfeed)*input_ch);
       rmsfeed[i]=malloc(sizeof(**rmsfeed)*input_ch);
     }
   }
   
   if(pull_eq_feedback(peakfeed,rmsfeed)==1)
-    if(displayit && eq_visible)
-      for(i=0;i<freqs;i++)
-	multibar_set(MULTIBAR(bars[i].slider),rmsfeed[i],peakfeed[i],input_ch);
+    for(i=0;i<eq_freqs;i++)
+      multibar_set(MULTIBAR(bars[i].slider),rmsfeed[i],peakfeed[i],
+		   input_ch,(displayit && eq_visible));
+  
 }
 
 void eqpanel_reset(void){
   int i;
-  for(i=0;i<freqs;i++)
+  for(i=0;i<eq_freqs;i++)
     multibar_reset(MULTIBAR(bars[i].slider));
 }
-
-
-
-
-
 

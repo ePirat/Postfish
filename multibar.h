@@ -44,10 +44,10 @@ typedef struct _Multibar       Multibar;
 typedef struct _MultibarClass  MultibarClass;
 
 typedef struct bartack {
-  double pixelposhi;
-  double pixelposlo;
-  double pixeldeltahi;
-  double pixeldeltalo;
+  float pixelposhi;
+  float pixelposlo;
+  float pixeldeltahi;
+  float pixeldeltalo;
 } bartrack;
 
 #define HI_ATTACK   (1<<0)
@@ -66,12 +66,12 @@ struct _Multibar{
   int labels;
   int readout;
   PangoLayout **layout;
-  double       *levels;
+  float       *levels;
 
   GdkGC         *boxcolor;
-  double         peak;
+  float         peak;
   int            peakdelay;
-  double         peakdelta;
+  float         peakdelta;
 
   int            clipdelay;
 
@@ -80,17 +80,17 @@ struct _Multibar{
   int dampen_flags;
 
   int    thumbs;
-  double thumbval[3];
+  float  thumbval[3];
   int    thumbpixel[3];
   GtkStateType thumbstate[3];
   int    thumbfocus;
   int    prev_thumbfocus;
   int    thumbgrab;
   int    thumbx;
-  double thumblo;
-  double thumbhi;
-  double thumbsmall;
-  double thumblarge;
+  float  thumblo;
+  float  thumbhi;
+  float  thumbsmall;
+  float  thumblarge;
 
   int    thumblo_x;
   int    thumbhi_x;
@@ -108,26 +108,27 @@ struct _MultibarClass{
 };
 
 GType          multibar_get_type        (void);
-GtkWidget*     multibar_new             (int n, char **labels, double *levels,
+GtkWidget*     multibar_new             (int n, char **labels, float *levels,
 					 int thumbs, int flags);
-GtkWidget*     multibar_slider_new (int n, char **labels, double *levels, 
+GtkWidget*     multibar_slider_new (int n, char **labels, float *levels, 
 				    int thumbs);
 
 void	       multibar_clear           (Multibar *m);
-void	       multibar_set             (Multibar *m,double *lo,double *hi, int n);
-void	       multibar_thumb_set       (Multibar *m,double v, int n);
-void	       multibar_setwarn         (Multibar *m);
+void	       multibar_set             (Multibar *m,float *lo,float *hi, int n,int drawp);
+void	       multibar_thumb_set       (Multibar *m,float v, int n);
+void	       multibar_setwarn         (Multibar *m,int drawp);
 void           multibar_reset           (Multibar *m);
 void           multibar_callback        (Multibar *m,
 					 void (*callback)
 					 (GtkWidget *,gpointer),
 					 gpointer);
-double multibar_get_value(Multibar *m,int n);
-void multibar_thumb_bounds(Multibar *m,double lo, double hi);
-void multibar_thumb_increment(Multibar *m,double small, double large);
+float multibar_get_value(Multibar *m,int n);
+void multibar_thumb_bounds(Multibar *m,float lo, float hi);
+void multibar_thumb_increment(Multibar *m,float small, float large);
 
 G_END_DECLS
 
 #endif
+
 
 

@@ -29,89 +29,117 @@
    n^3 -> n^2 log n jump possible. Google for it, you'll find it. */
 
 #include <string.h>
-#include "smallft.h"
+#include <fftw3.h>
 #include "reconstruct.h"
 
-static void AtWA(drft_lookup *fft, double *x, double *w,int n){
+/* fftw3 requires this kind of static setup */
+static fftwf_plan fftwf_qf;
+static fftwf_plan fftwf_qb;
+static fftwf_plan fftwf_sf;
+static fftwf_plan fftwf_sb;
+static float *q;
+static float *s;
+static blocksize=0;
+
+void reconstruct_reinit(int n){
+  if(blocksize!=n){
+    if(blocksize){
+      fftwf_destroy_plan(fftwf_qf);
+      fftwf_destroy_plan(fftwf_qb);
+      fftwf_destroy_plan(fftwf_sf);
+      fftwf_destroy_plan(fftwf_sb);
+      fftwf_free(q);
+      fftwf_free(s);
+    }
+    blocksize=n;
+
+    q=fftwf_malloc((n+2)*sizeof(*q));
+    s=fftwf_malloc((n+2)*sizeof(*s));
+    fftwf_qf=fftwf_plan_dft_r2c_1d(n,q,(fftwf_complex *)q,FFTW_MEASURE);
+    fftwf_qb=fftwf_plan_dft_c2r_1d(n,(fftwf_complex *)q,q,FFTW_MEASURE);
+    fftwf_sf=fftwf_plan_dft_r2c_1d(n,s,(fftwf_complex *)s,FFTW_MEASURE);
+    fftwf_sb=fftwf_plan_dft_c2r_1d(n,(fftwf_complex *)s,s,FFTW_MEASURE);
+  }
+}
+
+static void AtWA(float *w,int n){
   int i;
-  drft_forward(fft,x);
-  for(i=0;i<n;i++)x[i]*=w[i];
-  drft_backward(fft,x); /* this is almost the same as A'; see the
-			   correction factor rolled into w at the
-			   beginning of reconstruct() */
+  fftwf_execute(fftwf_qf);
+  for(i=0;i<n+2;i++)q[i]*=w[i];
+  fftwf_execute(fftwf_qb); /* this is almost the same as A'; see the
+			      correction factor rolled into w at the
+			      beginning of reconstruct() */
 }
 
 /* This is not the inverse of XA'WAX; the algebra isn't valid (due to
    the singularity of the selection matrix X) and as such is useless
    for direct solution.  However, it does _approximate_ the inverse
    and as such makes an excellent system preconditioner. */
-static void precondition(drft_lookup *fft, double *x, double *w,int n){
+static void precondition(float *w,int n){
   int i;
 
   /* no need to remove scaling of result; the relative stretching of
      the solution space is what's important */
 
-  drft_forward(fft,x); /* almost the same as A^-1'; see the correction
-			  factor rolled into w at the beginning of
-			  reconstruct() */
-  for(i=0;i<n;i++)x[i]/=w[i];  
-  drft_backward(fft,x);
+  fftwf_execute(fftwf_sf); /* almost the same as A^-1'; see the correction
+			      factor rolled into w at the beginning of
+			      reconstruct() */
+  for(i=0;i<n+2;i++)s[i]/=w[i];  
+  fftwf_execute(fftwf_sb); 
 }
 
-static double inner_product(double *a, double *b, int n){
+static float inner_product(float *a, float *b, int n){
   int i;
-  double acc=0.;
+  float acc=0.;
   for(i=0;i<n;i++)acc+=a[i]*b[i];
   return acc;
 }
 
-#include <stdio.h>
-void reconstruct(drft_lookup *fft,
-		 double *x, double *w, 
-		 double *flag, double e,int max,int n){
+void reconstruct(float *x, float *w,
+		 float *flag, float e,int max){
+  int n=blocksize;
   int i,j;
-  double Atb[n];
-  double r[n];
-  double d[n];
-  double q[n];
-  double s[n];
-  double phi_new,phi_old,res_0,res_new;
-  double alpha,beta;
+  float Atb[n];
+  float r[n];
+  float d[n];
+  float phi_new,phi_old,res_0,res_new;
+  float alpha,beta;
 
   /* hack; roll a correction factor for A'/A-1 into w */
   for(j=1;j<n-1;j++)w[j]*=.5;
 
   /* compute initial Atb */
-  for(j=0;j<n;j++)Atb[j]=x[j]*(flag[j]-1.);
-  AtWA(fft,Atb,w,n);
+  for(j=0;j<n;j++)q[j]=x[j]*(flag[j]-1.);
+  AtWA(w,n);
+  for(j=0;j<n;j++)Atb[j]=q[j];
 
   /* compute initial residue */
-  for(j=0;j<n;j++)r[j]=x[j]*flag[j];
-  AtWA(fft,r,w,n);
-  for(j=0;j<n;j++)d[j]=r[j]=(Atb[j]-r[j])*flag[j];
+  for(j=0;j<n;j++)q[j]=x[j]*flag[j];
+  AtWA(w,n);
+  for(j=0;j<n;j++)s[j]=r[j]=(Atb[j]-q[j])*flag[j];
 
   /* initial preconditioning */
-  precondition(fft,d,w,n);
-  for(j=0;j<n;j++)q[j]=d[j]*=flag[j];
+  precondition(w,n);
+  for(j=0;j<n;j++)q[j]=d[j]=s[j]*=flag[j];
 
   phi_new=inner_product(r,d,n);
   res_new=res_0=inner_product(Atb,Atb,n);
 
   for(i=0;i<max && sqrt(res_new)/sqrt(res_0)>e;i++){
-    AtWA(fft,q,w,n);
+    AtWA(w,n);
     alpha=phi_new/inner_product(d,q,n);
     for(j=0;j<n;j++)x[j]+=alpha*d[j];
 
     if((i & 0x3f)==0x3f){
-      for(j=0;j<n;j++)r[j]=x[j]*flag[j];
-      AtWA(fft,r,w,n);
-      for(j=0;j<n;j++)r[j]=(Atb[j]-r[j])*flag[j];
+      for(j=0;j<n;j++)q[j]=x[j]*flag[j];
+      AtWA(w,n);
+      for(j=0;j<n;j++)r[j]=(Atb[j]-q[j])*flag[j];
     }else
       for(j=0;j<n;j++)r[j]-=alpha*q[j]*flag[j];
     
     /* apply preconditioner */
     for(j=0;j<n;j++)s[j]=r[j]*flag[j];
-    precondition(fft,s,w,n);
+    precondition(w,n);
     for(j=0;j<n;j++)s[j]*=flag[j];
 
     phi_old=phi_new;
