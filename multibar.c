@@ -72,6 +72,95 @@ static void draw(GtkWidget *widget,double *lowvals, double *highvals, int n){
 
     }
 
+    /* dampen movement according to setup */
+    if(n>m->bars){
+      if(!m->bartrackers)
+	m->bartrackers=calloc(n,sizeof(*m->bartrackers));
+      else{
+	m->bartrackers=realloc(m->bartrackers,
+				    n*sizeof(*m->bartrackers));
+	memset(m->bartrackers+m->bars,0,
+	       sizeof(*m->bartrackers)*(n-m->bars));
+      }
+      
+      for(i=m->bars;i<n;i++){
+	m->bartrackers[i].pixelposlo=pixlo[i];
+	m->bartrackers[i].pixelposhi=pixhi[i];
+	m->bartrackers[i].pixeldeltalo=0;
+	m->bartrackers[i].pixeldeltahi=0;
+      }
+
+      m->bars=n;
+    }else if(n<m->bars)
+      m->bars=n;
+
+    for(i=0;i<n;i++){
+      double trackhi=m->bartrackers[i].pixelposhi;
+      double tracklo=m->bartrackers[i].pixelposlo;
+      double delhi=m->bartrackers[i].pixeldeltahi;
+      double dello=m->bartrackers[i].pixeldeltalo;
+
+      /* hi */
+      if(pixhi[i]>trackhi){
+	/* hi attack */
+	if(m->dampen_flags & HI_ATTACK){
+	  /* damp the attack */
+	  if(delhi<0.)
+	    delhi=1.;
+	  else
+	    delhi+=2;
+	  pixhi[i]=trackhi+delhi;
+	}else
+	  if(delhi<0.)delhi=0.;
+	
+      }else{
+	/* hi decay */
+	if(m->dampen_flags & HI_DECAY){
+	  /* damp the decay */
+	  if(delhi>0.)
+	    delhi=-1.;
+	  else
+	    delhi-=2;
+	  pixhi[i]=trackhi+delhi;
+	}else
+	  if(delhi>0.)delhi=0.;
+
+      }
+      m->bartrackers[i].pixelposhi=pixhi[i];
+      m->bartrackers[i].pixeldeltahi=delhi;
+
+      /* lo */
+      if(pixlo[i]>tracklo){
+	/* lo attack */
+	if(m->dampen_flags & LO_ATTACK){
+	  /* damp the attack */
+	  if(dello<0.)
+	    dello=1.;
+	  else
+	    dello+=2;
+	  pixlo[i]=tracklo+dello;
+	}else
+	  if(dello<0.)dello=0.;
+
+      }else{
+	/* lo decay */
+	if(m->dampen_flags & LO_DECAY){
+	  /* damp the decay */
+	  if(dello>0.)
+	    dello=-1.;
+	  else
+	    dello-=2;
+	  pixlo[i]=tracklo+dello;
+	}else
+	  if(dello>0.)dello=0.;
+
+      }
+      m->bartrackers[i].pixelposlo=pixlo[i];
+      m->bartrackers[i].pixeldeltalo=dello;
+
+    }
+
+    /* draw the pixel positions */
     while(x<widget->allocation.width){
       int r=0xffff,g=0xffff,b=0xffff;
       GdkColor rgb={0,0,0,0};
@@ -289,7 +378,7 @@ GType multibar_get_type (void){
   return m_type;
 }
 
-GtkWidget* multibar_new (int n, char **labels, double *levels){
+GtkWidget* multibar_new (int n, char **labels, double *levels, int flags){
   int i;
   GtkWidget *ret= GTK_WIDGET (g_object_new (multibar_get_type (), NULL));
   Multibar *m=MULTIBAR(ret);
@@ -303,6 +392,7 @@ GtkWidget* multibar_new (int n, char **labels, double *levels){
   for(i=0;i<m->labels;i++)
     m->layout[i]=gtk_widget_create_pango_layout(ret,labels[i]);
 
+  m->dampen_flags=flags;
   return ret;
 }
 
@@ -318,5 +408,3 @@ void multibar_set(Multibar *m,double *lo, double *hi, int n){
 		  widget->allocation.height);
   
 }
-
-

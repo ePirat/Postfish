@@ -505,8 +505,8 @@ void mainpanel_create(postfish_mainpanel *panel,char **chlabels){
     GtkWidget *inframe=gtk_frame_new(NULL);
     GtkWidget *outframe=gtk_frame_new(NULL);
 
-    panel->inbar=multibar_new(12,labels,levels);
-    panel->outbar=multibar_new(12,labels,levels);
+    panel->inbar=multibar_new(12,labels,levels, LO_ATTACK|LO_DECAY|HI_DECAY );
+    panel->outbar=multibar_new(12,labels,levels, LO_ATTACK|LO_DECAY|HI_DECAY );
 
     gtk_container_set_border_width(GTK_CONTAINER (ttable), 3);
     gtk_table_set_col_spacings(GTK_TABLE(ttable),5);

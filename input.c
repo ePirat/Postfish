@@ -357,15 +357,17 @@ static void update_input_feedback(double *peak,double *rms){
     input_rms=calloc(n,sizeof(*input_rms));
     input_peak=calloc(n,sizeof(*input_peak));
   }
-
-  if(input_feedback==0)
-    for(i=0;i<n;i++)input_peak[i]*=.9;
-  for(i=0;i<n;i++)input_rms[i]=.8*input_rms[i]+.2*rms[i];
   
-  for(i=0;i<n;i++)
-    if(peak[i]>input_peak[i])
-      input_peak[i]=peak[i];
-
+  if(input_feedback==0){
+    memcpy(input_peak,peak,sizeof(*peak)*n);
+    memcpy(input_rms,rms,sizeof(*rms)*n);
+  }else{
+    for(i=0;i<n;i++){
+      if(peak[i]>input_peak[i])
+	input_peak[i]=peak[i];
+      input_rms[i]=.5*input_rms[i]+.5*rms[i];  
+    }
+  }
   input_feedback=1;
 
   pthread_mutex_unlock(&master_mutex);

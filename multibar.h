@@ -25,7 +25,12 @@ typedef struct bartack {
   double pixelposlo;
   double pixeldeltahi;
   double pixeldeltalo;
-}
+} bartrack;
+
+#define HI_ATTACK (1<<0)
+#define LO_ATTACK (1<<1)
+#define HI_DECAY  (1<<2)
+#define LO_DECAY  (1<<3)
 
 struct _Multibar{
 
@@ -44,6 +49,7 @@ struct _Multibar{
 
   bartrack *bartrackers;
   int bars;
+  int dampen_flags;
 };
 
 struct _MultibarClass{
@@ -54,7 +60,8 @@ struct _MultibarClass{
 };
 
 GType          multibar_get_type        (void);
-GtkWidget*     multibar_new             (int n, char **labels, double *levels);
+GtkWidget*     multibar_new             (int n, char **labels, double *levels,
+					 int flags);
 void	       multibar_clear           (Multibar *m);
 void	       multibar_set             (Multibar *m,double *lo,double *hi, int n);
 
