@@ -54,6 +54,7 @@ typedef struct {
 
 extern sig_atomic_t playback_active;
 extern sig_atomic_t playback_exit;
+extern sig_atomic_t ch;
 extern void *playback_thread(void *dummy);
 
 static void action_play(GtkWidget *dummy,postfish_mainpanel *p){
@@ -152,22 +153,6 @@ static void masterdB_change(GtkRange *r, gpointer in){
   gdouble val=gtk_range_get_value(r);
   sprintf(buf,"%.1f dB",val);
   readout_set(READOUT(p->masterdB_r),buf);
-}
-
-static void timeentry_fix(char *buffer){
-  if(buffer[0]=='0')buffer[0]=' ';
-  if(!strncmp(buffer," 0",2))buffer[1]=' ';
-  if(!strncmp(buffer,"  0",3))buffer[2]=' ';
-  if(!strncmp(buffer,"   0",4))buffer[3]=' ';
-  if(!strncmp(buffer,"    :0",6))buffer[5]=' ';
-  if(!strncmp(buffer,"    : 0",7))buffer[6]=' ';
-  
-  if(buffer[0]!=' ' && buffer[1]==' ')buffer[1]='0';
-  if(buffer[1]!=' ' && buffer[2]==' ')buffer[2]='0';
-  if(buffer[2]!=' ' && buffer[3]==' ')buffer[3]='0';
-  if(buffer[3]!=' ' && buffer[5]==' ')buffer[5]='0';
-  if(buffer[5]!=' ' && buffer[6]==' ')buffer[6]='0';
-
 }
 
 static gboolean timeevent_unselect(GtkWidget *widget,
@@ -300,7 +285,7 @@ static gboolean keybinding(GtkWidget *widget,
   case GDK_n:
     gtk_widget_activate(p->buttonactive[2]);
     break;
-  case GDK_q:
+  case GDK_e:
     gtk_widget_activate(p->buttonactive[3]);
     break;
   case GDK_c:
@@ -439,7 +424,7 @@ void mainpanel_create(postfish_mainpanel *panel,char **chlabels){
   panel->leftframe=gtk_frame_new(NULL);
   panel->box2=gtk_vbox_new(0,0);
   panel->box1=gtk_vbox_new(0,6);
-  panel->wintable=gtk_table_new(8,3,0);
+  panel->wintable=gtk_table_new(7,3,0);
   panel->twirlimage=gtk_image_new_from_pixmap(panel->ff[0],panel->fb[0]);
 
   gtk_container_set_border_width (GTK_CONTAINER (panel->topframe), 3);
@@ -483,7 +468,7 @@ void mainpanel_create(postfish_mainpanel *panel,char **chlabels){
   mainpanel_panelentry(panel,"_Declip ","[d]",0);
   mainpanel_panelentry(panel,"Cross_Talk ","[t]",1);
   mainpanel_panelentry(panel,"_Noise Filter ","[n]",2);
-  mainpanel_panelentry(panel,"E_qualizer ","[q]",3);
+  mainpanel_panelentry(panel,"_Equalizer ","[e]",3);
   mainpanel_panelentry(panel,"_Compander ","[c]",4);
   mainpanel_panelentry(panel,"_Limiter ","[l]",5);
   mainpanel_panelentry(panel,"_Output Cal. ","[o]",6);
@@ -549,22 +534,6 @@ void mainpanel_create(postfish_mainpanel *panel,char **chlabels){
     {
       GtkWidget *box=gtk_hbox_new(0,0);
 
-      GtkWidget *topbox=gtk_hbox_new(0,0);
-      GtkWidget *pre=
-	gtk_radio_button_new_with_mnemonic(NULL,"_pre-compander");
-      GtkWidget *mid=
-	gtk_radio_button_new_with_mnemonic_from_widget(GTK_RADIO_BUTTON(pre),
-						       "p_re-limiter");
-      GtkWidget *post=
-	gtk_radio_button_new_with_mnemonic_from_widget(GTK_RADIO_BUTTON(pre),
-						       "pr_e-output");
-
-      gtk_box_pack_start(GTK_BOX(topbox),pre,0,0,0);
-      gtk_box_pack_start(GTK_BOX(topbox),mid,0,0,0);
-      gtk_box_pack_start(GTK_BOX(topbox),post,0,0,0);
-      gtk_table_attach_defaults(GTK_TABLE(ttable),topbox,1,3,3,4);
-
-
       panel->masterdB_a=gtk_toggle_button_new_with_label("[m]aster");
       panel->masterdB_r=readout_new("  0.0 dB");
       panel->masterdB_s=gtk_hscale_new_with_range(-50,50,.1);
@@ -572,13 +541,13 @@ void mainpanel_create(postfish_mainpanel *panel,char **chlabels){
       gtk_range_set_value(GTK_RANGE(panel->masterdB_s),0);
       gtk_scale_set_draw_value(GTK_SCALE(panel->masterdB_s),FALSE);
     
-      gtk_table_attach(GTK_TABLE(ttable),panel->masterdB_a,0,1,4,5,
+      gtk_table_attach(GTK_TABLE(ttable),panel->masterdB_a,0,1,3,4,
 		       GTK_FILL,GTK_FILL,0,0);
       
       gtk_box_pack_start(GTK_BOX(box),panel->masterdB_r,0,0,0);
       gtk_box_pack_start(GTK_BOX(box),panel->masterdB_s,1,1,0);
       
-      gtk_table_attach_defaults(GTK_TABLE(ttable),box,1,3,4,5);
+      gtk_table_attach_defaults(GTK_TABLE(ttable),box,1,3,3,4);
 
       g_signal_connect_after (G_OBJECT(panel->masterdB_s), "value-changed",
 			G_CALLBACK(masterdB_change), (gpointer)panel);
@@ -610,11 +579,11 @@ void mainpanel_create(postfish_mainpanel *panel,char **chlabels){
       gtk_table_attach_defaults(GTK_TABLE(bar_table),panel->deckactive[5],6,7,0,1);
       gtk_table_attach_defaults(GTK_TABLE(bar_table),panel->deckactive[6],7,8,0,1);
 
-      gtk_table_attach(GTK_TABLE(ttable),bar_table,1,3,5,6,
+      gtk_table_attach(GTK_TABLE(ttable),bar_table,1,3,4,5,
 		       GTK_EXPAND|GTK_FILL,GTK_EXPAND|GTK_FILL,
 		       0,8);
 
-      gtk_table_attach(GTK_TABLE(ttable),panel->twirlimage,0,1,5,6,
+      gtk_table_attach(GTK_TABLE(ttable),panel->twirlimage,0,1,4,5,
       		       0,0,
 		       0,0);
 
@@ -668,9 +637,9 @@ void mainpanel_create(postfish_mainpanel *panel,char **chlabels){
 
       gtk_misc_set_alignment(GTK_MISC(cuelabel),1,.5);
 
-      gtk_table_attach_defaults(GTK_TABLE(ttable),cuelabel,0,1,6,7);
-      gtk_table_attach_defaults(GTK_TABLE(ttable),cuebox,1,2,6,7);
-      gtk_table_attach_defaults(GTK_TABLE(ttable),panelb,2,3,6,7);
+      gtk_table_attach_defaults(GTK_TABLE(ttable),cuelabel,0,1,5,6);
+      gtk_table_attach_defaults(GTK_TABLE(ttable),cuebox,1,2,5,6);
+      gtk_table_attach_defaults(GTK_TABLE(ttable),panelb,2,3,5,6);
 
       gtk_box_pack_start(GTK_BOX(cuebox),cue,0,0,0);
 
@@ -696,10 +665,10 @@ void mainpanel_create(postfish_mainpanel *panel,char **chlabels){
       GtkWidget *panel=gtk_check_button_new_with_mnemonic("_setting list");
       gtk_misc_set_alignment(GTK_MISC(conflabel),1,.5);
 
-      gtk_table_attach_defaults(GTK_TABLE(ttable),conflabel,0,1,7,8);
-      gtk_table_attach(GTK_TABLE(ttable),confbox,1,2,7,8,
+      gtk_table_attach_defaults(GTK_TABLE(ttable),conflabel,0,1,6,7);
+      gtk_table_attach(GTK_TABLE(ttable),confbox,1,2,6,7,
 		       GTK_EXPAND|GTK_FILL,GTK_EXPAND|GTK_FILL,0,3);
-      gtk_table_attach(GTK_TABLE(ttable),panel,2,3,7,8,0,0,0,0);
+      gtk_table_attach(GTK_TABLE(ttable),panel,2,3,6,7,0,0,0,0);
 
       gtk_box_pack_start(GTK_BOX(confbox),conf,1,1,0);
     }
@@ -718,6 +687,9 @@ void mainpanel_create(postfish_mainpanel *panel,char **chlabels){
 void mainpanel_go(int argc,char *argv[]){
   postfish_mainpanel p;
   char *homedir=getenv("HOME");
+  char *labels[9];
+  char *labels_gen[]={"_0","_1","_2","_3","_4","_5","_6","_7",0};
+  char *labels_st[]={"_0 left","_1 right","_2 mid","_3 side",0};
   memset(&p,0,sizeof(p));
   gtk_rc_add_default_file("/etc/postfish/postfishrc");
   if(homedir){
@@ -728,13 +700,32 @@ void mainpanel_go(int argc,char *argv[]){
     gtk_rc_add_default_file(homerc);
   }
   gtk_init (&argc, &argv);
-  
-  {
-    char *labels[]={"_0 left","_1 right","_2 mid","_3 side",0};
-    mainpanel_create(&p,labels);
+
+  if(ch==2){
+    memcpy(labels,labels_st,sizeof(labels_st));
+  }else{
+    memcpy(labels,labels_gen,sizeof(labels_gen));
+    labels[ch]=0;
   }
-  
+
+  mainpanel_create(&p,labels);
   animate_fish(&p);
   gtk_main ();
 
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -54,27 +54,26 @@
 
 #include "mainpanel.h"
 
-#define todB(x)   ((x)==0?-400.f:log((x)*(x))*4.34294480f)
-#define fromdB(x) (exp((x)*.11512925f))  
-#define toOC(n)     (log(n)*1.442695f-5.965784f)
-
 static int outfileno=-1;
-static int loop_flag=1;
+sig_atomic_t loop_flag=1;
 static int inbytes=0;
 static int outbytes=2;
 static int rate=0;
-static int ch=0;
+sig_atomic_t ch=0;
 static int signp=0;
 
 /* working space */
-
-static long block=1024;
+typedef struct time_linkage {
+  int samples;
+  int channels;
+  int rate;
+  double **data;
+} time_linkage;
 
 static off_t Acursor=0;
 static off_t Bcursor=-1;
 static long  T=-1;
 static off_t cursor=0;
-
 
 pthread_mutex_t master_mutex=PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
 
