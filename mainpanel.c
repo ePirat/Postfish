@@ -536,7 +536,8 @@ static void mainpanel_chentry(postfish_mainpanel *p,
       gtk_widget_set_name(l,"windowbuttonlike");
       gtk_misc_set_alignment(GTK_MISC(l),0,.5);
       gtk_table_attach_defaults(GTK_TABLE(table),l,1,2,i+1,i+2);
-    }else{
+    }
+    {
       GtkWidget *b=windowbutton_new(NULL);
       
       gtk_widget_set_sensitive(b,FALSE);
