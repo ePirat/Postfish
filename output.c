@@ -177,17 +177,12 @@ void *playback_thread(void *dummy){
 	  }
 	}
       }
-      {
-	struct timeval tv;
-	long foo;
-	gettimeofday(&tv,NULL);
-	foo=tv.tv_sec*15+tv.tv_usec*15/100000;
-	if(last!=foo)
-	  write(eventpipe[1],"",1);
-	last=foo;
-      }
       
       count+=fwrite(audiobuf,1,ret->channels*ret->samples*2,playback_fd);
+
+      /* inform Lord Vader his shuttle is ready */
+      write(eventpipe[1],"",1);
+
     }
   }
 

@@ -53,7 +53,8 @@
 #define toOC(n)     (log(n)*1.442695f-5.965784f)
 
 typedef struct time_linkage {
-  int samples;
+  int size;
+  int samples;  /* normally same as size; exception is EOF */
   int channels;
   int rate;
   double **data;
@@ -68,5 +69,4 @@ extern int outfileno;
 extern int seekable;
 extern int eventpipe[2];
 extern int input_ch;
-extern sig_atomic_t input_feedback;
 

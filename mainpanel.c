@@ -1,10 +1,7 @@
 
+#include "postfish.h"
 #include <gtk/gtk.h>
 #include <gdk/gdkkeysyms.h>
-#include <signal.h>
-#include <stdio.h>
-#include <pthread.h>
-#include "postfish.h"
 #include "fisharray.h"
 #include "buttonicons.h"
 #include "multibar.h"
@@ -51,6 +48,8 @@ typedef struct {
   GtkWidget *outbar;
 
   GtkWidget *channelshow[10]; /* support only up to 8 + mid/side */
+
+  GtkWidget *cue;
 
   /* ui state */
   int fishframe;
@@ -610,7 +609,6 @@ void mainpanel_create(postfish_mainpanel *panel,char **chlabels){
     {
       GtkWidget *cuebox=gtk_hbox_new(0,0);
       GtkWidget *cuelabel=gtk_label_new("cue:");
-      GtkWidget *cue=readout_new("    :  :00.00");
       GtkWidget *entry_a=gtk_entry_new();
       GtkWidget *entry_b=gtk_entry_new();
 
@@ -618,6 +616,9 @@ void mainpanel_create(postfish_mainpanel *panel,char **chlabels){
       GtkWidget *frameb=gtk_vseparator_new();
 
       GtkWidget *panelb=gtk_check_button_new_with_mnemonic("c_ue list");
+
+      panel->cue=readout_new("    :  :00.00");
+
 
       panel->cue_set[0]=gtk_button_new_with_label("[a]");
       panel->cue_set[1]=gtk_toggle_button_new_with_label("[b]");
@@ -653,7 +654,7 @@ void mainpanel_create(postfish_mainpanel *panel,char **chlabels){
       gtk_table_attach_defaults(GTK_TABLE(ttable),cuebox,1,2,5,6);
       gtk_table_attach_defaults(GTK_TABLE(ttable),panelb,2,3,5,6);
 
-      gtk_box_pack_start(GTK_BOX(cuebox),cue,0,0,0);
+      gtk_box_pack_start(GTK_BOX(cuebox),panel->cue,0,0,0);
 
       gtk_box_pack_start(GTK_BOX(cuebox),framea,1,1,3);
 
@@ -711,22 +712,28 @@ static gboolean async_event_handle(GIOChannel *channel,
       gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(panel->deckactive[3]),0);
 
   /* second order of business; update the input meter if data is available */
-  if(input_feedback){
+  {
+    off_t   time_cursor;
+    int     n;
     double *rms=alloca(sizeof(*rms)*(input_ch+2));
     double *peak=alloca(sizeof(*peak)*(input_ch+2));
-    fetch_input_feedback(peak,rms);
-
-    for(i=0;i<input_ch+2;i++){
-      if(gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(panel->channelshow[i]))){
-	peak[i]=todB(peak[i]);
-	rms[i]=todB(rms[i]);
-      }else{
-	peak[i]=-400;
-	rms[i]=-400;
+    if(pull_input_feedback(peak,rms,&time_cursor,&n)){
+      char buffer[14];
+      for(i=0;i<n;i++){
+	if(gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(panel->channelshow[i]))){
+	  peak[i]=todB(peak[i]);
+	  rms[i]=todB(rms[i]);
+	}else{
+	  peak[i]=-400;
+	  rms[i]=-400;
+	}
       }
-    }
+      
+      multibar_set(MULTIBAR(panel->inbar),rms,peak,n);
+      input_cursor_to_time(time_cursor,buffer);
+      readout_set(panel->cue,buffer);
 
-    multibar_set(MULTIBAR(panel->inbar),rms,peak,input_ch+2);
+    }
   }
 
   return TRUE;

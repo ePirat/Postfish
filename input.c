@@ -22,6 +22,7 @@
  */
 
 #include "postfish.h"
+#include "input.h"
 
 static off_t        Acursor=0;
 static off_t        Bcursor=-1;
@@ -44,6 +45,18 @@ typedef struct {
 
 } file_entry;
 
+typedef struct input_feedback{
+  off_t   cursor;
+  double *rms;
+  double *peak;
+
+  struct input_feedback *next;
+} input_feedback;
+
+static input_feedback *feedback_list_head;
+static input_feedback *feedback_list_tail;
+static input_feedback *feedback_pool;
+
 static file_entry *file_list=NULL;
 static int file_entries=0;
 static int current_file_entry_number=-1;
@@ -60,14 +73,6 @@ void input_Bcursor_set(off_t c){
   pthread_mutex_lock(&master_mutex);
   Bcursor=c;
   pthread_mutex_unlock(&master_mutex);
-}
-
-off_t input_cursor_get(void){
-  off_t ret;
-  pthread_mutex_lock(&master_mutex);
-  ret=cursor;
-  pthread_mutex_unlock(&master_mutex);
-  return ret;
 }
 
 off_t input_time_to_cursor(char *t){
@@ -121,7 +126,8 @@ off_t input_time_to_cursor(char *t){
   }else
     h=0;
 
-  return (off_t)hd + (off_t)s*100 + (off_t)m*60*100 + (off_t)h*60*60*100;
+  return ((off_t)hd + (off_t)s*100 + (off_t)m*60*100 + (off_t)h*60*60*100) *
+    input_rate / 100 * inbytes * input_ch;
 }
 
 void time_fix(char *buffer){
@@ -140,12 +146,15 @@ void time_fix(char *buffer){
 }
 
 void input_cursor_to_time(off_t cursor,char *t){
-  int h=cursor/60/60/100,m,s,hd;
-  cursor%=(off_t)60*60*100;
-  m=cursor/60/100;
-  cursor%=(off_t)60*100;
-  s=cursor/100;
-  m=cursor%100;
+  int h,m,s,hd;
+  cursor/=input_ch*inbytes;
+
+  h=cursor/60/60/input_rate;
+  cursor%=(off_t)60*60*input_rate;
+  m=cursor/60/input_rate;
+  cursor%=(off_t)60*input_rate;
+  s=cursor/input_rate;
+  hd=cursor%input_rate*100/input_rate;
   if(h>9999)h=9999;
 
   sprintf(t,"%04d:%02d:%02d.%02d",h,m,s,hd);
@@ -300,12 +309,12 @@ int input_load(int n,char *list[]){
     }
   }
 
-  out.samples=2048;
+  out.size=2048;
   input_ch=out.channels=ch;
-  out.rate=rate;
+  input_rate=out.rate=rate;
   out.data=malloc(sizeof(*out.data)*ch);
   for(i=0;i<ch;i++)
-    out.data[i]=malloc(sizeof(*out.data[0])*out.samples);
+    out.data[i]=malloc(sizeof(*out.data[0])*out.size);
   
   return 0;
 }
@@ -345,49 +354,76 @@ int input_seek(off_t pos){
   return(0);
 }
 
-double *input_rms=NULL;
-double *input_peak=NULL;
-sig_atomic_t input_feedback=0;
-
-static void update_input_feedback(double *peak,double *rms){
-  int i,n=input_ch+2;
-  pthread_mutex_lock(&master_mutex);
-
-  if(!input_rms){
-    input_rms=calloc(n,sizeof(*input_rms));
-    input_peak=calloc(n,sizeof(*input_peak));
-  }
+static input_feedback *new_input_feedback(void){
+  input_feedback *ret;
   
-  if(input_feedback==0){
-    memcpy(input_peak,peak,sizeof(*peak)*n);
-    memcpy(input_rms,rms,sizeof(*rms)*n);
-  }else{
-    for(i=0;i<n;i++){
-      if(peak[i]>input_peak[i])
-	input_peak[i]=peak[i];
-      input_rms[i]=.5*input_rms[i]+.5*rms[i];  
-    }
+  pthread_mutex_lock(&master_mutex);
+  if(feedback_pool){
+    ret=feedback_pool;
+    feedback_pool=feedback_pool->next;
+    pthread_mutex_unlock(&master_mutex);
+    return ret;
   }
-  input_feedback=1;
+  pthread_mutex_unlock(&master_mutex);
+  ret=malloc(sizeof(*ret));
+  ret->rms=malloc((input_ch+2)*sizeof(*ret->rms));
+  ret->peak=malloc((input_ch+2)*sizeof(*ret->peak));
+  
+  return ret;
+}
 
+static void push_input_feedback(double *peak,double *rms, off_t cursor){
+  int i,n=input_ch+2;
+  input_feedback *f=new_input_feedback();
+
+  f->cursor=cursor;
+  memcpy(f->rms,rms,n*sizeof(*rms));
+  memcpy(f->peak,peak,n*sizeof(*peak));
+  f->next=NULL;
+
+  pthread_mutex_lock(&master_mutex);
+  if(!feedback_list_tail){
+    feedback_list_tail=f;
+    feedback_list_head=f;
+  }else{
+    feedback_list_head->next=f;
+    feedback_list_head=f;
+  }
   pthread_mutex_unlock(&master_mutex);
 }
 
-int fetch_input_feedback(double *peak,double *rms){
-  int n=input_ch+2,i,j;
+int pull_input_feedback(double *peak,double *rms,off_t *cursor,int *n){
+  input_feedback *f;
+  int i,j;
+  *n=input_ch+2;
+
   pthread_mutex_lock(&master_mutex);
+  if(feedback_list_tail){
+    
+    f=feedback_list_tail;
+    feedback_list_tail=feedback_list_tail->next;
+    if(!feedback_list_tail)feedback_list_head=0;
 
-  memcpy(rms,input_rms,sizeof(*input_rms)*n);
-  memcpy(peak,input_peak,sizeof(*input_peak)*n);
-
-  input_feedback=0;
-
+  }else{
+    pthread_mutex_unlock(&master_mutex);
+    return 0;
+  }
   pthread_mutex_unlock(&master_mutex);
+
+  memcpy(rms,f->rms,sizeof(*rms)* *n);
+  memcpy(peak,f->peak,sizeof(*peak)* *n);
+  *cursor=f->cursor;
+
+  pthread_mutex_lock(&master_mutex);
+  f->next=feedback_pool;
+  feedback_pool=f;
+  pthread_mutex_unlock(&master_mutex);
+  return 1;
 }
 
 time_linkage *input_read(void){
   int read_b=0,i,j,k;
-  int toread_b=out.samples*out.channels*inbytes;
+  int toread_b=out.size*out.channels*inbytes;
   unsigned char *readbuf;
   double *rms=alloca(sizeof(*rms)*(out.channels+2));
   double *peak=alloca(sizeof(*peak)*(out.channels+2));
@@ -430,9 +466,11 @@ time_linkage *input_read(void){
       cursor+=ret;
     }else{
       if(current_file_entry_number+1>=file_entries){
+
+	/* end of file before full frame */
 	memset(readbuf+read_b,0,toread_b);
-	read_b+=toread_b;
 	toread_b=0;
+
       }
     }
 
@@ -451,6 +489,8 @@ time_linkage *input_read(void){
 	pthread_mutex_unlock(&master_mutex);
     }
   }
+
+  out.samples=read_b/out.channels/inbytes;
   
   k=0;
   for(i=0;i<out.samples;i++){
@@ -507,7 +547,7 @@ time_linkage *input_read(void){
     rms[j]=sqrt(rms[j]);
   }
 
-  update_input_feedback(peak,rms);
+  push_input_feedback(peak,rms,cursor);
 
   return &out;
 }
