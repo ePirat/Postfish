@@ -357,7 +357,7 @@ static gboolean mainpanel_keybinding(GtkWidget *widget,
 
 
   switch(event->keyval){
-  case GDK_m:
+  case GDK_t:
     /* trigger master dB */
     gtk_widget_activate(p->masterdB_a);
     break;
@@ -380,23 +380,20 @@ static gboolean mainpanel_keybinding(GtkWidget *widget,
   case GDK_d:
     gtk_widget_activate(p->buttonactive[0]);
     break;
-  case GDK_t:
+  case GDK_c:
     gtk_widget_activate(p->buttonactive[1]);
     break;
-  case GDK_n:
+  case GDK_m:
     gtk_widget_activate(p->buttonactive[2]);
     break;
-  case GDK_e:
+  case GDK_s:
     gtk_widget_activate(p->buttonactive[3]);
     break;
-  case GDK_c:
+  case GDK_e:
     gtk_widget_activate(p->buttonactive[4]);
     break;
   case GDK_l:
     gtk_widget_activate(p->buttonactive[5]);
-    break;
-  case GDK_o:
-    gtk_widget_activate(p->buttonactive[6]);
     break;
   case GDK_a:
     gtk_widget_activate(p->cue_set[0]);
@@ -626,7 +623,7 @@ void mainpanel_create(postfish_mainpanel *panel,char **chlabels){
       GtkWidget *box=gtk_hbox_new(0,0);
 
       GtkWidget *masterlabel=gtk_label_new("master:");
-      panel->masterdB_a=gtk_toggle_button_new_with_label("[m] active");
+      panel->masterdB_a=gtk_toggle_button_new_with_label("a[t]ten");
       panel->masterdB_r=readout_new("  0.0dB");
       panel->masterdB_s=multibar_slider_new(10,sliderlabels,sliderlevels,1);
       
@@ -638,9 +635,9 @@ void mainpanel_create(postfish_mainpanel *panel,char **chlabels){
       gtk_table_attach(GTK_TABLE(ttable),masterlabel,0,1,3,4,
 		       GTK_FILL,GTK_FILL,0,0);
       
-      gtk_box_pack_start(GTK_BOX(box),panel->masterdB_a,0,0,2);
       gtk_box_pack_start(GTK_BOX(box),panel->masterdB_s,1,1,0);
       gtk_box_pack_start(GTK_BOX(box),panel->masterdB_r,0,0,0);
+      gtk_box_pack_start(GTK_BOX(box),panel->masterdB_a,0,0,0);
       
       gtk_table_attach_defaults(GTK_TABLE(ttable),box,1,3,3,4);
 
@@ -819,12 +816,11 @@ void mainpanel_create(postfish_mainpanel *panel,char **chlabels){
   }
 
   mainpanel_panelentry(panel,"_Declip ","[d]",0,clippanel_create);
-  mainpanel_panelentry(panel,"Cross_Talk ","[t]",1,0);
-  mainpanel_panelentry(panel,"_Compand/Gate ","[c]",2,compandpanel_create);
-  mainpanel_panelentry(panel,"_Equalizer ","[e]",3,eqpanel_create);
-  mainpanel_panelentry(panel,"_Limiter ","[l]",4,0);
-  mainpanel_panelentry(panel,"_Output Cal. ","[o]",5,0);
-
+  mainpanel_panelentry(panel,"_Crosstalk ","[c]",1,0);
+  mainpanel_panelentry(panel,"_Multicomp ","[m]",2,compandpanel_create);
+  mainpanel_panelentry(panel,"_Singlecomp ","[s]",3,0);
+  mainpanel_panelentry(panel,"_Equalizer ","[e]",4,eqpanel_create);
+  mainpanel_panelentry(panel,"_Limiter ","[l]",5,0);
 
   g_signal_connect (G_OBJECT (panel->toplevel), "delete_event",
 		    G_CALLBACK (shutdown), NULL);

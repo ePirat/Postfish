@@ -101,6 +101,7 @@ void eqpanel_create(postfish_mainpanel *mp,
   }
 
   gtk_box_pack_start(GTK_BOX(panel->subpanel_box),slidertable,1,1,4);
+  subpanel_show_all_but_toplevel(panel);
 
 }
 

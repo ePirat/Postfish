@@ -28,7 +28,7 @@
 #include "windowbutton.h"
 #include "subpanel.h"
 
-static int clippanel_hide(GtkWidget *widget,
+static int subpanel_hide(GtkWidget *widget,
 			  GdkEvent *event,
 			  gpointer in){
   subpanel_generic *p=in;
@@ -51,10 +51,10 @@ static int windowbutton_action(GtkWidget *widget,
   
   if(active){
     if(p->mappedvar)*p->mappedvar=1;
-    gtk_widget_show_all(p->subpanel_toplevel);
+    gtk_widget_show(p->subpanel_toplevel);
   }else{
     if(p->mappedvar)*p->mappedvar=0;
-    gtk_widget_hide_all(p->subpanel_toplevel);
+    gtk_widget_hide(p->subpanel_toplevel);
   }
 
   return FALSE;
@@ -104,6 +104,10 @@ static gboolean forward_events(GtkWidget *widget,
   return TRUE;
 }
 
+void subpanel_show_all_but_toplevel(subpanel_generic *s){
+  gtk_widget_show_all(s->subpanel_topframe);
+}
+
 subpanel_generic *subpanel_create(postfish_mainpanel *mp,
 				  GtkWidget *windowbutton,
 				  GtkWidget *activebutton,
@@ -113,7 +117,6 @@ subpanel_generic *subpanel_create(postfish_mainpanel *mp,
 
   subpanel_generic *panel=calloc(1,sizeof(*panel));
   GdkWindow *root=gdk_get_default_root_window();
-  GtkWidget *topframe=gtk_frame_new (NULL);
 
   GtkWidget *toplabelbox=gtk_event_box_new();
   GtkWidget *toplabelframe=gtk_frame_new(NULL);
@@ -124,6 +127,7 @@ subpanel_generic *subpanel_create(postfish_mainpanel *mp,
   if(activebutton && activevar)
     toplabelab=gtk_toggle_button_new_with_label(shortcut);
   
+  panel->subpanel_topframe=gtk_frame_new (NULL);
   panel->subpanel_windowbutton=toplabelwb;
   panel->subpanel_activebutton=toplabelab;
 
@@ -146,12 +150,12 @@ subpanel_generic *subpanel_create(postfish_mainpanel *mp,
   panel->subpanel_toplevel=gtk_window_new (GTK_WINDOW_TOPLEVEL);
   panel->mainpanel=mp;
 
-  gtk_container_add (GTK_CONTAINER (panel->subpanel_toplevel), topframe);
-  gtk_container_add (GTK_CONTAINER (topframe), panel->subpanel_box);
-  gtk_container_set_border_width (GTK_CONTAINER (topframe), 3);
+  gtk_container_add (GTK_CONTAINER (panel->subpanel_toplevel), panel->subpanel_topframe);
+  gtk_container_add (GTK_CONTAINER (panel->subpanel_topframe), panel->subpanel_box);
+  gtk_container_set_border_width (GTK_CONTAINER (panel->subpanel_topframe), 3);
   gtk_container_set_border_width (GTK_CONTAINER (panel->subpanel_box), 5);
-  gtk_frame_set_shadow_type(GTK_FRAME(topframe),GTK_SHADOW_NONE);
-  gtk_frame_set_label_widget(GTK_FRAME(topframe),toplabelbox);
+  gtk_frame_set_shadow_type(GTK_FRAME(panel->subpanel_topframe),GTK_SHADOW_NONE);
+  gtk_frame_set_label_widget(GTK_FRAME(panel->subpanel_topframe),toplabelbox);
 
     
   /* space *always* means play/pause */
@@ -165,7 +169,7 @@ subpanel_generic *subpanel_create(postfish_mainpanel *mp,
 
   /* delete should == hide */
   g_signal_connect (G_OBJECT (panel->subpanel_toplevel), "delete-event",
-		    G_CALLBACK (clippanel_hide), 
+		    G_CALLBACK (subpanel_hide), 
 		    panel);
 
   /* link the mainpanel and subpanel buttons */

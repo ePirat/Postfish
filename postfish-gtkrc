@@ -138,7 +138,7 @@ style "side" {
 }
 
 widget "*.GtkLabel" style "panel-text"
-widget "*.smallmarker*" style "small-marker"
+widget "*.smallmarker" style "small-marker"
 
 widget "*.color0" style "left"
 widget "*.color1" style "right"
@@ -150,6 +150,8 @@ widget "*.winpanel" style "darkpanel"
 
 widget "*.choiceframe.*" style "frame-text"
 widget "*.GtkFrame.GtkLabel" style "frame-label"
+widget "*.GtkFrame.GtkHBox.GtkLabel" style "frame-label"
+widget "*.framelabel" style "frame-label"
 
 widget "*.Readout*" style "readout"
 widget "*.GtkEntry" style "readout"

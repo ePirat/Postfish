@@ -69,7 +69,7 @@ static void compute(Multibar *m,float *lowvals, float *highvals, int n){
     xpad=2;
   }else{
     if(m->thumbs>1)
-      xpad=height*3/4+6;
+      xpad=((height+1)/2)+(height/2-3)*3/2+1;
     else
       xpad=height/2+1;
   }
@@ -582,7 +582,7 @@ static void draw(GtkWidget *widget,int n){
       gdk_draw_line(m->backing,m->boxcolor,x,y+(y1-y)/2,x,0);
 
       if(m->thumbfocus==num){
-	for(i=0;i<height/2;i++)
+	for(i=0;i<(height-1)/2;i++)
 	  for(j=0;j<=i*2;j++)
 	    if(!(j&1))
 	      gdk_draw_point(m->backing,black_gc,x-i+j,y+i+2);
@@ -636,7 +636,7 @@ static void size_request (GtkWidget *widget,GtkRequisition *requisition){
   }else{
     maxy+=3;
     if(m->thumbs>1)
-      xpad=maxy+(maxy/2-1)/2-1+2;
+      xpad=((maxy+1)/2)+(maxy/2-3)*3/2+1;
     else
       xpad=maxy/2+1+2;
   }

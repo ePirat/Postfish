@@ -43,7 +43,7 @@ int pull_eq_feedback(float **peak,float **rms){
 
 /* called only by initial setup */
 int eq_load(void){
-  return freq_load(&eq,eq_freq_list,eq_freqs,input_size);
+  return freq_load(&eq,eq_freq_list,eq_freqs);
 }
 
 /* called only in playback thread */

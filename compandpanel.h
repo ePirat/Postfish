@@ -27,5 +27,6 @@ extern void compandpanel_create(postfish_mainpanel *mp,
 
 extern void compandpanel_feedback(int displayit);
 extern void compandpanel_reset(void);
+extern void compandpanel_set_play(int playp);
 
 

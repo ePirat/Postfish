@@ -27,6 +27,7 @@ typedef struct{
   GtkWidget *subpanel_windowbutton;
   GtkWidget *subpanel_activebutton;
   GtkWidget *subpanel_toplevel;
+  GtkWidget *subpanel_topframe;
   GtkWidget *subpanel_box;
   sig_atomic_t *activevar;
   sig_atomic_t *mappedvar;
@@ -40,3 +41,4 @@ extern subpanel_generic *subpanel_create(postfish_mainpanel *mp,
 					 sig_atomic_t *activevar,
 					 sig_atomic_t *mappedvar,
 					 char *prompt,char *shortcut);
+extern void subpanel_show_all_but_toplevel(subpanel_generic *s);

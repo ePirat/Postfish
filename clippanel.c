@@ -313,7 +313,7 @@ void clippanel_create(postfish_mainpanel *mp,
 
 
   mainpanel_inbar=mp->inbar;
-
+  subpanel_show_all_but_toplevel(panel);
 }
 
 void clippanel_feedback(int displayit){

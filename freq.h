@@ -44,14 +44,14 @@ typedef struct {
   float **cache;
   int cache_samples;
   int fillstate;     /* 0: uninitialized
-			1: normal
-			2: eof processed */
+			1: half-primed
+			2: nominal
+			3: eof processed */
 } freq_state;
 
 extern void freq_transform_work(float *work,freq_state *f);
 extern int pull_freq_feedback(freq_state *ff,float **peak,float **rms);
-extern int freq_load(freq_state *f,float *frequencies, int bands, 
-		     int blocksize);
+extern int freq_load(freq_state *f,float *frequencies, int bands);
 extern int freq_reset(freq_state *f);
 extern time_linkage *freq_read(time_linkage *in, freq_state *f,
 			       void (*func)(freq_state *f,
