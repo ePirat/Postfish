@@ -319,7 +319,7 @@ int input_load(int n,char *list[]){
   return 0;
 }
 
-int input_seek(off_t pos){
+off_t input_seek(off_t pos){
   int i;
 
   if(pos<0)pos=0;
@@ -338,8 +338,9 @@ int input_seek(off_t pos){
 	     SEEK_SET);
       pthread_mutex_lock(&master_mutex);
       cursor=pos;
+      playback_seeking=1;
       pthread_mutex_unlock(&master_mutex);
-      return 0;
+      return cursor;
     }
   }
   i--;
@@ -350,8 +351,17 @@ int input_seek(off_t pos){
 	 SEEK_SET);
   pthread_mutex_lock(&master_mutex);
   cursor=pos;
+      playback_seeking=1;
   pthread_mutex_unlock(&master_mutex);
-  return(0);
+  return cursor;
+}
+
+int input_time_seek_rel(double s){
+  int ret;
+  pthread_mutex_lock(&master_mutex);
+  ret=input_seek(cursor+input_rate*inbytes*input_ch*s);
+  pthread_mutex_unlock(&master_mutex);
+  return ret;
 }
 
 static input_feedback *new_input_feedback(void){

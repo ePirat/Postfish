@@ -66,11 +66,38 @@ static void action_zero(GtkWidget *widget,postfish_mainpanel *p){
   off_t cursor=input_time_to_cursor(time);
 
   output_halt_playback();
-  
   input_seek(cursor);
   readout_set(READOUT(p->cue),(char *)time);
   multibar_reset(MULTIBAR(p->inbar));
   multibar_reset(MULTIBAR(p->outbar));
+}
+
+static void action_bb(GtkWidget *widget,postfish_mainpanel *p){
+  off_t cursor=input_time_seek_rel(-60);
+  char time[14];
+  input_cursor_to_time(cursor,time);
+  readout_set(READOUT(p->cue),(char *)time);
+}
+
+static void action_b(GtkWidget *widget,postfish_mainpanel *p){
+  off_t cursor=input_time_seek_rel(-5);
+  char time[14];
+  input_cursor_to_time(cursor,time);
+  readout_set(READOUT(p->cue),(char *)time);
+}
+
+static void action_f(GtkWidget *widget,postfish_mainpanel *p){
+  off_t cursor=input_time_seek_rel(5);
+  char time[14];
+  input_cursor_to_time(cursor,time);
+  readout_set(READOUT(p->cue),(char *)time);
+}
+
+static void action_ff(GtkWidget *widget,postfish_mainpanel *p){
+  off_t cursor=input_time_seek_rel(60);
+  char time[14];
+  input_cursor_to_time(cursor,time);
+  readout_set(READOUT(p->cue),(char *)time);
 }
 
 static void action_play(GtkWidget *widget,postfish_mainpanel *p){
@@ -82,11 +109,11 @@ static void action_play(GtkWidget *widget,postfish_mainpanel *p){
       pthread_create(&playback_thread_id,NULL,&playback_thread,NULL);
     }
   }else{
-    output_pause_playback();
+    output_halt_playback();
   }
 }
 
-static void action_b(GtkWidget *widget,postfish_mainpanel *p){
+static void action_entryb(GtkWidget *widget,postfish_mainpanel *p){
   if(gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(widget)))
     loop_active=1;
   else
@@ -610,8 +637,16 @@ void mainpanel_create(postfish_mainpanel *panel,char **chlabels){
 
       g_signal_connect (G_OBJECT (panel->deckactive[0]), "clicked",
 			G_CALLBACK (action_zero), panel);
+      g_signal_connect (G_OBJECT (panel->deckactive[1]), "clicked",
+			G_CALLBACK (action_bb), panel);
+      g_signal_connect (G_OBJECT (panel->deckactive[2]), "clicked",
+			G_CALLBACK (action_b), panel);
       g_signal_connect (G_OBJECT (panel->deckactive[3]), "clicked",
 			G_CALLBACK (action_play), panel);
+      g_signal_connect (G_OBJECT (panel->deckactive[4]), "clicked",
+			G_CALLBACK (action_f), panel);
+      g_signal_connect (G_OBJECT (panel->deckactive[5]), "clicked",
+			G_CALLBACK (action_ff), panel);
 
 
     }
@@ -654,7 +689,7 @@ void mainpanel_create(postfish_mainpanel *panel,char **chlabels){
 			G_CALLBACK (timeevent_unselect), NULL);
 
       g_signal_connect (G_OBJECT (panel->cue_set[1]), "clicked",
-			G_CALLBACK (action_b), panel);
+			G_CALLBACK (action_entryb), panel);
 
 
       gtk_widget_set_name(panel->cue_reset[0],"reseta");
@@ -717,8 +752,9 @@ static gboolean feedback_process(postfish_mainpanel *panel){
     if(!playback_active)
       gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(panel->deckactive[3]),0);
 
-  /* second order of business; update the input meter if data is available */
-  {
+  /* second order of business; update the input meter if data is
+     available and not dirtied by a seek */
+  if(!playback_seeking){
     off_t   time_cursor;
     int     n;
     double *rms=alloca(sizeof(*rms)*(input_ch+2));

@@ -100,6 +100,8 @@ static void draw(GtkWidget *widget,double *lowvals, double *highvals, int n){
 	    double del=(lowvals[i]-m->levels[j])/(m->levels[j+1]-m->levels[j]);
 	    pixlo[i]=(j+del)/m->labels*widget->allocation.width;
 	    break;
+	  }else if(j==m->labels){
+	    pixlo[i]=widget->allocation.width+1;
 	  }
 	}else
 	  break;
@@ -111,6 +113,8 @@ static void draw(GtkWidget *widget,double *lowvals, double *highvals, int n){
 	    double del=(highvals[i]-m->levels[j])/(m->levels[j+1]-m->levels[j]);
 	    pixhi[i]=(j+del)/m->labels*widget->allocation.width;
 	    break;
+	  }else if(j==m->labels){
+	    pixhi[i]=widget->allocation.width+1;
 	  }
 	}else
 	  break;
@@ -237,12 +241,14 @@ static void draw(GtkWidget *widget,double *lowvals, double *highvals, int n){
     /* peak follower */
     {
       int x=-10;
-      for(j=0;j<=m->labels;j++)
+      for(j=0;j<=m->labels+1;j++)
 	if(m->peak>=m->levels[j]){
 	  if(m->peak<=m->levels[j+1]){
 	    double del=(m->peak-m->levels[j])/(m->levels[j+1]-m->levels[j]);
 	    x=(j+del)/m->labels*widget->allocation.width;
 	    break;
+	  }else if (j==m->labels){
+	    x=widget->allocation.width+1;
 	  }
 	}else
 	  break;
@@ -348,8 +354,6 @@ static void multibar_class_init (MultibarClass *class){
 
 static void multibar_init (Multibar *m){
   m->layout=0;
-  m->peak=-200;
-
   m->peakdelay=0;
   m->clipdelay=0;
   m->peak=-400;

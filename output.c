@@ -29,6 +29,26 @@
 
 sig_atomic_t playback_active=0;
 sig_atomic_t playback_exit=0;
+sig_atomic_t playback_seeking=0;
+
+void output_reset(void){
+  /* empty feedback queues */
+  while(pull_output_feedback(NULL,NULL,NULL));
+  return;
+}
+
+void pipeline_reset(){
+  int flags=fcntl(eventpipe[0],F_GETFL);
+  char buf[1];
+  /* drain the event pipe */
+  if(fcntl(eventpipe[0],F_SETFL,O_NONBLOCK))
+    fprintf(stderr,"Unable to set O_NONBLOCK on event pipe.\n");
+  while(read(eventpipe[0],buf,1)>0);
+  fcntl(eventpipe[0],F_SETFL,flags);
+
+  input_reset();  /* clear any persistent lapping state */
+  output_reset(); /* clear any persistent lapping state */
+}
 
 typedef struct output_feedback{
   double *rms;
@@ -211,6 +231,11 @@ void *playback_thread(void *dummy){
   double *peak=alloca(sizeof(*peak)*(input_ch+2));
 
   while(1){
+    if(playback_seeking){
+      pipeline_reset();
+      playback_seeking=0;
+    }
+
     if(playback_exit)break;
 
     /* get data */
@@ -327,7 +352,7 @@ void *playback_thread(void *dummy){
   return(NULL);
 }
 
-void output_pause_playback(void){
+void output_halt_playback(void){
   if(playback_active){
     playback_exit=1;
     
@@ -338,20 +363,5 @@ void output_pause_playback(void){
 	break;
     }
   }
-}
-
-void output_reset(void){
-  /* empty feedback queues */
-  while(pull_output_feedback(NULL,NULL,NULL));
-  return;
-}
-
-/* safe to call from UI only because we wait for playback to halt and
-   it can't be restarted until we return */
-void output_halt_playback(void){
-  output_pause_playback();
-  input_reset();  /* clear any persistent lapping state */
-  output_reset(); /* clear any persistent lapping state */
-
 }
 
