@@ -690,7 +690,7 @@ static float *peakfeed=0;
 static float *rmsfeed=0;
 
 void singlepanel_feedback(int displayit){
-  int j;
+  int j,k;
   if(!peakfeed){
     peakfeed=malloc(sizeof(*peakfeed)*max(input_ch,OUTPUT_CHANNELS));
     rmsfeed=malloc(sizeof(*rmsfeed)*max(input_ch,OUTPUT_CHANNELS));
@@ -705,9 +705,12 @@ void singlepanel_feedback(int displayit){
     for(j=0;j<input_ch;j++){
       float rms[input_ch];
       float peak[input_ch];
+
+      for(k=0;k<input_ch;k++){
+	rms[k]=-150;
+	peak[k]=-150;
+      }
       
-      memset(rms,0,sizeof(rms));
-      memset(peak,0,sizeof(peak));
       rms[j]=rmsfeed[j];
       peak[j]=peakfeed[j];
       

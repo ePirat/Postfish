@@ -1057,7 +1057,7 @@ static float **peakfeed=0;
 static float **rmsfeed=0;
 
 void compandpanel_feedback(int displayit){
-  int i,j,bands;
+  int i,j,k,bands;
   if(!peakfeed){
     peakfeed=malloc(sizeof(*peakfeed)*multicomp_freqs_max);
     rmsfeed=malloc(sizeof(*rmsfeed)*multicomp_freqs_max);
@@ -1079,9 +1079,12 @@ void compandpanel_feedback(int displayit){
       for(i=0;i<bands;i++){
 	float rms[input_ch];
 	float peak[input_ch];
-	
-	memset(rms,0,sizeof(rms));
-	memset(peak,0,sizeof(peak));
+
+	for(k=0;k<input_ch;k++){
+	  rms[k]=-150;
+	  peak[k]=-150;
+	}
+
 	rms[j]=rmsfeed[i][j];
 	peak[j]=peakfeed[i][j];
 	
