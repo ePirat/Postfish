@@ -168,7 +168,6 @@ static void suppress_work(void *vs){
 	
 	
 	if(sset.linkp==0 || firstlink==1){
-	  firstlink++;
 	  
 	  compute_iir_symmetric4(fast, input_size, &sss->iirS[i][j],
 				 smooth);
@@ -186,6 +185,19 @@ static void suppress_work(void *vs){
 	  for(k=0;k<input_size;k++)
 	    fast[k]=fromdB_a((todB_a(slow+k)-todB_a(fast+k))*.5*multiplier);
 	  //_analysis("adj",i,fast,input_size,1,offset);
+
+	  if(sset.linkp && firstlink==1){
+
+	    for(l=0;l<input_ch;l++){
+	      if(l!=j){
+		memcpy(&sss->iirS[i][l],&sss->iirS[i][j],sizeof(iir_state));
+		memcpy(&sss->iirT[i][l],&sss->iirT[i][j],sizeof(iir_state));
+		memcpy(&sss->iirR[i][l],&sss->iirR[i][j],sizeof(iir_state));
+	      }
+	    }
+	  }
+
+	  firstlink++;
 	}
 	
 	
