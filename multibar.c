@@ -380,8 +380,8 @@ static void draw(GtkWidget *widget,int n){
   if(m->thumbs){
     int height=widget->allocation.height;
     GdkGC *black_gc=widget->style->black_gc;
-    int y=height/2-2;
-    int y1=height-2;
+    int y=height/2-3;
+    int y1=height-3;
     int y0=y-(y1-y-1);
 
     GdkColor yellow={0,0xff00,0xd000,0};
@@ -618,14 +618,14 @@ static gint determine_thumb(GtkWidget *widget,int ix, int iy){
     int num=(m->thumbs==1?0:1);
 
     int x= ix-m->thumbpixel[num];
-    int y= iy-(height*4/5-1);
+    int y= iy-(height*4/5-2);
     distances[num]=sqrt(x*x + y*y);
   }
 
   /* left thumb */
   if(m->thumbs>1){
     int x= ix-(m->thumbpixel[0]-(height/2));
-    int y= iy-(height/2-2);
+    int y= iy-(height/2-3);
     distances[0]=sqrt(x*x + y*y);
   }
   
@@ -633,7 +633,7 @@ static gint determine_thumb(GtkWidget *widget,int ix, int iy){
   if(m->thumbs>1){
     int num=(m->thumbs==2?1:2);
     int x= ix-(m->thumbpixel[num]+(height/2));
-    int y= iy-(height/2-2);
+    int y= iy-(height/2-3);
     distances[num]=sqrt(x*x + y*y);
   }
   
