@@ -33,11 +33,13 @@ typedef struct{
 
   int active_button_count; /* silliness around the rotating non-alt-shortcut */
   int active_button_start; /* silliness around the rotating non-alt-shortcut */
-  int rotation[10];
+  int rotation[10];        /* silliness around the rotating non-alt-shortcut */
 
   sig_atomic_t *mappedvar;
 
   postfish_mainpanel *mainpanel;
+  void (*callback)(gpointer in,int);
+  gpointer callback_pointer;
 } subpanel_generic;
 
 extern subpanel_generic *subpanel_create(postfish_mainpanel *mp,
@@ -49,3 +51,5 @@ extern subpanel_generic *subpanel_create(postfish_mainpanel *mp,
 					 int start,int num);
 
 extern void subpanel_show_all_but_toplevel(subpanel_generic *s);
+
+extern void subpanel_set_active_callback(subpanel_generic *s,gpointer in,void (*callback)(gpointer in,int));

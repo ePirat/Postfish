@@ -66,10 +66,11 @@ static void compute(Multibar *m,float *lowvals, float *highvals, int n){
 
   /* figure out the x padding */
   if(m->thumbs<1){
-    xpad=2;
+    xpad=1;
   }else{
-    xpad=((height+1)/2)+(height/2-3)*3/2+1;
+    xpad=height;
   }
+
   m->xpad=xpad;
 
   if(m->readout){
@@ -126,7 +127,7 @@ static void compute(Multibar *m,float *lowvals, float *highvals, int n){
 	  if(lowvals[i]>=m->levels[j]){
 	    if(lowvals[i]<=m->levels[j+1]){
 	      float del=(lowvals[i]-m->levels[j])/(m->levels[j+1]-m->levels[j]);
-	      pixlo[i]=(j+del)/m->labels*(widget->allocation.width-xpad*2)-xpad;
+	      pixlo[i]=(j+del)/m->labels*(widget->allocation.width-xpad*2-1)-xpad;
 	      break;
 	    }else if(j==m->labels){
 	      pixlo[i]=widget->allocation.width-xpad+1;
@@ -139,7 +140,7 @@ static void compute(Multibar *m,float *lowvals, float *highvals, int n){
 	  if(highvals[i]>=m->levels[j]){
 	    if(highvals[i]<=m->levels[j+1]){
 	      float del=(highvals[i]-m->levels[j])/(m->levels[j+1]-m->levels[j]);
-	      pixhi[i]=(j+del)/m->labels*(widget->allocation.width-xpad*2)+xpad;
+	      pixhi[i]=(j+del)/m->labels*(widget->allocation.width-xpad*2-1)+xpad;
 	      break;
 	    }else if(j==m->labels){
 	      pixhi[i]=widget->allocation.width-xpad+1;
@@ -158,7 +159,7 @@ static void compute(Multibar *m,float *lowvals, float *highvals, int n){
 	float dello=m->bartrackers[i].pixeldeltalo;
 	
 	/* hi */
-	delhi = compute_dampening(width-xpad*2,pixhi[i],trackhi,delhi,m->dampen_flags & ZERO_DAMP);
+	delhi = compute_dampening(width-xpad*2-1,pixhi[i],trackhi,delhi,m->dampen_flags & ZERO_DAMP);
 	
 	if(pixhi[i]>trackhi){
 	  if(m->dampen_flags & HI_ATTACK)pixhi[i]=trackhi+delhi;
@@ -169,7 +170,7 @@ static void compute(Multibar *m,float *lowvals, float *highvals, int n){
 	m->bartrackers[i].pixeldeltahi=delhi;
 	
 	/* lo */
-	dello = compute_dampening(width-xpad*2,pixlo[i],tracklo,dello,m->dampen_flags & ZERO_DAMP);
+	dello = compute_dampening(width-xpad*2-1,pixlo[i],tracklo,dello,m->dampen_flags & ZERO_DAMP);
 	if(pixlo[i]>tracklo){
 	  if(m->dampen_flags & LO_ATTACK)pixlo[i]=tracklo+dello;
 	}else{
@@ -204,7 +205,7 @@ static void draw(GtkWidget *widget,int n){
     gdk_gc_copy(m->boxcolor,widget->style->black_gc);
   }
     
-  if(m->readout){
+  if(m->readout && widget->state!=GTK_STATE_INSENSITIVE){
     /* draw the pixel positions */
     while(x<widget->allocation.width){
       int r=0xffff,g=0xffff,b=0xffff;
@@ -308,7 +309,7 @@ static void draw(GtkWidget *widget,int n){
 	if(m->peak>=m->levels[j]){
 	  if(m->peak<=m->levels[j+1]){
 	    float del=(m->peak-m->levels[j])/(m->levels[j+1]-m->levels[j]);
-	    x=(j+del)/m->labels*(widget->allocation.width-xpad*2)+xpad;
+	    x=(j+del)/m->labels*(widget->allocation.width-xpad*2-1)+xpad;
 	    break;
 	  }else if (j==m->labels){
 	    x=widget->allocation.width-xpad+1;
@@ -352,7 +353,7 @@ static void draw(GtkWidget *widget,int n){
   }
 
   for(i=0;i<m->labels+1;i++){
-    int x=rint(((float)i)/m->labels*(widget->allocation.width-xpad*2))+xpad;
+    int x=rint(((float)i)/m->labels*(widget->allocation.width-xpad*2-1))+xpad;
     int y=widget->allocation.height-lpad-upad;
     int px,py;
     int gc=0;
@@ -385,7 +386,6 @@ static void draw(GtkWidget *widget,int n){
   {
     int width=widget->allocation.width;
     int height=widget->allocation.height;
-    int apad=3-xpad;
     GdkGC *gc=parent->style->bg_gc[0];
     GdkGC *light_gc=parent->style->light_gc[0];
     GdkGC *dark_gc=parent->style->dark_gc[0];
@@ -393,29 +393,32 @@ static void draw(GtkWidget *widget,int n){
 
     /* blank side padding to bg of parent */
     gdk_draw_rectangle(m->backing,gc,1,0,0,xpad,height);
-    gdk_draw_rectangle(m->backing,gc,1,width-xpad+1,0,xpad-1,height);
-
+    gdk_draw_rectangle(m->backing,gc,1,width-xpad,0,xpad,height);
 
     /* blank sides of trough */
     gdk_draw_rectangle(m->backing,gc,1,
-		       0,height-lpad,
-		       m->thumblo_x+xpad+apad-1,lpad);
+		       0,
+		       height-lpad,
+		       m->thumblo_x,
+		       lpad);
     gdk_draw_rectangle(m->backing,gc,1,
-		       m->thumbhi_x+xpad-apad,height-lpad,
-		       width-xpad+apad-m->thumbhi_x,lpad);
+		       m->thumbhi_x+xpad+xpad,
+		       height-lpad,
+		       width-xpad-xpad-m->thumbhi_x,
+		       lpad);
     
     /* frame */
     if(m->readout){
-      gdk_draw_line(m->backing,dark_gc,xpad-1,0,width-xpad,0);
-      gdk_draw_line(m->backing,dark_gc,xpad-1,0,xpad-1,height-lpad);
-      gdk_draw_line(m->backing,dark_gc,xpad,height-lpad,width-xpad,height-lpad);
-      gdk_draw_line(m->backing,dark_gc,width-xpad,height-lpad,width-xpad,1);
+      gdk_draw_line(m->backing,dark_gc,0,0,width-2,0);
+      gdk_draw_line(m->backing,dark_gc,0,0,0,height-lpad);
+      gdk_draw_line(m->backing,dark_gc,1,height-lpad,width-2,height-lpad);
+      gdk_draw_line(m->backing,dark_gc,width-2,height-lpad,width-2,1);
       
-      gdk_draw_line(m->backing,light_gc,xpad-1,height-lpad+1,
-		    width-xpad+1,height-lpad+1);
-      gdk_draw_line(m->backing,light_gc,width-xpad+1,0,width-xpad+1,height-lpad+1);
-      gdk_draw_line(m->backing,light_gc,xpad,1,width-xpad-1,1);
-      gdk_draw_line(m->backing,light_gc,xpad,1,xpad,height-lpad-1);
+      gdk_draw_line(m->backing,light_gc,0,height-lpad+1,
+		    width-1,height-lpad+1);
+      gdk_draw_line(m->backing,light_gc,width-1,0,width-1,height-lpad+1);
+      gdk_draw_line(m->backing,light_gc,1,1,width-3,1);
+      gdk_draw_line(m->backing,light_gc,1,1,1,height-lpad-1);
     }
 
 
@@ -423,32 +426,35 @@ static void draw(GtkWidget *widget,int n){
     if(lpad>2 || m->readout==0){
       if(lpad>2){
 	gdk_draw_rectangle(m->backing,mid_gc,1,
-			   xpad+m->thumblo_x+apad,height-lpad+1,
-			   m->thumbhi_x-m->thumblo_x-apad*2+1,lpad-1);
+			   m->thumblo_x+1,height-lpad+1,
+			   m->thumbhi_x-m->thumblo_x+xpad*2,lpad-1);
 	
 	gdk_draw_line(m->backing,dark_gc,
-		      m->thumblo_x+xpad+apad-1,height-lpad,
-		      m->thumblo_x+xpad+apad-1,height-1);
+		      m->thumblo_x,height-lpad,
+		      m->thumblo_x,height-1);
 	
       }
 
       gdk_draw_line(m->backing,light_gc,
-		    m->thumblo_x+xpad+apad-1,height-1,
-		    m->thumbhi_x+xpad-apad+1,height-1);
+		    m->thumblo_x,height-1,
+		    m->thumbhi_x+xpad*2,height-1);
 
       dark_gc=widget->style->dark_gc[GTK_STATE_ACTIVE];
 
       gdk_draw_line(m->backing,dark_gc,
-		    m->thumblo_x+xpad+apad-1,height-lpad,
-		    m->thumbhi_x+xpad-apad+1,height-lpad);
+		    m->thumblo_x,height-lpad,
+		    m->thumbhi_x+xpad*2-1,height-lpad);
       
       if(lpad>2)
 	gdk_draw_line(m->backing,light_gc,
-		      m->thumbhi_x+xpad-apad+1,height-1,
-		      m->thumbhi_x+xpad-apad+1,height-lpad);
+		      m->thumbhi_x+xpad*2,height-1,
+		      m->thumbhi_x+xpad*2,height-lpad+1);
 
 
+      if(m->readout==0)
+	gdk_draw_point(m->backing,light_gc,width-1,height-lpad);
     }
+      
 
   }
 
@@ -460,7 +466,7 @@ static void draw(GtkWidget *widget,int n){
     int y0=height/3-1;
     int y1=height-3;
 
-    int outer=(y1-y-2)+y*3/2;
+    int outer=height-1;
     int inner=(y1+y0)/2-y0;
 
     int A[3]={outer,outer,outer};
@@ -606,10 +612,10 @@ static void size_request (GtkWidget *widget,GtkRequisition *requisition){
   maxy+=4;
 
   if(m->thumbs==0){
-    xpad=2;
+    xpad=1;
   }else{
     maxy+=3;
-    xpad=((maxy+1)/2)+(maxy/2-3)*3/2+1;
+    xpad=maxy;
   }
 
   requisition->width = (maxx*1.5+2)*m->labels+xpad*2;
@@ -715,8 +721,8 @@ static gint determine_thumb(Multibar *m,int ix, int iy){
 static int pixel_bound(Multibar *m,int x){
   GtkWidget *w=GTK_WIDGET(m);
   if(x<0)return 0;
-  if(x>w->allocation.width-m->xpad*2)
-    return w->allocation.width-m->xpad*2;
+  if(x>w->allocation.width-m->xpad*2-1)
+    return w->allocation.width-m->xpad*2-1;
   return x;
 }
 
@@ -725,8 +731,8 @@ static float pixel_to_val(Multibar *m,int x){
   int j;
 
   for(j=0;j<=m->labels;j++){
-    int pixlo=rint((float)j/m->labels*(w->allocation.width-m->xpad*2));
-    int pixhi=rint((float)(j+1)/m->labels*(w->allocation.width-m->xpad*2));
+    int pixlo=rint((float)j/m->labels*(w->allocation.width-m->xpad*2-1));
+    int pixhi=rint((float)(j+1)/m->labels*(w->allocation.width-m->xpad*2-1));
 
     if(x>=pixlo && x<=pixhi){
       if(pixlo==pixhi)return m->levels[j];
@@ -744,13 +750,13 @@ static int val_to_pixel(Multibar *m,float v){
   if(v<m->levels[0]){
     ret=0;
   }else if(v>m->levels[m->labels]){
-    ret=w->allocation.width-m->xpad*2;
+    ret=w->allocation.width-m->xpad*2-1;
   }else{
     for(j=0;j<=m->labels;j++){
       if(v>=m->levels[j] && v<=m->levels[j+1]){
 	float del=(v-m->levels[j])/(m->levels[j+1]-m->levels[j]);
-	int pixlo=rint((float)j/m->labels*(w->allocation.width-m->xpad*2));
-	int pixhi=rint((float)(j+1)/m->labels*(w->allocation.width-m->xpad*2));
+	int pixlo=rint((float)j/m->labels*(w->allocation.width-m->xpad*2-1));
+	int pixhi=rint((float)(j+1)/m->labels*(w->allocation.width-m->xpad*2-1));
 	ret=rint(pixlo*(1.-del)+pixhi*del);
 	break;
       }
@@ -1012,6 +1018,11 @@ gboolean key_press(GtkWidget *w,GdkEventKey *event){
 
 static GtkDrawingAreaClass *parent_class = NULL;
 
+
+static void state_changed(GtkWidget *w,GtkStateType ps){
+  draw_and_expose(w);
+}
+
 static void multibar_class_init (MultibarClass *class){
   GtkWidgetClass *widget_class = GTK_WIDGET_CLASS (class);
   parent_class = g_type_class_peek_parent (class);
@@ -1027,6 +1038,7 @@ static void multibar_class_init (MultibarClass *class){
   widget_class->motion_notify_event = multibar_motion;
   widget_class->focus_out_event = unfocus;
   widget_class->focus_in_event = refocus;
+  widget_class->state_changed = state_changed;
 
   stipple=gdk_bitmap_create_from_data(NULL,"\125\352",2,2);
   stippleB=gdk_bitmap_create_from_data(NULL,"\352\125",2,2);

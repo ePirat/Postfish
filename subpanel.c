@@ -70,6 +70,7 @@ static int activebutton_action(GtkWidget *widget,
       active=gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(p->subpanel_activebutton[i]));
       gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->mainpanel_activebutton[i]),active);
       p->activevar[i]=active;
+      if(p->callback)p->callback(p->callback_pointer,i);
       break;
     }
     if(widget==p->mainpanel_activebutton[i]){
@@ -246,3 +247,9 @@ subpanel_generic *subpanel_create(postfish_mainpanel *mp,
   return panel;
 }
 
+void subpanel_set_active_callback(subpanel_generic *s,
+				  gpointer in,
+				  void (*callback)(gpointer in,int)){
+  s->callback_pointer=in;
+  s->callback=callback;
+}

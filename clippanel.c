@@ -107,6 +107,11 @@ static void limit_slider_change(GtkWidget *w,gpointer in){
   declip_setiterations(percent*.01);
 }
 
+static void active_callback(gpointer in,int activenum){
+  int active=declip_active[activenum];
+  gtk_widget_set_sensitive(feedback_bars[activenum],active);
+}
+
 void clippanel_create(postfish_mainpanel *mp,
 		      GtkWidget **windowbutton,
 		      GtkWidget **activebutton){
@@ -129,6 +134,8 @@ void clippanel_create(postfish_mainpanel *mp,
   GtkWidget *converge_box=gtk_vbox_new(0,0);
   GtkWidget *limit_box=gtk_vbox_new(0,0);
   GtkWidget *channel_table=gtk_table_new(input_ch,5,0);
+
+  subpanel_set_active_callback(panel,0,active_callback);
 
   gtk_widget_set_name(blocksize_box,"choiceframe");
   gtk_widget_set_name(converge_box,"choiceframe");
@@ -298,6 +305,7 @@ void clippanel_create(postfish_mainpanel *mp,
     multibar_callback(MULTIBAR(slider),trigger_slider_change,(gpointer)cs);
 
     trigger_slider_change(NULL,cs);
+    active_callback(0,i);
   }
 
   gtk_container_add(GTK_CONTAINER(converge_frame),converge_box);
