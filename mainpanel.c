@@ -152,14 +152,17 @@ static void shutdown(void){
 }
 
 sig_atomic_t master_att;
-static void masterdB_change(GtkRange *r, gpointer in){
+static void masterdB_change(GtkWidget *dummy, gpointer in){
   postfish_mainpanel *p=in;
   char buf[80];
-  gdouble val=gtk_range_get_value(r);
+  gdouble val=gtk_range_get_value(GTK_RANGE(p->masterdB_s));
   sprintf(buf,"%.1f dB",val);
   readout_set(READOUT(p->masterdB_r),buf);
 
-  master_att=rint(val*10);
+  if(gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(p->masterdB_a)))
+    master_att=rint(val*10);
+  else
+    master_att=0;
 }
 
 static gboolean timeevent_unselect(GtkWidget *widget,
@@ -560,6 +563,9 @@ void mainpanel_create(postfish_mainpanel *panel,char **chlabels){
 
       g_signal_connect_after (G_OBJECT(panel->masterdB_s), "value-changed",
 			G_CALLBACK(masterdB_change), (gpointer)panel);
+
+      g_signal_connect_after (G_OBJECT(panel->masterdB_a), "clicked",
+			G_CALLBACK(masterdB_change), (gpointer)panel);
     }
 
     /* master action bar */
@@ -729,7 +735,7 @@ static gboolean async_event_handle(GIOChannel *channel,
       
       multibar_set(MULTIBAR(panel->inbar),rms,peak,n);
       input_cursor_to_time(time_cursor,buffer);
-      readout_set(panel->cue,buffer);
+      readout_set(READOUT(panel->cue),buffer);
 
       if(pull_output_feedback(peak,rms,&n)){
 	for(i=0;i<n;i++){
