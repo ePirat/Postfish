@@ -103,8 +103,10 @@ off_t input_time_to_cursor(const char *t){
     s=atoi(c+1);
     if(s>59)s=59;
     if(s<0)s=0;
-  }else
-    s=0;
+  }else{
+    s=atoi(temp);
+    *temp=0;
+  }
 
   /* minutes */
   c=strrchr(temp,':');
@@ -113,18 +115,15 @@ off_t input_time_to_cursor(const char *t){
     m=atoi(c+1);
     if(m>59)m=59;
     if(m<0)m=0;
-  }else
-    m=0;
+  }else{
+    m=atoi(temp);
+    *temp=0;
+  }
 
   /* hours */
-  c=strrchr(temp,':');
-  if(c){
-    *c=0;
-    h=atoi(c+1);
-    if(h>9999)h=9999;
-    if(h<0)h=0;
-  }else
-    h=0;
+  h=atoi(temp);
+  if(h>9999)h=9999;
+  if(h<0)h=0;
 
   return ((off_t)hd + (off_t)s*100 + (off_t)m*60*100 + (off_t)h*60*60*100) *
     input_rate / 100 * inbytes * input_ch;
@@ -356,8 +355,8 @@ off_t input_seek(off_t pos){
   return cursor;
 }
 
-int input_time_seek_rel(double s){
-  int ret;
+off_t input_time_seek_rel(double s){
+  off_t ret;
   pthread_mutex_lock(&master_mutex);
   ret=input_seek(cursor+input_rate*inbytes*input_ch*s);
   pthread_mutex_unlock(&master_mutex);

@@ -8,4 +8,4 @@ extern time_linkage *input_read(void);
 extern int input_load(int n,char *list[]);
 extern int pull_input_feedback(double *peak,double *rms,off_t *cursor,int *n);
 extern void input_reset(void);
-extern int input_time_seek_rel(double s);
+extern off_t input_time_seek_rel(double s);

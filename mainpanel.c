@@ -72,6 +72,18 @@ static void action_zero(GtkWidget *widget,postfish_mainpanel *p){
   multibar_reset(MULTIBAR(p->outbar));
 }
 
+static void action_end(GtkWidget *widget,postfish_mainpanel *p){
+  off_t cursor=input_time_to_cursor("9999:59:59.99");
+  char buf[14];
+
+  output_halt_playback();
+  cursor=input_seek(cursor);
+  input_cursor_to_time(cursor,buf);
+  readout_set(READOUT(p->cue),(char *)buf);
+  multibar_reset(MULTIBAR(p->inbar));
+  multibar_reset(MULTIBAR(p->outbar));
+}
+
 static void action_bb(GtkWidget *widget,postfish_mainpanel *p){
   off_t cursor=input_time_seek_rel(-60);
   char time[14];
@@ -284,13 +296,14 @@ static gboolean keybinding(GtkWidget *widget,
 			   gpointer in){
   postfish_mainpanel *p=in;
 
+#if 0
   fprintf(stderr,"keypress: M%d C%d S%d L%d '%x'\n",
 	  event->state&GDK_MOD1_MASK,
 	  event->state&GDK_CONTROL_MASK,
 	  event->state&GDK_SHIFT_MASK,
 	  event->state&GDK_LOCK_MASK,
 	  event->keyval);
-
+#endif
   /* do not capture Alt accellerators */
   if(event->state&GDK_MOD1_MASK) return FALSE;
   if(event->state&GDK_CONTROL_MASK) return FALSE;
@@ -670,6 +683,8 @@ void mainpanel_create(postfish_mainpanel *panel,char **chlabels){
 			G_CALLBACK (action_f), panel);
       g_signal_connect (G_OBJECT (panel->deckactive[5]), "clicked",
 			G_CALLBACK (action_ff), panel);
+      g_signal_connect (G_OBJECT (panel->deckactive[6]), "clicked",
+			G_CALLBACK (action_end), panel);
 
 
     }
