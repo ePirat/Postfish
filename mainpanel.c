@@ -958,7 +958,7 @@ void mainpanel_create(postfish_mainpanel *panel,char **chlabels){
   mainpanel_chentry(panel,channeltable,"_Singlecomp ",3,0,1,singlepanel_create_channel);
   mainpanel_chentry(panel,channeltable,"De_verb ",4,1,0,suppresspanel_create_channel);
   mainpanel_chentry(panel,channeltable,"_Reverb ",5,1,0,0);
-  mainpanel_chentry(panel,channeltable,"_EQ ",6,0,1,0);
+  mainpanel_chentry(panel,channeltable,"_EQ ",6,0,1,eqpanel_create_channel);
 
   /* master panel */
   {
@@ -985,7 +985,7 @@ void mainpanel_create(postfish_mainpanel *panel,char **chlabels){
   mainpanel_masterentry(panel,mastertable,"_Multicomp "," m ",GDK_m,1,compandpanel_create_master);
   mainpanel_masterentry(panel,mastertable,"_Singlecomp "," s ",GDK_s,2,singlepanel_create_master);
   mainpanel_masterentry(panel,mastertable,"_Reverb "," r ",GDK_r,3,0);
-  mainpanel_masterentry(panel,mastertable,"_EQ "," e ",GDK_e,4,eqpanel_create);
+  mainpanel_masterentry(panel,mastertable,"_EQ "," e ",GDK_e,4,eqpanel_create_master);
   mainpanel_masterentry(panel,mastertable,"_Limit "," l ",GDK_l,5,limitpanel_create);
   mainpanel_masterentry(panel,mastertable,"_Output ",NULL,GDK_l,6,0);
 

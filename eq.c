@@ -140,6 +140,6 @@ time_linkage *eq_read_channel(time_linkage *in){
     visible[i]=eq_channel_set[i].panel_visible;
   }
 
-  return freq_read(in,&master_state.eq,visible,active,workfunc_ch);
+  return freq_read(in,&channel_state.eq,visible,active,workfunc_ch);
 }
 

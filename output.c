@@ -244,12 +244,13 @@ void *playback_thread(void *dummy){
     result|=link->samples;
     link=suppress_read_channel(link);
     result|=link->samples;
+    link=eq_read_channel(link);
+    result|=link->samples;
 
     link=multicompand_read_master(link);
     result|=link->samples;
     link=singlecomp_read_master(link);
     result|=link->samples;
-
     link=eq_read_master(link);
     result|=link->samples;
     

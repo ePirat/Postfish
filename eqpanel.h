@@ -22,8 +22,11 @@
  */
 
 #include "postfish.h"
-extern void eqpanel_create(postfish_mainpanel *mp,
-			   GtkWidget *windowbutton,
-			   GtkWidget *activebutton);
+extern void eqpanel_create_master(postfish_mainpanel *mp,
+				  GtkWidget *windowbutton,
+				  GtkWidget *activebutton);
+extern void eqpanel_create_channel(postfish_mainpanel *mp,
+				   GtkWidget **windowbutton,
+				   GtkWidget **activebutton);
 extern void eqpanel_feedback(int workp);
 extern void eqpanel_reset(void);
