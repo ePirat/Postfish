@@ -25,7 +25,7 @@ static gboolean forward_events(GtkWidget *widget,
 void clippanel_create(postfish_clippanel *panel,postfish_mainpanel *mp){
   GdkWindow *root=gdk_get_default_root_window();
   GtkWidget *topframe=gtk_frame_new (NULL);
-  GtkWidget *toplabel=gtk_label_new (" declipping filter ");
+  GtkWidget *toplabel=gtk_label_new (NULL);
   GtkWidget *topvbox=gtk_vbox_new (0,0);
 
   GtkWidget *indframe=gtk_frame_new (NULL);
@@ -36,6 +36,11 @@ void clippanel_create(postfish_clippanel *panel,postfish_mainpanel *mp){
   GtkWidget *allcheck=
     gtk_radio_button_new_with_label_from_widget (GTK_RADIO_BUTTON(indcheck), 
 						 "all channels ");
+
+  gtk_label_set_markup(GTK_LABEL(toplabel),
+		       "<span weight=\"bold\" "
+		       "style=\"italic\">"
+		       " declipping filter </span>");
 
   gtk_frame_set_label_widget(GTK_FRAME(indframe),indcheck);
   gtk_frame_set_label_widget(GTK_FRAME(allframe),allcheck);
