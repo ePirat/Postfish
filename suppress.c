@@ -220,14 +220,16 @@ static void suppress_work(void *vs){
 time_linkage *suppress_read(time_linkage *in){
   int visible[input_ch];
   int active[input_ch];
+  subband_window *w[input_ch];
   int i;
 
   for(i=0;i<input_ch;i++){
     visible[i]=0;
     active[i]=suppress_active;
+    w[i]=&sss.sw;
   }
   
-  return subband_read(in, &sss.ss, &sss.sw, visible, active, suppress_work, &sss);
+  return subband_read(in, &sss.ss, w, visible, active, suppress_work, &sss);
 }
 
 

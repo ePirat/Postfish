@@ -57,6 +57,11 @@ int subband_load(subband_state *f,int bands,int qblocksize){
   f->effect_active0=malloc(input_ch*sizeof(*f->effect_active0));
   f->effect_activeC=malloc(input_ch*sizeof(*f->effect_activeC));
 
+  f->wP=calloc(input_ch,sizeof(*f->wP));
+  f->w1=calloc(input_ch,sizeof(*f->w1));
+  f->w0=calloc(input_ch,sizeof(*f->w0));
+  f->wC=calloc(input_ch,sizeof(*f->wC));
+
   for(i=0;i<input_ch;i++)
     f->cache0[i]=malloc(input_size*sizeof(**f->cache0));
   for(i=0;i<input_ch;i++)
@@ -205,7 +210,7 @@ int subband_reset(subband_state *f){
 
 static void subband_work(subband_state *f,
 			 time_linkage *in,
-			 subband_window *w,
+			 subband_window **w,
 			 int      *visible,
 			 int      *active){
 
@@ -215,7 +220,6 @@ static void subband_work(subband_state *f,
   u_int32_t mutemask=in->active;
 
   f->mutemaskC=mutemask;
-  f->wC=w;
 
   for(i=0;i<input_ch;i++){
 
@@ -223,9 +227,10 @@ static void subband_work(subband_state *f,
     int content_p0= f->lap_active0[i];
     int content_p1= f->lap_active1[i];
 
-    int maxbands=w->freq_bands;
-    if(maxbands<f->w0->freq_bands)maxbands=f->w0->freq_bands;
-    if(maxbands<f->w1->freq_bands)maxbands=f->w1->freq_bands;
+    int maxbands=w[i]->freq_bands;
+    if(maxbands<f->w0[i]->freq_bands)maxbands=f->w0[i]->freq_bands;
+    if(maxbands<f->w1[i]->freq_bands)maxbands=f->w1[i]->freq_bands;
+    f->wC[i]=w[i];
 
     f->effect_activeC[i] = active[i] && !mute_channel_muted(mutemask,i);
     f->visibleC[i] = visible[i];
@@ -283,14 +288,15 @@ static void subband_work(subband_state *f,
 	fftwf_execute(f->fftwf_forward);
 	
 	/* repeatedly filter and transform back */
-	for(k=0;k<w->freq_bands;k++){
+	for(k=0;k<w[i]->freq_bands;k++){
 	  float *lapcb=f->lap[k][i]+input_size*2+(j-3)*f->qblocksize;
-	  
+	  float *hw=w[i]->ho_window[k];
+
 	  for(l=0;l<f->qblocksize*2+1;l++){
 	    f->fftwf_backward_in[2*l]= 
-	      f->fftwf_forward_out[2*l]*w->ho_window[k][l];
+	      f->fftwf_forward_out[2*l]*hw[l];
 	    f->fftwf_backward_in[2*l+1]= 
-	      f->fftwf_forward_out[2*l+1]*w->ho_window[k][l];
+	      f->fftwf_forward_out[2*l+1]*hw[l];
 	  }
 	  
 	  fftwf_execute(f->fftwf_backward);
@@ -306,7 +312,7 @@ static void subband_work(subband_state *f,
       }
       /* if we're suddenly processing fewer bands than we were, we
 	 have to trail out zeroes until the band lap is emptied */
-      for(k=w->freq_bands;k<maxbands;k++)
+      for(k=w[i]->freq_bands;k<maxbands;k++)
 	memset(f->lap[k][i]+input_size*2,0,sizeof(*f->lap[k][i])*input_size);
 	  
     }
@@ -330,9 +336,9 @@ static void unsubband_work(subband_state *f,time_linkage *in, time_linkage *out)
 
     int muted_p1= mute_channel_muted(f->mutemask1,i);
 
-    int maxbands=f->wC->freq_bands;
-    if(maxbands<f->w0->freq_bands)maxbands=f->w0->freq_bands;
-    if(maxbands<f->w1->freq_bands)maxbands=f->w1->freq_bands;
+    int maxbands=f->wC[i]->freq_bands;
+    if(maxbands<f->w0[i]->freq_bands)maxbands=f->w0[i]->freq_bands;
+    if(maxbands<f->w1[i]->freq_bands)maxbands=f->w1[i]->freq_bands;
   
     /* even if the lapping for a channel is active, we will draw
        output from the cache is the effect is inactive; it saves
@@ -471,9 +477,9 @@ static void unsubband_work(subband_state *f,time_linkage *in, time_linkage *out)
   f->mutemask1=f->mutemask0;
   f->mutemask0=f->mutemaskC;
 
-  f->wP=f->w1;
-  f->w1=f->w0;
-  f->w0=f->wC;
+  memcpy(f->wP,f->w1,input_ch*sizeof(*f->w1));
+  memcpy(f->w1,f->w0,input_ch*sizeof(*f->w0));
+  memcpy(f->w0,f->wC,input_ch*sizeof(*f->wC));
 
   f->lap_samples-=(out?f->out.samples:0);
 
@@ -481,7 +487,7 @@ static void unsubband_work(subband_state *f,time_linkage *in, time_linkage *out)
 
 /* called only by playback thread */
 time_linkage *subband_read(time_linkage *in, subband_state *f,
-			   subband_window *w,int *visible, int *active,
+			   subband_window **w,int *visible, int *active,
 			   void (*workfunc)(void *),void *arg){
   int i,j;
   
@@ -510,6 +516,11 @@ time_linkage *subband_read(time_linkage *in, subband_state *f,
       memset(f->lap_active1,set,sizeof(*f->lap_active1)*input_ch);
       memset(f->lap_active0,set,sizeof(*f->lap_active0)*input_ch);
       //memset(f->lap_activeC,1,sizeof(*f->lap_activeC)*input_ch);
+
+      f->wP[i]=w[i];
+      f->w1[i]=w[i];
+      f->w0[i]=w[i];
+
     }
     
     memcpy(f->effect_activeP,active,sizeof(*f->effect_activeP)*input_ch);
@@ -523,10 +534,6 @@ time_linkage *subband_read(time_linkage *in, subband_state *f,
     f->mutemaskP=in->active;
     f->mutemask1=in->active;
     f->mutemask0=in->active;
-
-    f->wP=w;
-    f->w1=w;
-    f->w0=w;
 
     /* initially zero the padding of the input working array */
     memset(f->fftwf_forward_in,0,f->qblocksize*4*sizeof(*f->fftwf_forward_in));

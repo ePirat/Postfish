@@ -361,30 +361,34 @@ static void multicompand_work(void *vs){
   subband_state *ss=&ms->ss;
   int i,j,k,bypass_visible=1;
   float adj[input_size];
+  int maxmaxbands=0;
 
   float **peakfeed=ms->peak;
   float **rmsfeed=ms->rms;
-
-  int bank;
-  subband_window *w=ss->w1;
-  subband_window *wP=ss->wP;
-  int maxbands=ss->wC->freq_bands;
-  if(maxbands<ss->w0->freq_bands)maxbands=ss->w0->freq_bands;
-  if(maxbands<ss->w1->freq_bands)maxbands=ss->w1->freq_bands;
-
-  if(w==&ms->sw[0]){
-    bank=0;
-  }else if(w==&ms->sw[1]){
-    bank=1;
-  }else bank=2;
   
-  for(i=0;i<maxbands;i++){
-    for(j=0;j<input_ch;j++){
+  for(j=0;j<input_ch;j++){
+    int active=(ss->effect_active1[j] || 
+		ss->effect_active0[j] || 
+		ss->effect_activeC[j]);
+    
+    int bank;
+    subband_window *w=ss->w1[j];
+    subband_window *wP=ss->wP[j];
+    int maxbands=ss->wC[j]->freq_bands;
+    if(maxbands<ss->w0[j]->freq_bands)maxbands=ss->w0[j]->freq_bands;
+    if(maxbands<ss->w1[j]->freq_bands)maxbands=ss->w1[j]->freq_bands;
+    if(maxbands>maxmaxbands)maxmaxbands=maxbands;
+    
+    if(w==&ms->sw[0]){
+      bank=0;
+    }else if(w==&ms->sw[1]){
+      bank=1;
+    }else bank=2;
+    
+    for(i=0;i<maxbands;i++){
+      
       float *x=ss->lap[i][j];
-      int active=(ss->effect_active1[j] || 
-		  ss->effect_active0[j] || 
-		  ss->effect_activeC[j]);
-
+      
       if(active){
 	/* one thing is worth a note here; 'maxbands' can be
 	   'overrange' for the current bank.  This is intentional; we
@@ -462,13 +466,10 @@ static void multicompand_work(void *vs){
 	memset(&ms->over_iir[i][j],0,sizeof(iir_state));
 	memset(&ms->under_iir[i][j],0,sizeof(iir_state));
 	memset(&ms->base_iir[i][j],0,sizeof(iir_state));
-      }
-
+      }   
     }
-  }
-
-  for(;i<wP->freq_bands;i++)
-    for(j=0;j<input_ch;j++){
+    
+    for(;i<wP->freq_bands;i++){
       memset(&ms->over_peak[i][j],0,sizeof(peak_state));
       memset(&ms->under_peak[i][j],0,sizeof(peak_state));
       memset(&ms->base_peak[i][j],0,sizeof(peak_state));
@@ -476,6 +477,7 @@ static void multicompand_work(void *vs){
       memset(&ms->under_iir[i][j],0,sizeof(iir_state));
       memset(&ms->base_iir[i][j],0,sizeof(iir_state));
     }
+  }
 
   /* finish up the state feedabck */
   if(bypass_visible){
@@ -489,12 +491,12 @@ static void multicompand_work(void *vs){
       (multicompand_feedback *)
       feedback_new(&ms->feedpool,new_multicompand_feedback);
     
-    for(i=0;i<w->freq_bands;i++){
+    for(i=0;i<maxmaxbands;i++){
       memcpy(ff->peak[i],ms->peak[i],input_ch*sizeof(**ms->peak));
       memcpy(ff->rms[i],ms->rms[i],input_ch*sizeof(**ms->rms));
     } 
     ff->bypass=0;
-    ff->freq_bands=w->freq_bands;
+    ff->freq_bands=maxmaxbands;
     feedback_push(&ms->feedpool,(feedback_generic *)ff);
   }
 }
@@ -502,13 +504,15 @@ static void multicompand_work(void *vs){
 time_linkage *multicompand_read(time_linkage *in){
   int visible[input_ch];
   int active[input_ch];
-  int i;
+  subband_window *w[input_ch];
+  int i,ab=c.active_bank;
 
   for(i=0;i<input_ch;i++){
     visible[i]=compand_visible;
     active[i]=compand_active;
+    w[i]=&ms.sw[ab];
   }
-  return subband_read(in, &ms.ss, &ms.sw[c.active_bank],
+  return subband_read(in, &ms.ss, w,
 		      visible,active,multicompand_work,&ms);
 
 }

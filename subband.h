@@ -71,10 +71,10 @@ typedef struct {
 			     1: partial prime
 			     2: nominal
 			     3: eof processed */
-  subband_window *wP;
-  subband_window *w0;
-  subband_window *w1;
-  subband_window *wC;
+  subband_window **wP;
+  subband_window **w0;
+  subband_window **w1;
+  subband_window **wC;
 
 } subband_state;
 
@@ -85,7 +85,7 @@ extern int subband_load_freqs(subband_state *f,subband_window *w,
 			      const float *freq_list,int bands);
 
 extern time_linkage *subband_read(time_linkage *in, subband_state *f,
-				  subband_window *w,int *visible, int *active,
+				  subband_window **w,int *visible, int *active,
 				  void (*workfunc)(void *),void *arg);
 
 extern int subband_reset(subband_state *f);
