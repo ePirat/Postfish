@@ -56,3 +56,12 @@ typedef struct time_linkage {
 } time_linkage;
 
 extern pthread_mutex_t master_mutex;
+
+extern sig_atomic_t loop_active;
+extern sig_atomic_t playback_active;
+extern sig_atomic_t playback_exit;
+extern int outfileno;
+extern int seekable;
+extern int eventpipe[2];
+extern int input_ch;
+

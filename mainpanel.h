@@ -1,1 +1,1 @@
-extern void mainpanel_go(int argc,char *argv[]);
+extern void mainpanel_go(int n,char *list[],int ch);

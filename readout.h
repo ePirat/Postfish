@@ -9,6 +9,7 @@
 #include <gtk/gtkframe.h>
 #include <gtk/gtknotebook.h>
 #include <gtk/gtklabel.h>
+#include <gtk/gtkeventbox.h>
 
 G_BEGIN_DECLS
 

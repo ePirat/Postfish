@@ -4,11 +4,13 @@
 #include <signal.h>
 #include <stdio.h>
 #include <pthread.h>
+#include "postfish.h"
 #include "fisharray.h"
 #include "buttonicons.h"
 #include "multibar.h"
 #include "readout.h"
 #include "version.h"
+#include "input.h"
 
 typedef struct {
   GtkWidget *topframe;
@@ -54,23 +56,26 @@ typedef struct {
 
 extern sig_atomic_t playback_active;
 extern sig_atomic_t playback_exit;
-extern sig_atomic_t ch;
 extern void *playback_thread(void *dummy);
 
 static void action_play(GtkWidget *dummy,postfish_mainpanel *p){
-  if(!playback_active){
-    pthread_t playback_thread_id;
-    playback_active=1;
-    animate_fish(p);
-    pthread_create(&playback_thread_id,NULL,&playback_thread,NULL);
+  if(gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(widget))){
+    if(!playback_active){
+      pthread_t playback_thread_id;
+      playback_active=1;
+      animate_fish(p);
+      pthread_create(&playback_thread_id,NULL,&playback_thread,NULL);
+    }
   }else{
-    playback_exit=1;
-    sched_yield();
-    while(1){
-      if(playback_active){
-	sched_yield();
-      }else
-	break;
+    if(playback_active){
+      playback_exit=1;
+      sched_yield();
+      while(1){
+	if(playback_active){
+	  sched_yield();
+	}else
+	  break;
+      }
     }
   }
 }
@@ -191,7 +196,7 @@ static gboolean timeevent_keybinding(GtkWidget *widget,
       if(pos>13)pos=13;
       buffer[pos]=event->keyval;
 
-      timeentry_fix(buffer);
+      time_fix(buffer);
 
       pos++;
       if(pos==4 || pos==7 || pos==10)pos++;
@@ -684,12 +689,13 @@ void mainpanel_create(postfish_mainpanel *panel,char **chlabels){
 }
 
 #include <stdlib.h>
-void mainpanel_go(int argc,char *argv[]){
+void mainpanel_go(int argc,char *argv[], int ch){
   postfish_mainpanel p;
   char *homedir=getenv("HOME");
-  char *labels[9];
-  char *labels_gen[]={"_0","_1","_2","_3","_4","_5","_6","_7",0};
-  char *labels_st[]={"_0 left","_1 right","_2 mid","_3 side",0};
+  char *labels[11];
+  char  buffer[20];
+  int i;
+
   memset(&p,0,sizeof(p));
   gtk_rc_add_default_file("/etc/postfish/postfishrc");
   if(homedir){
@@ -701,11 +707,35 @@ void mainpanel_go(int argc,char *argv[]){
   }
   gtk_init (&argc, &argv);
 
-  if(ch==2){
-    memcpy(labels,labels_st,sizeof(labels_st));
-  }else{
-    memcpy(labels,labels_gen,sizeof(labels_gen));
-    labels[ch]=0;
+  memset(labels,0,sizeof(labels));
+  switch(ch){
+  case 1:
+    labels[0]="_0 mono";
+    break;
+  case 2:
+    labels[0]="_0 left";
+    labels[1]="_1 right";
+    labels[2]="_2 mid";
+    labels[3]="_3 side";
+    break;
+  case 3:
+  case 4:
+  case 5:
+  case 6:
+  case 7:
+  case 8:
+    for(i=0;i<ch;i++){
+      sprintf(buffer,"_%d",i);
+      labels[i]=strdup(buffer);
+    }
+    sprintf(buffer,"_%d mean",i);
+    labels[i++]=strdup(buffer);
+    sprintf(buffer,"_%d diff",i);
+    labels[i++]=strdup(buffer);
+  default:
+    fprintf(stderr,"\nPostfish currently supports inputs of one to eight\n"
+	    "channels (current input request: %d channels)\n\n",ch);
+    exit(1);
   }
 
   mainpanel_create(&p,labels);
@@ -713,17 +743,6 @@ void mainpanel_go(int argc,char *argv[]){
   gtk_main ();
 
 }
-
-
-
-
-
-
-
-
-
-
-
 
 
 
