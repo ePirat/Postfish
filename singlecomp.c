@@ -591,13 +591,10 @@ static void work_and_lapping(singlecomp_state *scs,
         for(k=0;k<input_size;k++)
           ox[k]=ix[k]*fromdB_a(adj[k]);
 
-	/* is this frame preceeded/followed by an 'inactive' or muted frame?
+	/* is this frame preceeded/followed by an 'inactive' frame?
 	   If so, smooth the transition */
 	if(!activeP){
-	  if(mutedP){
-	    for(k=0;k<input_size/2;k++)
-	      ox[k]*=window[k];
-	  }else{
+	  if(!mutedP){
 	    for(k=0;k<input_size/2;k++){
 	      float w=window[k];
 	      ox[k]= ox[k]*w + ix[k]*(1.-w);
@@ -605,13 +602,8 @@ static void work_and_lapping(singlecomp_state *scs,
 	  }
 	}
 	if(!activeC){
-	  float *cox=ox+input_size/2;
-	  if(mutedC){
-	    for(k=0;k<input_size/2;k++){
-	      float w=1.-window[k];
-	      cox[k]*=w;
-	    }
-	  }else{
+	  if(!mutedC){
+	    float *cox=ox+input_size/2;
 	    float *cix=ix+input_size/2;
 	    for(k=0;k<input_size/2;k++){
 	      float w=window[k];
