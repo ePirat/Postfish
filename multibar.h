@@ -20,6 +20,13 @@ G_BEGIN_DECLS
 typedef struct _Multibar       Multibar;
 typedef struct _MultibarClass  MultibarClass;
 
+typedef struct bartack {
+  double pixelposhi;
+  double pixelposlo;
+  double pixeldeltahi;
+  double pixeldeltalo;
+}
+
 struct _Multibar{
 
   GtkDrawingArea canvas;  
@@ -34,6 +41,9 @@ struct _Multibar{
 
   struct timeval cliptimer;
   struct timeval peaktimer;
+
+  bartrack *bartrackers;
+  int bars;
 };
 
 struct _MultibarClass{
