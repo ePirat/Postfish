@@ -59,10 +59,6 @@
 
 #include "envelope.h"
 
-#define todB(x)   ((x)==0?-400.f:log((x)*(x))*4.34294480f)
-#define fromdB(x) (exp((x)*.11512925f))  
-#define toOC(n)     (log(n)*1.442695f-5.965784f)
-
 #define MAX_BLOCKSIZE 32768
 #define BANDS 35
 
@@ -2004,7 +2000,7 @@ int main(int argc, char **argv){
     form_init(&editf,120,1);
     form_init(&noneditf,50,0);
     box(stdscr,0,0);
-    mvaddstr(0, 2, " Postfish Filter $Id: postfish.c,v 1.7 2003/10/10 08:02:12 xiphmont Exp $ ");
+    mvaddstr(0, 2, " Postfish Filter $Id: postfish.c,v 1.8 2003/10/14 08:39:08 xiphmont Exp $ ");
     mvaddstr(LINES-1, 2, 
 	     "  [<]<<   [,]<   [Spc] Play/Pause   [Bksp] Stop/Cue   [.]>   [>]>>  ");
 

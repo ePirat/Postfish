@@ -48,6 +48,10 @@
 #include <signal.h>
 #include <fcntl.h>
 
+#define todB(x)   ((x)==0?-400.f:log((x)*(x))*4.34294480f)
+#define fromdB(x) (exp((x)*.11512925f))  
+#define toOC(n)     (log(n)*1.442695f-5.965784f)
+
 typedef struct time_linkage {
   int samples;
   int channels;
@@ -64,4 +68,5 @@ extern int outfileno;
 extern int seekable;
 extern int eventpipe[2];
 extern int input_ch;
+extern sig_atomic_t input_feedback;
 

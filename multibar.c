@@ -2,10 +2,10 @@
 #include <stdlib.h>
 #include "multibar.h"
 
-static void draw(GtkWidget *widget,float *lowvals, float *highvals, int n){
+static void draw(GtkWidget *widget,double *lowvals, double *highvals, int n){
   int i,j;
   Multibar *m=MULTIBAR(widget);
-  float max=m->peak;
+  double max=m->peak;
 
   if(!m->boxcolor){
     m->boxcolor=gdk_gc_new(m->backing);
@@ -13,7 +13,7 @@ static void draw(GtkWidget *widget,float *lowvals, float *highvals, int n){
   }
   
   if(m->cliptimer.tv_sec){
-    struct timeval tv;
+     struct timeval tv;
     gettimeofday(&tv,NULL);
     
     long val=(tv.tv_sec-m->cliptimer.tv_sec)*1000+(tv.tv_usec-m->cliptimer.tv_usec)/1000;
@@ -26,7 +26,7 @@ static void draw(GtkWidget *widget,float *lowvals, float *highvals, int n){
     
     long val=(tv.tv_sec-m->peaktimer.tv_sec)*1000+(tv.tv_usec-m->peaktimer.tv_usec)/1000;
 
-    if(val>1000) m->peak -= (val-1000)*.1;
+    if(val>1500) max = m->peak -= (val-1500)*.01;
   }
 
   for(i=0;i<n;i++)
@@ -52,7 +52,7 @@ static void draw(GtkWidget *widget,float *lowvals, float *highvals, int n){
       for(j=0;j<=m->labels;j++)
 	if(lowvals[i]>=m->levels[j]){
 	  if(lowvals[i]<=m->levels[j+1]){
-	    float del=(lowvals[i]-m->levels[j])/(m->levels[j+1]-m->levels[j]);
+	    double del=(lowvals[i]-m->levels[j])/(m->levels[j+1]-m->levels[j]);
 	    pixlo[i]=(j+del)/m->labels*widget->allocation.width;
 	    break;
 	  }
@@ -63,7 +63,7 @@ static void draw(GtkWidget *widget,float *lowvals, float *highvals, int n){
       for(;j<=m->labels;j++)
 	if(highvals[i]>=m->levels[j]){
 	  if(highvals[i]<=m->levels[j+1]){
-	    float del=(highvals[i]-m->levels[j])/(m->levels[j+1]-m->levels[j]);
+	    double del=(highvals[i]-m->levels[j])/(m->levels[j+1]-m->levels[j]);
 	    pixhi[i]=(j+del)/m->labels*widget->allocation.width;
 	    break;
 	  }
@@ -142,6 +142,41 @@ static void draw(GtkWidget *widget,float *lowvals, float *highvals, int n){
     }
   }
 
+  gdk_draw_line (m->backing,
+		 widget->style->white_gc,
+		 0, 0, widget->allocation.width-1, 0);
+
+  gdk_draw_line (m->backing,
+		 widget->style->white_gc,
+		 0, widget->allocation.height-1, 
+		 widget->allocation.width-1, widget->allocation.height-1);
+
+  /* peak follower */
+  {
+    int x=-10;
+    for(j=0;j<=m->labels;j++)
+      if(m->peak>=m->levels[j]){
+	if(m->peak<=m->levels[j+1]){
+	  double del=(m->peak-m->levels[j])/(m->levels[j+1]-m->levels[j]);
+	  x=(j+del)/m->labels*widget->allocation.width;
+	  break;
+	}
+      }else
+	break;
+
+
+    gdk_draw_polygon(m->backing,widget->style->fg_gc[0],1,
+		     (GdkPoint[]){{x,5},{x+5,0},{x-4,0}},3);
+    gdk_draw_polygon(m->backing,widget->style->fg_gc[0],1,
+		     (GdkPoint[]){{x,widget->allocation.height-6},
+		       {x+5,widget->allocation.height},
+			 {x-5,widget->allocation.height}},3);
+
+    
+    gdk_draw_line(m->backing,widget->style->fg_gc[1],x,0,x,widget->allocation.height-1);
+
+  }
+
   for(i=0;i<m->labels;i++){
     int x=widget->allocation.width*(i+1)/m->labels;
     int y=widget->allocation.height;
@@ -161,32 +196,6 @@ static void draw(GtkWidget *widget,float *lowvals, float *highvals, int n){
 		     widget->style->text_gc[0],
 		     x, y,
 		     m->layout[i]);
-
-  }
-
-  /* peak follower */
-  {
-    int x=-10;
-    for(j=0;j<=m->labels;j++)
-      if(m->peak>=m->levels[j]){
-	if(m->peak<=m->levels[j+1]){
-	  float del=(m->peak-m->levels[j])/(m->levels[j+1]-m->levels[j]);
-	  x=(j+del)/m->labels*widget->allocation.width;
-	  break;
-	}
-      }else
-	break;
-
-
-    gdk_draw_polygon(m->backing,widget->style->black_gc,1,
-		     (GdkPoint[]){{x,5},{x+5,0},{x-4,0}},3);
-    gdk_draw_polygon(m->backing,widget->style->black_gc,1,
-		     (GdkPoint[]){{x,widget->allocation.height-6},
-		       {x+5,widget->allocation.height},
-			 {x-5,widget->allocation.height}},3);
-
-    
-    gdk_draw_line(m->backing,widget->style->black_gc,x,0,x,widget->allocation.height-1);
 
   }
 
@@ -280,7 +289,7 @@ GType multibar_get_type (void){
   return m_type;
 }
 
-GtkWidget* multibar_new (int n, char **labels, float *levels){
+GtkWidget* multibar_new (int n, char **labels, double *levels){
   int i;
   GtkWidget *ret= GTK_WIDGET (g_object_new (multibar_get_type (), NULL));
   Multibar *m=MULTIBAR(ret);
@@ -297,7 +306,7 @@ GtkWidget* multibar_new (int n, char **labels, float *levels){
   return ret;
 }
 
-void multibar_set(Multibar *m,float *lo, float *hi, int n){
+void multibar_set(Multibar *m,double *lo, double *hi, int n){
   GtkWidget *widget=GTK_WIDGET(m);
   draw(widget,lo,hi,n);
   gdk_draw_pixmap(widget->window,

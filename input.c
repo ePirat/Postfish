@@ -300,7 +300,7 @@ int input_load(int n,char *list[]){
     }
   }
 
-  out.samples=4096;
+  out.samples=2048;
   input_ch=out.channels=ch;
   out.rate=rate;
   out.data=malloc(sizeof(*out.data)*ch);
@@ -345,10 +345,53 @@ int input_seek(off_t pos){
   return(0);
 }
 
+double *input_rms=NULL;
+double *input_peak=NULL;
+sig_atomic_t input_feedback=0;
+
+static void update_input_feedback(double *peak,double *rms){
+  int i,n=input_ch+2;
+  pthread_mutex_lock(&master_mutex);
+
+  if(!input_rms){
+    input_rms=calloc(n,sizeof(*input_rms));
+    input_peak=calloc(n,sizeof(*input_peak));
+  }
+
+  if(input_feedback==0)
+    for(i=0;i<n;i++)input_peak[i]*=.9;
+  for(i=0;i<n;i++)input_rms[i]=.8*input_rms[i]+.2*rms[i];
+  
+  for(i=0;i<n;i++)
+    if(peak[i]>input_peak[i])
+      input_peak[i]=peak[i];
+
+  input_feedback=1;
+
+  pthread_mutex_unlock(&master_mutex);
+}
+
+int fetch_input_feedback(double *peak,double *rms){
+  int n=input_ch+2,i,j;
+  pthread_mutex_lock(&master_mutex);
+
+  memcpy(rms,input_rms,sizeof(*input_rms)*n);
+  memcpy(peak,input_peak,sizeof(*input_peak)*n);
+
+  input_feedback=0;
+
+  pthread_mutex_unlock(&master_mutex);
+}
+
 time_linkage *input_read(void){
   int read_b=0,i,j,k;
   int toread_b=out.samples*out.channels*inbytes;
   unsigned char *readbuf;
+  double *rms=alloca(sizeof(*rms)*(out.channels+2));
+  double *peak=alloca(sizeof(*peak)*(out.channels+2));
+
+  memset(rms,0,sizeof(*rms)*(out.channels+2));
+  memset(peak,0,sizeof(*peak)*(out.channels+2));
 
   pthread_mutex_lock(&master_mutex);
 
@@ -394,19 +437,27 @@ time_linkage *input_read(void){
     if(loop_active && cursor>=Bcursor){
       pthread_mutex_unlock(&master_mutex);
       input_seek(Acursor);
-    }else if(cursor>=current_file_entry->end){
-      pthread_mutex_unlock(&master_mutex);
-      if(current_file_entry_number+1<file_entries){
-	current_file_entry_number++;
-	current_file_entry++;
-	fseeko(current_file_entry->f,current_file_entry->data,SEEK_SET);
-      }
+    }else{
+      if(cursor>=current_file_entry->end){
+	pthread_mutex_unlock(&master_mutex);
+	if(current_file_entry_number+1<file_entries){
+	  current_file_entry_number++;
+	  current_file_entry++;
+	  fseeko(current_file_entry->f,current_file_entry->data,SEEK_SET);
+	}
+      }else
+	pthread_mutex_unlock(&master_mutex);
     }
   }
   
   k=0;
   for(i=0;i<out.samples;i++){
+    double mean=0.;
+    double div=0.;
+    double divrms=0.;
+
     for(j=0;j<out.channels;j++){
+      double dval;
       long val=0;
       switch(inbytes){
       case 1:
@@ -423,12 +474,41 @@ time_linkage *input_read(void){
 	break;
       }
       if(signp)
-	out.data[j][i]=val*4.6566128730e-10;
+	dval=out.data[j][i]=val*4.6566128730e-10;
       else
-	out.data[j][i]=(val^0x80000000UL)*4.6566128730e-10;
+	dval=out.data[j][i]=(val^0x80000000UL)*4.6566128730e-10;
+
+      if(fabs(dval)>peak[j])peak[j]=fabs(dval);
+      rms[j]+= dval*dval;
+      mean+=dval;
 
       k+=inbytes;
     }
+
+    /* mean */
+    mean/=j;
+    if(fabs(mean)>peak[j])peak[j]=fabs(mean);
+    rms[j]+= mean*mean;
+
+    /* div */
+    for(j=0;j<out.channels;j++){
+      double dval=mean-out.data[j][i];
+      if(fabs(dval)>peak[out.channels+1])peak[out.channels+1]=fabs(dval);
+      divrms+=dval*dval;
+    }
+    rms[out.channels+1]+=divrms/out.channels;
+      
   }    
+  
+  for(j=0;j<out.channels+2;j++){
+    rms[j]/=out.samples;
+    rms[j]=sqrt(rms[j]);
+  }
+
+  update_input_feedback(peak,rms);
+
   return &out;
 }
+
+
+

@@ -27,10 +27,10 @@ struct _Multibar{
 
   int labels;
   PangoLayout **layout;
-  float       *levels;
+  double       *levels;
 
   GdkGC         *boxcolor;
-  float         peak;
+  double         peak;
 
   struct timeval cliptimer;
   struct timeval peaktimer;
@@ -44,9 +44,9 @@ struct _MultibarClass{
 };
 
 GType          multibar_get_type        (void);
-GtkWidget*     multibar_new             (int n, char **labels, float *levels);
+GtkWidget*     multibar_new             (int n, char **labels, double *levels);
 void	       multibar_clear           (Multibar *m);
-void	       multibar_set             (Multibar *m,float *lo,float *hi, int n);
+void	       multibar_set             (Multibar *m,double *lo,double *hi, int n);
 
 G_END_DECLS
 

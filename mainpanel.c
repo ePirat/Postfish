@@ -47,6 +47,11 @@ typedef struct {
 
   GtkWidget *deckactive[7];
 
+  GtkWidget *inbar;
+  GtkWidget *outbar;
+
+  GtkWidget *channelshow[10]; /* support only up to 8 + mid/side */
+
   /* ui state */
   int fishframe;
   int fishframe_init;
@@ -58,7 +63,7 @@ extern sig_atomic_t playback_active;
 extern sig_atomic_t playback_exit;
 extern void *playback_thread(void *dummy);
 
-static void action_play(GtkWidget *dummy,postfish_mainpanel *p){
+static void action_play(GtkWidget *widget,postfish_mainpanel *p){
   if(gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(widget))){
     if(!playback_active){
       pthread_t playback_thread_id;
@@ -487,10 +492,10 @@ void mainpanel_create(postfish_mainpanel *panel,char **chlabels){
     
   /* right side of main panel */
   {
-    char *labels[12]={"-96","-72","-48","-24","-20","-16",
-		      "-12","-8","-4","0","+3","+6"};
-    float levels[13]={-140,-96,-72,-48,-24,-20,-16,
-		      -12,-8,-4,0,+3,+6};
+    char *labels[12]={"-96","-72","-60","-48","-36","-24",
+		      "-16","-8","-3","0","+3","+6"};
+    double levels[13]={-140.,-96.,-72.,-60.,-48.,-36.,-24.,
+		       -16.,-8.,-3.,0.,+3.,+6.};
 
     GtkWidget *ttable=gtk_table_new(7,2,0);
     GtkWidget *togglebox=gtk_hbox_new(0,0);
@@ -499,8 +504,9 @@ void mainpanel_create(postfish_mainpanel *panel,char **chlabels){
     GtkWidget *show=gtk_label_new("show:");
     GtkWidget *inframe=gtk_frame_new(NULL);
     GtkWidget *outframe=gtk_frame_new(NULL);
-    GtkWidget *inbar=multibar_new(12,labels,levels);
-    GtkWidget *outbar=multibar_new(12,labels,levels);
+
+    panel->inbar=multibar_new(12,labels,levels);
+    panel->outbar=multibar_new(12,labels,levels);
 
     gtk_container_set_border_width(GTK_CONTAINER (ttable), 3);
     gtk_table_set_col_spacings(GTK_TABLE(ttable),5);
@@ -513,19 +519,20 @@ void mainpanel_create(postfish_mainpanel *panel,char **chlabels){
       if(!chlabels[i])break;
 
       GtkWidget *button=gtk_check_button_new_with_mnemonic(chlabels[i]);
-      if(i<2)gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(button),TRUE);
+      if(i<input_ch)gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(button),TRUE);
       gtk_box_pack_start(GTK_BOX(togglebox),button,0,0,0);
       {
 	char buffer[]="color\0\0";
 	buffer[5]= (i%10)+48;
 	gtk_widget_set_name(button,buffer);
       }
+      panel->channelshow[i]=button;
     }
 
     gtk_frame_set_shadow_type(GTK_FRAME(inframe),GTK_SHADOW_ETCHED_IN);
     gtk_frame_set_shadow_type(GTK_FRAME(outframe),GTK_SHADOW_ETCHED_IN);
-    gtk_container_add(GTK_CONTAINER(inframe),inbar);
-    gtk_container_add(GTK_CONTAINER(outframe),outbar);
+    gtk_container_add(GTK_CONTAINER(inframe),panel->inbar);
+    gtk_container_add(GTK_CONTAINER(outframe),panel->outbar);
     
     gtk_table_attach_defaults(GTK_TABLE(ttable),togglebox,1,3,0,1);
     gtk_table_attach(GTK_TABLE(ttable),show,0,1,0,1,GTK_FILL|GTK_SHRINK,GTK_FILL|GTK_SHRINK,0,0);
@@ -688,6 +695,43 @@ void mainpanel_create(postfish_mainpanel *panel,char **chlabels){
 
 }
 
+static void async_event_handle(gpointer data,
+			int fd, 
+			GdkInputCondition condition){
+  postfish_mainpanel *panel=data;
+  int i;
+  char buf[1];
+  read(eventpipe[0],buf,1);
+
+  /* first order of business: release the play button if playback is
+     no longer in progress */
+  
+  if(gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(panel->buttonactive[3])))
+    if(!playback_active)
+      gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(panel->buttonactive[3]),0);
+
+  /* second order of business; update the input meter if data is available */
+  if(input_feedback){
+    double *rms=alloca(sizeof(*rms)*(input_ch+2));
+    double *peak=alloca(sizeof(*peak)*(input_ch+2));
+    fetch_input_feedback(peak,rms);
+
+    for(i=0;i<input_ch+2;i++){
+      if(gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(panel->channelshow[i]))){
+	peak[i]=todB(peak[i]);
+	rms[i]=todB(rms[i]);
+      }else{
+	peak[i]=-400;
+	rms[i]=-400;
+      }
+    }
+
+    multibar_set(MULTIBAR(panel->inbar),rms,peak,input_ch+2);
+  }
+
+
+}
+
 #include <stdlib.h>
 void mainpanel_go(int argc,char *argv[], int ch){
   postfish_mainpanel p;
@@ -728,10 +772,11 @@ void mainpanel_go(int argc,char *argv[], int ch){
       sprintf(buffer,"_%d",i);
       labels[i]=strdup(buffer);
     }
-    sprintf(buffer,"_%d mean",i);
+    sprintf(buffer,"_%d mid",i);
     labels[i++]=strdup(buffer);
-    sprintf(buffer,"_%d diff",i);
+    sprintf(buffer,"_%d div",i);
     labels[i++]=strdup(buffer);
+    break;
   default:
     fprintf(stderr,"\nPostfish currently supports inputs of one to eight\n"
 	    "channels (current input request: %d channels)\n\n",ch);
@@ -740,11 +785,11 @@ void mainpanel_go(int argc,char *argv[], int ch){
 
   mainpanel_create(&p,labels);
   animate_fish(&p);
+  gtk_input_add_full(eventpipe[0],GDK_INPUT_READ,async_event_handle,NULL,
+		     &p,NULL);
+
   gtk_main ();
 
 }
-
-
-
 
 

@@ -82,7 +82,7 @@ static FILE *playback_startup(int outfileno, int ch, int r){
 
   /* is this file a block device? */
   if(isachr(playback_fd)){
-    int fragment=0x7fff000d;
+    int fragment=0x0004000d;
     int fd=fileno(playback_fd);
 
     /* try to lower the DSP delay; this ioctl may fail gracefully */
@@ -181,13 +181,13 @@ void *playback_thread(void *dummy){
 	struct timeval tv;
 	long foo;
 	gettimeofday(&tv,NULL);
-	foo=tv.tv_sec*10+tv.tv_usec/100000;
+	foo=tv.tv_sec*20+tv.tv_usec/50000;
 	if(last!=foo)
 	  write(eventpipe[1],"",1);
 	last=foo;
       }
       
-      count+=fwrite(audiobuf,1,audiobufsize,playback_fd);
+      count+=fwrite(audiobuf,1,ret->channels*ret->samples*2,playback_fd);
     }
   }
 
