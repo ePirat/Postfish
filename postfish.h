@@ -75,4 +75,6 @@ extern int seekable;
 extern int eventpipe[2];
 extern int input_ch;
 
+extern void mainpanel_go(int n,char *list[],int ch);
+
 #endif

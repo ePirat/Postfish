@@ -11,59 +11,6 @@
 #include "output.h"
 #include "mainpanel.h"
 
-#include "clippanel.h"
-
-struct postfish_mainpanel{
-  GtkWidget *topframe;
-  GtkWidget *toplabel;
-
-  GtkWidget *mainbox;
-  GtkWidget *box1;
-  GtkWidget *leftback;
-  GtkWidget *leftframe;
-  GtkWidget *box2;
-
-  GtkWidget *wintable;
-  GtkWidget *twirlimage;
-  GdkPixmap *ff[19];
-  GdkBitmap *fb[19];
-
-  GtkWidget *quitbutton;
-  
-  GtkWidget *playimage;
-  GdkPixmap *pf[2];
-  GdkBitmap *pb[2];
-
-  /* we need these widgets */
-  GtkWidget *toplevel;
-
-  GtkWidget *masterdB_r;
-  GtkWidget *masterdB_s;
-  GtkWidget *masterdB_a;
-
-  GtkWidget *buttonactive[7];
-  GtkWidget *cue_set[2];
-  GtkWidget *cue_reset[2];
-
-  GtkWidget *deckactive[7];
-
-  GtkWidget *inbar;
-  GtkWidget *outbar;
-
-  GtkWidget *channelshow[10]; /* support only up to 8 + mid/side */
-
-  GtkWidget *cue;
-  GtkWidget *entry_a;
-  GtkWidget *entry_b;
-
-  postfish_clippanel clippanel;
-
-  /* ui state */
-  int fishframe;
-  int fishframe_init;
-  guint fishframe_timer;
- 
-};
 
 static void action_clippanel_window(GtkWidget *widget,postfish_mainpanel *p){
   if(gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(widget))){
@@ -348,7 +295,7 @@ static gboolean timeevent_keybinding(GtkWidget *widget,
   }
 }
 
-gboolean mainpanel_keybinding(GtkWidget *widget,
+static gboolean mainpanel_keybinding(GtkWidget *widget,
 			      GdkEventKey *event,
 			      gpointer in){
   postfish_mainpanel *p=in;
@@ -361,6 +308,7 @@ gboolean mainpanel_keybinding(GtkWidget *widget,
 	  event->state&GDK_LOCK_MASK,
 	  event->keyval);
 #endif
+
   /* do not capture Alt accellerators */
   if(event->state&GDK_MOD1_MASK) return FALSE;
   if(event->state&GDK_CONTROL_MASK) return FALSE;
@@ -481,6 +429,7 @@ static void mainpanel_panelentry(postfish_mainpanel *p,
   GtkWidget *ww=gtk_check_button_new_with_mnemonic(label);
   GtkWidget *wa=gtk_toggle_button_new_with_label(shortcut);
 
+  p->buttonwindow[i]=ww;
   p->buttonactive[i]=wa;
   
   gtk_table_attach_defaults(GTK_TABLE(p->wintable),ww,0,1,i+1,i+2);

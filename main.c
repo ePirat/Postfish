@@ -28,7 +28,6 @@
 
 /* sound playback code is OSS-specific for now */
 #include "postfish.h"
-#include "mainpanel.h"
 #include "input.h"
 #include "output.h"
 
