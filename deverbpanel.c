@@ -98,7 +98,7 @@ static void compand_change(GtkWidget *w,gpointer in){
   if(val==1.){
     sprintf(buffer,"   off");
   }else 
-    sprintf(buffer,"%4.2f",val);
+    sprintf(buffer,"  %4.2f",val);
 
   readout_set(bar->readoutc,buffer);
   
@@ -149,8 +149,8 @@ static deverb_panel_state *deverbpanel_create_helper(postfish_mainpanel *mp,
   float compand_levels[5]={1,1.5,2,3,5};
   char  *compand_labels[5]={"","1.5","2","3","5"};
 
-  float timing_levels[5]={1, 10, 100, 1000, 10000};
-  char  *timing_labels[5]={"","10ms","     100ms","1s","10s"};
+  float timing_levels[5]={10, 40, 100, 400, 1000};
+  char  *timing_labels[5]={"","40ms","     100ms","400ms","1s"};
 
   GtkWidget *table=gtk_table_new(deverb_freqs+4,4,0);
   GtkWidget *timinglabel=gtk_label_new("deverberator filter timing");
@@ -219,8 +219,8 @@ static deverb_panel_state *deverbpanel_create_helper(postfish_mainpanel *mp,
 
     multibar_callback(MULTIBAR(slider),timing_change,&ps->timing);
     
-    multibar_thumb_set(MULTIBAR(slider),80,0);
-    multibar_thumb_set(MULTIBAR(slider),400,2);
+    multibar_thumb_set(MULTIBAR(slider),100,0);
+    multibar_thumb_set(MULTIBAR(slider),400,1);
 
     gtk_table_attach(GTK_TABLE(table),slider,1,2,1,2,
 		     GTK_FILL|GTK_EXPAND,GTK_EXPAND,5,0);
@@ -243,8 +243,25 @@ static deverb_panel_state *deverbpanel_create_helper(postfish_mainpanel *mp,
     ps->bars[i].number=i;
 
     multibar_callback(MULTIBAR(ps->bars[i].cslider),compand_change,ps->bars+i);
-    multibar_thumb_set(MULTIBAR(ps->bars[i].cslider),1,0);
-    
+
+    switch(i){
+    case 0:
+      multibar_thumb_set(MULTIBAR(ps->bars[i].cslider),1.,0);
+      break;
+    case 1:
+      multibar_thumb_set(MULTIBAR(ps->bars[i].cslider),1.3,0);
+      break;
+    case 2:case 3: case 4: case 5: 
+      multibar_thumb_set(MULTIBAR(ps->bars[i].cslider),1.7,0);
+      break;
+    case 6:
+      multibar_thumb_set(MULTIBAR(ps->bars[i].cslider),1.3,0);
+      break;
+    case 7:
+      multibar_thumb_set(MULTIBAR(ps->bars[i].cslider),1,0);
+      break;
+    }
+
     gtk_misc_set_alignment(GTK_MISC(label),1,.5);
       
     gtk_table_attach(GTK_TABLE(table),label,0,1,i+3,i+4,

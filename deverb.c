@@ -113,6 +113,7 @@ int deverb_load(void){
   return 0;
 }
 
+#if 0
 static void _analysis(char *base,int seq, float *data, int n,int dB, 
 		      off_t offset){
 
@@ -132,7 +133,7 @@ static void _analysis(char *base,int seq, float *data, int n,int dB,
   }
   fclose(f);
 }
-
+#endif
 
 static void deverb_work_helper(void *vs, deverb_settings *sset){
   deverb_state *sss=(deverb_state *)vs;
@@ -143,7 +144,6 @@ static void deverb_work_helper(void *vs, deverb_settings *sset){
   iir_filter *smooth=&sss->smooth;
   iir_filter *release=&sss->release;
   int ahead;
-  static off_t offset=0;
 
   if(smoothms!=smooth->ms)filter_set(ss,smoothms,smooth,1,2);
   if(releasems!=release->ms)filter_set(ss,releasems,release,0,1);
@@ -245,7 +245,6 @@ static void deverb_work_helper(void *vs, deverb_settings *sset){
 
     sss->prevratio[i]=multiplier;
   }
-  offset+=input_size;
 }
 
 static void deverb_work_channel(void *vs){
