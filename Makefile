@@ -7,7 +7,7 @@ LD=gcc
 
 SRC = main.c mainpanel.c multibar.c readout.c input.c output.c
 OBJ = main.o mainpanel.o multibar.o readout.o input.o output.o
-GCF = `pkg-config --cflags gtk+-2.0`
+GCF = `pkg-config --cflags gtk+-2.0` -DG_DISABLE_DEPRECATED -DGDK_DISABLE_DEPRECATED -DGTK_DISABLE_DEPRECATED -DGDK_PIXBUF_DISABLE_DEPRECATED
 
 all:	
 	$(MAKE) target CFLAGS="-W -O2 $(GCF)"

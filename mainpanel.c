@@ -695,9 +695,9 @@ void mainpanel_create(postfish_mainpanel *panel,char **chlabels){
 
 }
 
-static void async_event_handle(gpointer data,
-			int fd, 
-			GdkInputCondition condition){
+static gboolean async_event_handle(GIOChannel *channel,
+				   GIOCondition condition,
+				   gpointer data){
   postfish_mainpanel *panel=data;
   int i;
   char buf[1];
@@ -706,9 +706,9 @@ static void async_event_handle(gpointer data,
   /* first order of business: release the play button if playback is
      no longer in progress */
   
-  if(gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(panel->buttonactive[3])))
+  if(gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(panel->deckactive[3])))
     if(!playback_active)
-      gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(panel->buttonactive[3]),0);
+      gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(panel->deckactive[3]),0);
 
   /* second order of business; update the input meter if data is available */
   if(input_feedback){
@@ -729,7 +729,7 @@ static void async_event_handle(gpointer data,
     multibar_set(MULTIBAR(panel->inbar),rms,peak,input_ch+2);
   }
 
-
+  return TRUE;
 }
 
 #include <stdlib.h>
@@ -785,8 +785,22 @@ void mainpanel_go(int argc,char *argv[], int ch){
 
   mainpanel_create(&p,labels);
   animate_fish(&p);
-  gtk_input_add_full(eventpipe[0],GDK_INPUT_READ,async_event_handle,NULL,
-		     &p,NULL);
+
+  {
+    GIOChannel *channel = g_io_channel_unix_new (eventpipe[0]);
+    GSource *source;
+    guint id;
+
+    g_io_channel_set_encoding (channel, NULL, NULL);
+    g_io_channel_set_buffered (channel, FALSE);
+    g_io_channel_set_close_on_unref (channel, TRUE);
+
+    id = g_io_add_watch (channel, G_IO_IN, async_event_handle, &p);
+
+    g_io_channel_unref (channel);
+
+  }
+
 
   gtk_main ();
 

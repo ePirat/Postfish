@@ -294,7 +294,7 @@ static gboolean configure(GtkWidget *widget, GdkEventConfigure *event){
   Multibar *m=MULTIBAR(widget);
   
   if (m->backing)
-    gdk_pixmap_unref(m->backing);
+    gdk_drawable_unref(m->backing);
   
   m->backing = gdk_pixmap_new(widget->window,
 			      widget->allocation.width,
@@ -309,12 +309,12 @@ static gboolean configure(GtkWidget *widget, GdkEventConfigure *event){
 
 static gboolean expose( GtkWidget *widget, GdkEventExpose *event ){
   Multibar *m=MULTIBAR(widget);
-  gdk_draw_pixmap(widget->window,
-		  widget->style->fg_gc[GTK_WIDGET_STATE (widget)],
-		  m->backing,
-		  event->area.x, event->area.y,
-		  event->area.x, event->area.y,
-		  event->area.width, event->area.height);
+  gdk_draw_drawable(widget->window,
+		    widget->style->fg_gc[GTK_WIDGET_STATE (widget)],
+		    m->backing,
+		    event->area.x, event->area.y,
+		    event->area.x, event->area.y,
+		    event->area.width, event->area.height);
   
   return FALSE;
 }
@@ -399,12 +399,12 @@ GtkWidget* multibar_new (int n, char **labels, double *levels, int flags){
 void multibar_set(Multibar *m,double *lo, double *hi, int n){
   GtkWidget *widget=GTK_WIDGET(m);
   draw(widget,lo,hi,n);
-  gdk_draw_pixmap(widget->window,
-		  widget->style->fg_gc[GTK_WIDGET_STATE (widget)],
-		  m->backing,
-		  0, 0,
-		  0, 0,
-		  widget->allocation.width,		  
-		  widget->allocation.height);
+  gdk_draw_drawable(widget->window,
+		    widget->style->fg_gc[GTK_WIDGET_STATE (widget)],
+		    m->backing,
+		    0, 0,
+		    0, 0,
+		    widget->allocation.width,		  
+		    widget->allocation.height);
   
 }
