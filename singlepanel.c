@@ -87,10 +87,9 @@ static singlecomp_panel_state *master_panel;
 static singlecomp_panel_state **channel_panel;
 
 static void singlepanel_state_to_config_helper(int bank,singlecomp_settings *s,int A){
-  int i;
   config_set_integer("singlecompand_active",bank,A,0,0,0,s->panel_active);
-  config_set_integer("singlecompand_thresh",bank,A,i,0,0,s->u_thresh);
-  config_set_integer("singlecompand_thresh",bank,A,i,0,1,s->o_thresh);
+  config_set_integer("singlecompand_thresh",bank,A,0,0,0,s->u_thresh);
+  config_set_integer("singlecompand_thresh",bank,A,0,0,1,s->o_thresh);
 
   config_set_integer("singlecompand_over_set",bank,A,0,0,0,s->o_mode);
   config_set_integer("singlecompand_over_set",bank,A,0,0,1,s->o_softknee);
@@ -122,13 +121,12 @@ void singlepanel_state_to_config(int bank){
 static void singlepanel_state_from_config_helper(int bank,singlecomp_settings *s,
 						 singlecomp_panel_state *p,int A){
 
-  int i;
   config_get_sigat("singlecompand_active",bank,A,0,0,0,&s->panel_active);
   gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->panel->subpanel_activebutton[0]),s->panel_active);
 
-  config_get_sigat("singlecompand_thresh",bank,A,i,0,0,&s->u_thresh);
+  config_get_sigat("singlecompand_thresh",bank,A,0,0,0,&s->u_thresh);
   multibar_thumb_set(MULTIBAR(p->bar.slider),s->u_thresh,0);
-  config_get_sigat("singlecompand_thresh",bank,A,i,0,1,&s->o_thresh);
+  config_get_sigat("singlecompand_thresh",bank,A,0,0,1,&s->o_thresh);
   multibar_thumb_set(MULTIBAR(p->bar.slider),s->o_thresh,1);
 
   config_get_sigat("singlecompand_over_set",bank,A,0,0,0,&s->o_mode);
