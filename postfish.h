@@ -26,6 +26,9 @@
    reusable code.  It's monolithic, inflexible, and designed that way
    on purpose. */
 
+#ifndef _POSTFISH_H_
+#define _POSTFISH_H_
+
 #define _GNU_SOURCE
 #define _LARGEFILE_SOURCE 
 #define _LARGEFILE64_SOURCE
@@ -72,3 +75,4 @@ extern int seekable;
 extern int eventpipe[2];
 extern int input_ch;
 
+#endif

@@ -9,8 +9,11 @@
 #include "version.h"
 #include "input.h"
 #include "output.h"
+#include "mainpanel.h"
 
-typedef struct {
+#include "clippanel.h"
+
+struct postfish_mainpanel{
   GtkWidget *topframe;
   GtkWidget *toplabel;
 
@@ -25,7 +28,6 @@ typedef struct {
   GdkPixmap *ff[19];
   GdkBitmap *fb[19];
 
-  GtkWidget *buttonpanel[7];
   GtkWidget *quitbutton;
   
   GtkWidget *playimage;
@@ -54,12 +56,22 @@ typedef struct {
   GtkWidget *entry_a;
   GtkWidget *entry_b;
 
+  postfish_clippanel clippanel;
+
   /* ui state */
   int fishframe;
   int fishframe_init;
   guint fishframe_timer;
  
-} postfish_mainpanel;
+};
+
+static void action_clippanel_window(GtkWidget *widget,postfish_mainpanel *p){
+  if(gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(widget))){
+    clippanel_show(&p->clippanel);
+  }else{
+    clippanel_hide(&p->clippanel);
+  }
+}
 
 static void action_zero(GtkWidget *widget,postfish_mainpanel *p){
   const char *time=gtk_entry_get_text(GTK_ENTRY(p->entry_a));
@@ -336,9 +348,9 @@ static gboolean timeevent_keybinding(GtkWidget *widget,
   }
 }
 
-static gboolean keybinding(GtkWidget *widget,
-			   GdkEventKey *event,
-			   gpointer in){
+gboolean mainpanel_keybinding(GtkWidget *widget,
+			      GdkEventKey *event,
+			      gpointer in){
   postfish_mainpanel *p=in;
 
 #if 0
@@ -463,12 +475,23 @@ static gboolean keybinding(GtkWidget *widget,
 static void mainpanel_panelentry(postfish_mainpanel *p,
 				 char *label,
 				 char *shortcut,
-				 int i){
-  p->buttonpanel[i]=gtk_check_button_new_with_mnemonic(label);
-  p->buttonactive[i]=gtk_toggle_button_new_with_label(shortcut);
+				 int i,
+				 GCallback cw,
+				 GCallback ca){
+  GtkWidget *ww=gtk_check_button_new_with_mnemonic(label);
+  GtkWidget *wa=gtk_toggle_button_new_with_label(shortcut);
+
+  p->buttonactive[i]=wa;
   
-  gtk_table_attach_defaults(GTK_TABLE(p->wintable),p->buttonpanel[i],0,1,i+1,i+2);
-  gtk_table_attach_defaults(GTK_TABLE(p->wintable),p->buttonactive[i],1,2,i+1,i+2);
+  gtk_table_attach_defaults(GTK_TABLE(p->wintable),ww,0,1,i+1,i+2);
+  gtk_table_attach_defaults(GTK_TABLE(p->wintable),wa,1,2,i+1,i+2);
+
+  if(cw)
+    g_signal_connect (G_OBJECT (ww), "clicked",
+		      G_CALLBACK (cw), p);
+  if(ca)
+    g_signal_connect (G_OBJECT (wa), "clicked",
+		      G_CALLBACK (ca), p);
 }
 
 void mainpanel_create(postfish_mainpanel *panel,char **chlabels){
@@ -482,17 +505,26 @@ void mainpanel_create(postfish_mainpanel *panel,char **chlabels){
   char *text_bar[7]={"[bksp]","[<]","[,]","[space]","[.]","[>]","[end]"};
   GdkWindow *root=gdk_get_default_root_window();
 
-  char versionnum[20];
-  char versiondate[20];
-  char versiontime[20];
   char versionmarkup[240];
-  sscanf(VERSION,"$Id: mainpanel.c,v 1.20 2003/10/18 08:10:49 xiphmont Exp $",
-	 versionnum,versiondate,versiontime);
+  char *version=strstr(VERSION,"version.h,v");
+  if(version){
+    char *versionend=strchr(version,' ');
+    if(versionend)versionend=strchr(versionend+1,' ');
+    if(versionend)versionend=strchr(versionend+1,' ');
+    if(versionend)versionend=strchr(versionend+1,' ');
+    if(versionend){
+      int len=versionend-version-11;
+      version=strdup(version+12);
+      version[len-1]=0;
+    }
+  }else{
+    version="";
+  }
   snprintf(versionmarkup,240,"<span size=\"large\" weight=\"bold\" "
 	   "style=\"italic\" foreground=\"dark blue\">"
 	   "Postfish</span>  <span size=\"small\" foreground=\"#606060\">"
-	   "version %s %s %s</span> ",
-	   versionnum,versiondate,versiontime);
+	   "version %s</span> ",
+	   version);
 
   panel->toplevel=gtk_window_new (GTK_WINDOW_TOPLEVEL);
   panel->topframe=gtk_frame_new (NULL);
@@ -520,7 +552,7 @@ void mainpanel_create(postfish_mainpanel *panel,char **chlabels){
   
 
   g_signal_connect (G_OBJECT (panel->toplevel), "key-press-event",
-		    G_CALLBACK (keybinding), panel);
+		    G_CALLBACK (mainpanel_keybinding), panel);
   
 
   for(i=0;i<19;i++)
@@ -597,13 +629,14 @@ void mainpanel_create(postfish_mainpanel *panel,char **chlabels){
     gtk_table_attach_defaults(GTK_TABLE(panel->wintable),temp,1,2,0,1);
   }
 
-  mainpanel_panelentry(panel,"_Declip ","[d]",0);
-  mainpanel_panelentry(panel,"Cross_Talk ","[t]",1);
-  mainpanel_panelentry(panel,"_Noise Filter ","[n]",2);
-  mainpanel_panelentry(panel,"_Equalizer ","[e]",3);
-  mainpanel_panelentry(panel,"_Compander ","[c]",4);
-  mainpanel_panelentry(panel,"_Limiter ","[l]",5);
-  mainpanel_panelentry(panel,"_Output Cal. ","[o]",6);
+  mainpanel_panelentry(panel,"_Declip ","[d]",0,
+		       (GCallback)action_clippanel_window,0);
+  mainpanel_panelentry(panel,"Cross_Talk ","[t]",1,0,0);
+  mainpanel_panelentry(panel,"_Noise Filter ","[n]",2,0,0);
+  mainpanel_panelentry(panel,"_Equalizer ","[e]",3,0,0);
+  mainpanel_panelentry(panel,"_Compander ","[c]",4,0,0);
+  mainpanel_panelentry(panel,"_Limiter ","[l]",5,0,0);
+  mainpanel_panelentry(panel,"_Output Cal. ","[o]",6,0,0);
 
 
   g_signal_connect (G_OBJECT (panel->toplevel), "delete_event",
@@ -611,6 +644,7 @@ void mainpanel_create(postfish_mainpanel *panel,char **chlabels){
     
   g_signal_connect (G_OBJECT (panel->toplevel), "delete_event",
 		    G_CALLBACK (shutdown), NULL);
+
     
   /* right side of main panel */
   {
@@ -839,6 +873,8 @@ void mainpanel_create(postfish_mainpanel *panel,char **chlabels){
   gtk_widget_show_all(panel->toplevel);
   gtk_window_set_resizable(GTK_WINDOW(panel->toplevel),0);
 
+  clippanel_create(&panel->clippanel,panel);
+
 }
 
 static gboolean feedback_process(postfish_mainpanel *panel){
@@ -960,6 +996,7 @@ void mainpanel_go(int argc,char *argv[], int ch){
   mainpanel_create(&p,labels);
   animate_fish(&p);
 
+  /* set up watching the event pipe */
   {
     GIOChannel *channel = g_io_channel_unix_new (eventpipe[0]);
     GSource *source;
