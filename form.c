@@ -30,12 +30,20 @@
 #include <ncurses.h>
 #include <pthread.h>
 #include <math.h>
+#include <form.h>
 
 static int cursor_active=0;
 static int cursor_x;
 static int cursor_y;
 
 extern pthread_mutex_t master_mutex;
+
+long pow10(int power){
+  long ret=1,i;
+  for(i=0;i<power;i++)
+    ret*=10;
+  return(ret);
+}
 
 void *m_realloc(void *in,int bytes){
   if(!in)
@@ -78,40 +86,9 @@ int pgetch(){
     }
     
     ret=getch();
-    if(ret>0)return(ret);
+    if(ret>=0)return(ret);
   }
 }
-/***************** simple form entry fields *******************/
-
-enum field_type { FORM_TIME, FORM_DB, FORM_P2 };
-
-typedef struct {
-  enum field_type type;
-  int x;
-  int y;
-  int width;
-  int editwidth;
-  int editgroup;
-
-  int min;
-  int max;
-  int dpoint;
-  
-  void *var;
-  int  *flag;
-  struct form *form;
-
-  int cursor;
-} formfield;
-
-typedef struct form {
-  formfield *fields;
-  int count;
-  int storage;
-
-  int cursor;
-  int editable;
-} form;
 
 void form_init(form *f,int maxstorage,int editable){
   memset(f,0,sizeof(*f));
@@ -133,7 +110,7 @@ void draw_field(formfield *f){
   getyx(stdscr,y,x);
   move(f->y,f->x);
 
-  if(f->form->editable){
+  if(f->form->editable && f->active){
     if(focus){
       attron(A_REVERSE);
     }else{
@@ -148,11 +125,13 @@ void draw_field(formfield *f){
   switch(f->type){
   case FORM_TIME:
     {
-      long mult=rint(pow(10,f->editwidth-1));
+      long mult=pow10(f->editwidth-1);
       int zeroflag=0;
+      int count=0;
       /*xxxHHHHH:MM:SS.HH*/
       /*       9876543210*/
       for(i=f->width-1;i>=0;i--){
+	
 	switch(i){
 	case 2:
 	  addch('.');
@@ -161,16 +140,26 @@ void draw_field(formfield *f){
 	  addch(':');
 	  break;
 	default:
-	  if(lval!=-1 && ((lval/mult)%10 || i<5)){
-	    zeroflag=1;
-	    addch(48+(lval/mult)%10);
+	  if(f->form->editable && focus && count==f->cursor)
+	    attroff(A_REVERSE);
+
+	  if(f->active){
+	    if(lval!=-1 && ((lval/mult)%10 || i<5)){
+	      zeroflag=1;
+	      addch(48+(lval/mult)%10);
+	    }else{
+	      if(zeroflag)
+		addch('0');
+	      else
+		addch(' ');
+	    }
+	    mult/=10;
+	    if(f->form->editable && focus && count==f->cursor)
+	      attron(A_REVERSE);
 	  }else{
-	    if(zeroflag)
-	      addch('0');
-	    else
-	      addch(' ');
+	    addch('-');
 	  }
-	  mult/=10;
+	  count++;
 	}
       }
 
@@ -199,19 +188,26 @@ void draw_field(formfield *f){
   case FORM_P2:
     {
       char buf[80];
-      snprintf(buf,80,"%*ld",f->width,lval);
-      addstr(buf);
+      int i;
+      if(f->active){
+	snprintf(buf,80,"%*ld",f->width,lval);
+	addstr(buf);
+      }else
+	for(i=0;i<f->width;i++)addch('-');
       if(focus)cursor_active=0;
     }
     break;
   default:
     {
       char buf[80];
-      if(f->dpoint)
-	snprintf(buf,80,"%+*.1f",f->width,lval*.1);
-      else
-	snprintf(buf,80,"%+*ld",f->width,lval);
-      addstr(buf);
+      if(f->active){
+	if(f->dpoint)
+	  snprintf(buf,80,"%+*.1f",f->width,lval*.1);
+	else
+	  snprintf(buf,80,"%+*ld",f->width,lval);
+	addstr(buf);
+      }else
+	for(i=0;i<f->width;i++)addch('-');
       if(focus)cursor_active=0;
     }
     break;
@@ -227,8 +223,13 @@ void form_redraw(form *f){
     draw_field(f->fields+i);
 }
 
+void field_active(formfield *f,int activep){
+  f->active=activep;
+  draw_field(f);
+}
+
 formfield *field_add(form *f,enum field_type type,int x,int y,int width,
-	      int group,void *var,int *flag,int d,int min, int max){
+		     void *var,void (*cb)(void),int d,int min, int max){
   int n=f->count;
   if(f->storage==n)return(NULL);
   if(width<1)return(NULL);
@@ -238,9 +239,9 @@ formfield *field_add(form *f,enum field_type type,int x,int y,int width,
   f->fields[n].y=y;
   f->fields[n].width=width;
   f->fields[n].var=var;
-  f->fields[n].flag=flag;
+  f->fields[n].cb=cb;
   f->fields[n].dpoint=d;
-  f->fields[n].editgroup=group;
+  f->fields[n].active=1;
 
   f->fields[n].min=min;
   f->fields[n].max=max;
@@ -275,17 +276,25 @@ formfield *field_add(form *f,enum field_type type,int x,int y,int width,
 }
 
 void form_next_field(form *f){
-  int temp=f->cursor++;
-  draw_field(f->fields+temp);
-  if(f->cursor>=f->count)f->cursor=0;
-  draw_field(f->fields+f->cursor);
+  int v=f->cursor;
+  int t=(v+1>=f->count?v+1:0);
+  while(t!=v && !f->fields[t].active)
+    t=(t+1>=f->count?t+1:0);
+  
+  f->cursor=t;
+  draw_field(f->fields+v);
+  draw_field(f->fields+t);
 }
 
 void form_prev_field(form *f){
-  int temp=f->cursor--;
-  draw_field(f->fields+temp);
-  if(f->cursor<0)f->cursor=f->count-1;
-  draw_field(f->fields+f->cursor);
+  int v=f->cursor;
+  int t=(v-1<0?f->count-1:v-1);
+  while(t!=v && !f->fields[t].active)
+    t=(t-1<0?f->count-1:t-1);
+  
+  f->cursor=t;
+  draw_field(f->fields+v);
+  draw_field(f->fields+t);
 }
 
 void form_left_field(form *f){
@@ -298,7 +307,7 @@ void form_left_field(form *f){
   for(i=0;i<f->count;i++){
     int tx=f->fields[i].x+f->fields[i].width-1;
     int ty=f->fields[i].y;
-    if(tx<x){
+    if(tx<x && f->fields[i].active){
       double testdist=abs(ty-y)*100+abs(tx-x);
       if(testdist<dist){
 	best=i;
@@ -322,7 +331,7 @@ void form_right_field(form *f){
   for(i=0;i<f->count;i++){
     int tx=f->fields[i].x;
     int ty=f->fields[i].y;
-    if(tx>x){
+    if(tx>x && f->fields[i].active){
       double testdist=abs(ty-y)*100+abs(tx-x);
       if(testdist<dist){
 	best=i;
@@ -346,7 +355,7 @@ void form_down_field(form *f){
   for(i=0;i<f->count;i++){
     int tx=f->fields[i].x;
     int ty=f->fields[i].y;
-    if(ty>y){
+    if(ty>y && f->fields[i].active){
       double testdist=abs(ty-y)+abs(tx-x)*100;
       if(testdist<dist){
 	best=i;
@@ -370,7 +379,7 @@ void form_up_field(form *f){
   for(i=0;i<f->count;i++){
     int tx=f->fields[i].x;
     int ty=f->fields[i].y;
-    if(ty<y){
+    if(ty<y && f->fields[i].active){
       double testdist=abs(ty-y)+abs(tx-x)*100;
       if(testdist<dist){
 	best=i;
@@ -427,23 +436,23 @@ int form_handle_char(form *f,int c){
 	switch(c){
 	case '=':
 	  (*val)++;
-	  if(ff->flag)*(ff->flag)=1;
 	  if(*val>ff->max)*val=ff->max;
+	  if(ff->cb)ff->cb();
 	  break;
 	case '+':
 	  (*val)+=10;
-	  if(ff->flag)*(ff->flag)=1;
 	  if(*val>ff->max)*val=ff->max;
+	  if(ff->cb)ff->cb();
 	  break;
 	case '-':
 	  (*val)--;
-	  if(ff->flag)*(ff->flag)=1;
 	  if(*val<ff->min)*val=ff->min;
+	  if(ff->cb)ff->cb();
 	  break;
 	case '_':
 	  (*val)-=10;
-	  if(ff->flag)*(ff->flag)=1;
 	  if(*val<ff->min)*val=ff->min;
+	  if(ff->cb)ff->cb();
 	  break;
 	default:
 	  ret=c;
@@ -457,13 +466,13 @@ int form_handle_char(form *f,int c){
 	switch(c){
 	case '=':case '+':
 	  (*val)*=2;
-	  if(ff->flag)*(ff->flag)=1;
 	  if(*val>ff->max)*val=ff->max;
+	  if(ff->cb)ff->cb();
 	  break;
 	case '-':case '_':
 	  (*val)/=2;
-	  if(ff->flag)*(ff->flag)=1;
 	  if(*val<ff->min)*val=ff->min;
+	  if(ff->cb)ff->cb();
 	  break;
 	default:
 	  ret=c;
@@ -478,26 +487,28 @@ int form_handle_char(form *f,int c){
 	case '0':case '1':case '2':case '3':case '4':
 	case '5':case '6':case '7':case '8':case '9':
 	  {
-	    long mult=(int)rint(pow(10.,ff->editwidth-ff->cursor-1));
+	    long mult=pow10(ff->editwidth-ff->cursor-1);
 	    long oldnum=(*val/mult)%10;
 	    
-	    if(ff->flag)*(ff->flag)=1;
 	    *val-=oldnum*mult;
+
+	    if(*val==-1)*val=0;
 	    *val+=(c-48)*mult;
 	    
 	    ff->cursor++;
 	    if(ff->cursor>=ff->editwidth)ff->cursor=ff->editwidth-1;
+	    if(ff->cb)ff->cb();
 	  }
 	  break;
 	case KEY_BACKSPACE:case '\b':
 	  {
-	    long mult=(int)rint(pow(10.,ff->editwidth-ff->cursor-1));
+	    long mult=pow10(ff->editwidth-ff->cursor-1);
 	    long oldnum=(*val/mult)%10;
 	    
-	    if(ff->flag)*(ff->flag)=1;
 	    *val-=oldnum*mult;
 	    ff->cursor--;
 	    if(ff->cursor<0)ff->cursor=0;
+	    if(ff->cb)ff->cb();
 	  }
 	  break;
 	default:

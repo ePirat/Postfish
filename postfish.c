@@ -64,6 +64,7 @@
 #define MAX_BLOCKSIZE 32768
 #define BANDS 35
 
+static int outfileno=-1;
 static int inbytes=0;
 static int outbytes=2;
 static int rate=0;
@@ -93,7 +94,6 @@ typedef struct {
   long noiset[BANDS];
 
   long used;
-  char name[20];
 
 } configprofile;
 
@@ -101,7 +101,7 @@ typedef struct {
 static long configactive=0;
 static configprofile configlist[CONFIG_MAX]={
   {
-    8192,1,300,-60,0,1,0,1,1,
+    8192,2,300,-30,0,1,0,1,1,
     {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
      0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
     1,
@@ -109,11 +109,11 @@ static configprofile configlist[CONFIG_MAX]={
      -120,-120,-120,-120,-120,-120,-120,-120,-120,
      -120,-120,-120,-120,-120,-120,-120,-120,-120,
      -120,-120,-120,-120,-120,-120,-120,-120},
-    1,"default"
+    1,
   }
 };
 static configprofile configdefault={
-  8192,1,300,-60,0,1,0,1,1,
+  8192,2,300,-30,0,1,0,1,1,
   {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
   1,
@@ -121,7 +121,7 @@ static configprofile configdefault={
    -120,-120,-120,-120,-120,-120,-120,-120,-120,
    -120,-120,-120,-120,-120,-120,-120,-120,-120,
    -120,-120,-120,-120,-120,-120,-120,-120},
-  0,"default"
+  0,
 };
 static configprofile wc;
 
@@ -190,7 +190,6 @@ int ttypipe[2];
 pthread_t tty_thread_id;
 
 typedef struct {
-  char *name;
   FILE *f;
   
   off_t begin;
@@ -203,6 +202,7 @@ file_entry *file_list=NULL;
 int file_entries=0;
 int current_file_entry_number=-1;
 file_entry *current_file_entry=NULL;
+int seekable=0;
 
 /* -------------------------------------- */
 
@@ -226,7 +226,7 @@ form noneditf;
 
 
 void update_N(){
-  mvaddstr(N_Y,N_X+4,"     [n] Noise Filter ");
+  mvaddstr(N_Y,N_X+4,"     [n] Noise Gate ");
   if(wc.noise_p){
     attron(A_BOLD);
     addstr("ON ");
@@ -237,6 +237,13 @@ void update_N(){
 
   attrset(0);
 
+}
+
+void dirty_the_noise(){
+  noise_dirty=1;
+}
+void dirty_the_eq(){
+  eq_dirty=1;
 }
 
 void update_static_N(){
@@ -279,7 +286,8 @@ void update_static_N(){
   mvaddstr(N_Y+2+BANDS,N_X+27," +30");
 
   for(i=0;i<BANDS;i++)
-    field_add(&editf,FORM_DB,N_X+5,N_Y+2+i,4,0,&wc.noiset[i],&noise_dirty,0,-150,0);
+    field_add(&editf,FORM_DB,N_X+5,N_Y+2+i,4,&wc.noiset[i],
+	      dirty_the_noise,0,-150,0);
 }
 
 void update_E(){
@@ -335,8 +343,53 @@ void update_static_E(){
   mvaddstr(E_Y+1,E_X+27," +0");
 
   for(i=0;i<BANDS;i++)
-    field_add(&editf,FORM_DB,E_X+5,E_Y+2+i,3,1,&wc.eqt[i],&eq_dirty,0,-30,30);
+    field_add(&editf,FORM_DB,E_X+5,E_Y+2+i,3,&wc.eqt[i],
+	      dirty_the_eq,0,-30,30);
 }
+
+
+static formfield *A_field;
+static formfield *B_field;
+static formfield *T_field;
+
+static formfield *pre_field;
+static formfield *post_field;
+static formfield *limit_field;
+static long pre_var=0;
+static long post_var=0;
+
+off_t time_to_cursor(long t){
+  if(t<0)
+    return(-1);
+
+  {
+    off_t c=t%10000;
+    
+    c+=t/10000%100*6000;
+    c+=t/1000000*600000;
+    
+    return((off_t)rint(c*.01*rate)*ch*inbytes);
+  }
+}
+
+void dirty_A(){
+  Acursor=time_to_cursor(A);
+}
+void dirty_B(){
+  Bcursor=time_to_cursor(B);
+}
+
+long cursor_to_time(off_t c){
+  long T;
+  if(c<0)return(-1);
+  c=c*100./rate/ch/inbytes;
+  T =c/(100*60*60)*1000000;
+  T+=c/(100*60)%60*10000;
+  T+=c/(100)%60*100;
+  T+=c%100;
+  return(T);
+}
+
 
 void update_D(){
   attron(A_BOLD);
@@ -353,29 +406,31 @@ void update_D(){
   else
     addstr("OFF");
   
-  move(D_Y+8,D_X+18);
-  if(wc.dyn_p)
-    addstr("ON ");
-  else
-    addstr("OFF");
-
+  move(D_Y+8,D_X+12);
+  switch(wc.dyn_p){
+  case 0:
+    addstr("      OFF");
+    field_active(limit_field,1);
+    break;
+  case 1:
+    addstr("BLOCK ATT");
+    field_active(limit_field,1);
+    break;
+  case 2:
+    addstr("SOFT CLIP");
+    field_active(limit_field,0);
+    break;
+  }
   attrset(0);
 }
-
-static formfield *A_field;
-static formfield *B_field;
-static formfield *T_field;
-
-static formfield *pre_field;
-static formfield *post_field;
-static long pre_var=0;
-static long post_var=0;
 
 void update_static_D(){
 
   mvaddstr(D_Y+0,D_X,"[m]    Master Att            dB");
-  mvaddstr(D_Y+1,D_X,"[r] Dynamic Range            db");
+  mvaddstr(D_Y+1,D_X,"[r] Dynamic Range            dB");
   mvaddstr(D_Y+2,D_X,"       Frame size");
+
+  mvaddstr(D_Y+5,D_X,"                             dB");
 
   mvvline(D_Y+5,D_X,0,1);
   mvvline(D_Y+5,D_X+11,0,1);
@@ -394,8 +449,9 @@ void update_static_D(){
   mvaddstr(D_Y+6,D_X+10," 0 ");
   mvaddstr(D_Y+6,D_X+18," +30");
 
-  mvaddstr(D_Y+8,D_X,"[l] Dynamic Limit            dB");
-  mvaddstr(D_Y+9,D_X,"    peak integral            ms");
+  mvaddstr(D_Y+8,D_X,"[l] Limiter                  dB");
+  mvaddstr(D_Y+9,D_X,"    Block period             ms");
+  mvaddstr(D_Y+11,D_X,"                             dB");
 
   mvvline(D_Y+11,D_X,0,1);
   mvvline(D_Y+11,D_X+11,0,1);
@@ -414,23 +470,27 @@ void update_static_D(){
   mvaddstr(D_Y+12,D_X+10," A ");
   mvaddstr(D_Y+12,D_X+19," +0");
 
-  field_add(&editf,FORM_DB,D_X+23,D_Y+0,5,2,&wc.masteratt,NULL,1,-900,+900);
-  field_add(&editf,FORM_DB,D_X+23,D_Y+1,5,3,&wc.dynamicatt,NULL,1,-900,+900);
-  field_add(&editf,FORM_P2,D_X+23,D_Y+2,5,4,&wc.block_a,NULL,0,64,MAX_BLOCKSIZE);
-  field_add(&editf,FORM_DB,D_X+23,D_Y+8,5,5,&wc.dynt,NULL,1,-300,0);
-  field_add(&editf,FORM_DB,D_X+23,D_Y+9,5,6,&wc.dynms,NULL,0,0,MAX_DECAY_MS);
+  field_add(&editf,FORM_DB,D_X+23,D_Y+0,5,&wc.masteratt,NULL,1,-900,+900);
+  field_add(&editf,FORM_DB,D_X+23,D_Y+1,5,&wc.dynamicatt,NULL,1,-900,+900);
+  field_add(&editf,FORM_P2,D_X+23,D_Y+2,5,&wc.block_a,NULL,0,64,MAX_BLOCKSIZE);
+  field_add(&editf,FORM_DB,D_X+23,D_Y+8,5,&wc.dynt,NULL,1,-300,0);
+  limit_field=field_add(&editf,FORM_DB,D_X+23,D_Y+9,5,&wc.dynms,NULL,0,0,MAX_DECAY_MS);
 
   mvaddstr(D_Y+14,D_X,"[a]             [A] Clear");
   mvaddstr(D_Y+15,D_X,"[b]             [B] Clear");
 
-  A_field=field_add(&editf,FORM_TIME,D_X+4,D_Y+14,11,9,&A,NULL,0,0,99999999);
-  B_field=field_add(&editf,FORM_TIME,D_X+4,D_Y+15,11,10,&B,NULL,0,0,99999999);
+  A_field=field_add(&editf,FORM_TIME,D_X+4,D_Y+14,11,&A,dirty_A,0,0,99999999);
+  B_field=field_add(&editf,FORM_TIME,D_X+4,D_Y+15,11,&B,dirty_B,0,0,99999999);
+  if(!seekable){
+    field_active(A_field,0);
+    field_active(B_field,0);
+  }
   noneditf.cursor=-1;
 
-  T_field=field_add(&noneditf,FORM_TIME,D_X+4,D_Y+16,11,0,&T,NULL,0,0,99999999);
+  T_field=field_add(&noneditf,FORM_TIME,D_X+4,D_Y+16,11,&T,NULL,0,0,99999999);
 
-  pre_field=field_add(&noneditf,FORM_DB,D_X+23,D_Y+5,5,0,&pre_var,NULL,0,-30,30);
-  post_field=field_add(&noneditf,FORM_DB,D_X+23,D_Y+11,5,0,&post_var,NULL,0,-30,0);
+  pre_field=field_add(&noneditf,FORM_DB,D_X+23,D_Y+5,5,&pre_var,NULL,0,-30,30);
+  post_field=field_add(&noneditf,FORM_DB,D_X+23,D_Y+11,5,&post_var,NULL,0,-30,0);
 
 }
 
@@ -489,26 +549,26 @@ void update_C(){
 void update_static_0(){
 
   mvaddstr(T_Y,T_X,"[0>");
-  field_add(&noneditf,FORM_TIME,T_X+3,T_Y,11,0,&TX[0],NULL,0,0,99999999);
+  field_add(&noneditf,FORM_TIME,T_X+3,T_Y,11,&TX[0],NULL,0,0,99999999);
   mvaddstr(T_Y,T_X+19,"[1>");
-  field_add(&noneditf,FORM_TIME,T_X+21,T_Y,11,0,&TX[1],NULL,0,0,99999999);
+  field_add(&noneditf,FORM_TIME,T_X+21,T_Y,11,&TX[1],NULL,0,0,99999999);
   mvaddstr(T_Y,T_X+38,"[2>");
-  field_add(&noneditf,FORM_TIME,T_X+41,T_Y,11,0,&TX[2],NULL,0,0,99999999);
+  field_add(&noneditf,FORM_TIME,T_X+41,T_Y,11,&TX[2],NULL,0,0,99999999);
   mvaddstr(T_Y,T_X+57,"[3>");
-  field_add(&noneditf,FORM_TIME,T_X+60,T_Y,11,0,&TX[3],NULL,0,0,99999999);
+  field_add(&noneditf,FORM_TIME,T_X+60,T_Y,11,&TX[3],NULL,0,0,99999999);
   mvaddstr(T_Y,T_X+76,"[4>");
-  field_add(&noneditf,FORM_TIME,T_X+79,T_Y,11,0,&TX[4],NULL,0,0,99999999);
+  field_add(&noneditf,FORM_TIME,T_X+79,T_Y,11,&TX[4],NULL,0,0,99999999);
 
   mvaddstr(T_Y+1,T_X,"[5>");
-  field_add(&noneditf,FORM_TIME,T_X+3,T_Y+1,11,0,&TX[5],NULL,0,0,99999999);
+  field_add(&noneditf,FORM_TIME,T_X+3,T_Y+1,11,&TX[5],NULL,0,0,99999999);
   mvaddstr(T_Y+1,T_X+19,"[6>");
-  field_add(&noneditf,FORM_TIME,T_X+21,T_Y+1,11,0,&TX[6],NULL,0,0,99999999);
+  field_add(&noneditf,FORM_TIME,T_X+21,T_Y+1,11,&TX[6],NULL,0,0,99999999);
   mvaddstr(T_Y+1,T_X+38,"[7>");
-  field_add(&noneditf,FORM_TIME,T_X+41,T_Y+1,11,0,&TX[7],NULL,0,0,99999999);
+  field_add(&noneditf,FORM_TIME,T_X+41,T_Y+1,11,&TX[7],NULL,0,0,99999999);
   mvaddstr(T_Y+1,T_X+57,"[8>");
-  field_add(&noneditf,FORM_TIME,T_X+60,T_Y+1,11,0,&TX[8],NULL,0,0,99999999);
+  field_add(&noneditf,FORM_TIME,T_X+60,T_Y+1,11,&TX[8],NULL,0,0,99999999);
   mvaddstr(T_Y+1,T_X+76,"[9>");
-  field_add(&noneditf,FORM_TIME,T_X+79,T_Y+1,11,0,&TX[9],NULL,0,0,99999999);
+  field_add(&noneditf,FORM_TIME,T_X+79,T_Y+1,11,&TX[9],NULL,0,0,99999999);
 
 }
 
@@ -518,31 +578,6 @@ void update_a(){
 
 void update_b(){
   draw_field(B_field);
-}
-
-off_t time_to_cursor(long t){
-  if(t<0)
-    return(-1);
-
-  {
-    off_t c=t%10000;
-    
-    c+=t/10000%100*6000;
-    c+=t/1000000*600000;
-    
-    return((off_t)rint(c*.01*rate)*ch*inbytes);
-  }
-}
-
-long cursor_to_time(off_t c){
-  long T;
-  if(c<0)return(-1);
-  c=c*100./rate/ch/inbytes;
-  T =c/(100*60*60)*1000000;
-  T+=c/(100*60)%60*10000;
-  T+=c/(100)%60*100;
-  T+=c%100;
-  return(T);
 }
 
 void update_ui(){
@@ -778,23 +813,20 @@ void master_att(double *b){
     pthread_mutex_unlock(&master_mutex);
 }  
 
-/* return a scaled amplitude */
-inline double atan_amplitude(double amplitude,double thresh){
+inline double inv_amplitude(double amplitude,double thresh){
   if(fabs(amplitude)>thresh){
-    /* use a scaled atan() rolloff, which will begin with a 1:1 slope
-       but asymptotically approach our limit */
-    double scale=(1./(M_PI*.5))*(1.-thresh);
+    double scale=(1.-thresh);
     if(amplitude>0)
-      return(atan((amplitude-thresh)/scale)*scale + thresh );
+      return ( (amplitude-thresh)/(scale+(amplitude-thresh)) )*scale + thresh ;
     else
-      return(atan((amplitude+thresh)/scale)*scale - thresh );
+      return ( (thresh+amplitude)/(scale-(thresh+amplitude)) )*scale - thresh ;
   }else
     return(amplitude);
 }
 
-inline double atan_scale(double amplitude,double thresh){
+inline double inv_scale(double amplitude,double thresh){
   if(amplitude==0.)return 1.;
-  return(atan_amplitude(amplitude,thresh)/amplitude);
+  return(inv_amplitude(amplitude,thresh)/amplitude);
 }
 
 /* limit output by block; atan-scale according to max amplitude */
@@ -820,21 +852,37 @@ void dynamic_limit(double **b){
     for(i=1;i<j;i++)
       if(y<dyn_decay[i])y=dyn_decay[i];
 
-    d=atan_scale(y,thresh);
+    d=inv_scale(y,thresh);
     y=dyn_decay[0];
 
     pthread_mutex_lock(&master_mutex);
+
+    /* valid for either block att or soft clip */
     if(maxtimepre<y)maxtimepre=y;
     if(maxtimepost<y*d)maxtimepost=y*d;
     if(maxtimeprehold<y)maxtimeprehold=y;
     if(maxtimeposthold<y*d)maxtimeposthold=y*d;
-    if(wc.dyn_p && d!=1.){
-      pthread_mutex_unlock(&master_mutex);
 
+    switch(wc.dyn_p){
+    case 2:
+      d=thresh;
+      pthread_mutex_unlock(&master_mutex);
+      
       for(j=0;j<ch;j++)
 	for(i=0;i<block;i++)
-	  b[j][i]*=d;
-    }else{
+	  b[j][i]=inv_amplitude(b[j][i],d);
+      break;
+    case 1:
+      if(d!=1.){
+	pthread_mutex_unlock(&master_mutex);
+	
+	for(j=0;j<ch;j++)
+	  for(i=0;i<block;i++)
+	    b[j][i]*=d;
+	break;
+      }
+      /* partial fall-through */
+    default:
       pthread_mutex_unlock(&master_mutex);
     }
   }
@@ -991,6 +1039,11 @@ int aseek(off_t pos){
   int i;
 
   if(pos<0)pos=0;
+  if(!seekable){
+    current_file_entry=file_list;
+    current_file_entry_number=0;
+    return -1;
+  }
 
   pthread_mutex_lock(&master_mutex);
   for(i=0;i<file_entries;i++){
@@ -1024,9 +1077,20 @@ int aread(double **buf){
   double M,S;
   
   pthread_mutex_lock(&master_mutex);
-  if(Bcursor<0 && cursor>=current_file_entry->end){
+
+  /* the non-streaming case */
+  if(Bcursor<0 && 
+     cursor>=current_file_entry->end &&
+     current_file_entry->end!=-1){
     pthread_mutex_unlock(&master_mutex);
     return -1; /* EOF */
+  }
+
+  /* the streaming case */
+  if(feof(current_file_entry->f) && 
+     current_file_entry_number+1>=file_entries){
+    pthread_mutex_unlock(&master_mutex);
+    return -1;
   }
 
   if(primed){
@@ -1044,10 +1108,16 @@ int aread(double **buf){
 
     ret=fread(readbuf+read_b,1,read_this_loop,current_file_entry->f);
 
-    if(ret>=0){
+    if(ret>0){
       read_b+=ret;
       toread_b-=ret;
       cursor+=ret;
+    }else{
+      if(current_file_entry_number+1>=file_entries){
+	memset(readbuf+read_b,0,toread_b);
+	read_b+=toread_b;
+	toread_b=0;
+      }
     }
 
     if(Bcursor!=-1 && cursor>=Bcursor){
@@ -1057,10 +1127,6 @@ int aread(double **buf){
 	current_file_entry_number++;
 	current_file_entry++;
 	fseeko(current_file_entry->f,current_file_entry->data,SEEK_SET);
-      }else{
-	memset(readbuf+read_b,0,toread_b);
-	read_b+=toread_b;
-	toread_b=0;
       }
     }
   }
@@ -1109,8 +1175,11 @@ void PutNumLE(long num,FILE *f,int bytes){
     i++;
   }
 }
+
 void WriteWav(FILE *f,long channels,long rate,long bits,long duration){
-  fseek(f,0,SEEK_SET);
+  if(ftell(f)>0)
+    if(fseek(f,0,SEEK_SET))
+      return;
   fprintf(f,"RIFF");
   PutNumLE(duration+44-8,f,4);
   fprintf(f,"WAVEfmt ");
@@ -1125,10 +1194,17 @@ void WriteWav(FILE *f,long channels,long rate,long bits,long duration){
   PutNumLE(duration,f,4);
 }
 
+int isachr(FILE *f){
+  struct stat s;
+
+  if(!fstat(fileno(f),&s))
+    if(S_ISCHR(s.st_mode)) return 1;
+  return 0;
+}
+
 /* playback must be halted to change blocksize. */
-void *playback_thread(void *vfile){
+void *playback_thread(void *dummy){
   FILE *playback_fd=NULL;
-  char *file=(char *)vfile;
   int i,j,k;
   int format=AFMT_S16_NE;
   int channels=ch;
@@ -1143,6 +1219,7 @@ void *playback_thread(void *vfile){
   int bigendianp=0;
   double scale;
   int last=0;
+  off_t count=0;
 
   pthread_mutex_lock(&master_mutex);
   block=wc.block_a;
@@ -1160,22 +1237,31 @@ void *playback_thread(void *vfile){
   dyn_decay=alloca(sizeof(*dyn_decay)*dyn_decaysize);
   memset(dyn_decay,0,sizeof(*dyn_decay)*dyn_decaysize);
 
-  if(!strcmp(file,"stdout")){
-    playback_fd=stdout;
+  if(outfileno==-1){
+    playback_fd=fopen("/dev/dsp","wb");
   }else{
-    playback_fd=fopen(file,"wb");
-    if(!playback_fd){
-      pthread_mutex_lock(&master_mutex);
-      playback_active=0;
-      playback_exit=0;
-      pthread_mutex_unlock(&master_mutex);
-      return NULL;
-    }
+    playback_fd=fdopen(dup(outfileno),"wb");
+  }
+  if(!playback_fd){
+    pthread_mutex_lock(&master_mutex);
+    playback_active=0;
+    playback_exit=0;
+    pthread_mutex_unlock(&master_mutex);
+    return NULL;
   }
 
-  if(!strncmp(file,"/dev/",5)){
-    
+  /* is this file a block device? */
+  if(isachr(playback_fd)){
+    int fragment=0x7fff000d;
+
     fd=fileno(playback_fd);
+
+    /* try to lower the DSP delay; this ioctl may fail gracefully */
+    ret=ioctl(fd,SNDCTL_DSP_SETFRAGMENT,&fragment);
+    if(ret){
+      fprintf(stderr,"Could not set DSP fragment size; continuing.\n");
+    }
+
     ret=ioctl(fd,SNDCTL_DSP_SETFMT,&format);
     if(ret || format!=AFMT_S16_NE){
       fprintf(stderr,"Could not set AFMT_S16_NE playback\n");
@@ -1195,7 +1281,7 @@ void *playback_thread(void *vfile){
     if(AFMT_S16_NE==AFMT_S16_BE)bigendianp=1;
 
   }else{
-    WriteWav(playback_fd,ch,rate,outbytes*8,file_list[file_entries-1].end);
+    WriteWav(playback_fd,ch,rate,outbytes*8,-1);
   }
 
   buf=alloca(sizeof(*buf)*ch);
@@ -1314,9 +1400,11 @@ void *playback_thread(void *vfile){
       last=foo;
     }
 
-    fwrite(audiobuf,1,audiobufsize,playback_fd);
+    count+=fwrite(audiobuf,1,audiobufsize,playback_fd);
 
   }
+
+  if(!isachr(playback_fd))WriteWav(playback_fd,ch,rate,outbytes*8,count);
 
   pthread_mutex_lock(&master_mutex);
   fclose(playback_fd);
@@ -1339,7 +1427,8 @@ void _analysis(char *base,int i,double *v,int n,int dB){
   if(!of)perror("failed to open data dump file");
   
   for(j=0;j<n;j++){
-    fprintf(of,"%f ",(double)toOC((j+1)*22050./n)*2);
+    //fprintf(of,"%f ",(double)toOC((j+1)*22050./n)*2);
+    fprintf(of,"%d ",j);
     
     if(dB){
       float val;
@@ -1391,7 +1480,6 @@ void save_settings(int fd){
 	fprintf(f,"MASTERATT_P:%ld\n",configlist[i].masteratt_p);
 	fprintf(f,"DYNAMICATT_P:%ld\n",configlist[i].dynamicatt_p);
 	
-	fprintf(f,"NAME:%s\n",configlist[i].name);
       }
     }
     
@@ -1474,7 +1562,6 @@ void load_settings(int fd){
       confparse_ld(buffer,"MASTERATT_P",&configlist[i].masteratt_p);
       confparse_ld(buffer,"DYNAMICATT_P",&configlist[i].dynamicatt_p);
       
-      confparse_s(buffer,"NAME",configlist[i].name,sizeof(configlist[i].name));
     }
 
     confparse_ld(buffer,"A",&A);
@@ -1520,33 +1607,62 @@ int main(int argc, char **argv){
   off_t total=0;
   int i,j;
   int configfd;
+  int stdinp=0;
+  char *fname="stdin";
 
   /* parse command line and open all the input files */
-  file_list=calloc(argc-1,sizeof(file_entry));
-  file_entries=argc-1;
-  for(i=1;i<argc;i++){
-    FILE *f=fopen(argv[i],"rb");
+  if(argc==1){
+    /* look at stdin... is it a file, pipe, tty...? */
+    if(isatty(STDIN_FILENO)){
+      fprintf(stderr,
+	      "Postfish requires input either as a list of contiguous WAV\n"
+	      "files on the command line, or WAV data piped|redirected to\n"
+	      "stdin.\n");
+      exit(1);
+    }
+    stdinp=1;    /* file coming in via stdin */
+    file_entries=1;
+  }else
+    file_entries=argc-1;
+
+  file_list=calloc(file_entries,sizeof(file_entry));
+  for(i=1;i<=file_entries;i++){
+    FILE *f;
+    
+    if(stdinp){
+      int newfd=dup(STDIN_FILENO);
+      f=fdopen(newfd,"rb");
+    }else{
+      f=fopen(argv[i],"rb");
+      fname=argv[i];
+    }
+
     if(f){
       unsigned char buffer[81];
       off_t filelength;
       int datap=0;
       int fmtp=0;
-      file_list[i-1].name=strdup(argv[i]);
       file_list[i-1].f=f;
       
       /* parse header (well, sort of) and get file size */
-      fseek(f,0,SEEK_END);
-      filelength=ftello(f);
-      fseek(f,0,SEEK_SET);
+      seekable=(fseek(f,0,SEEK_CUR)?0:1);
+      if(!seekable){
+	filelength=-1;
+      }else{
+	fseek(f,0,SEEK_END);
+	filelength=ftello(f);
+	fseek(f,0,SEEK_SET);
+      }
 
       fread(buffer,1,12,f);
       if(strncmp(buffer,"RIFF",4) || strncmp(buffer+8,"WAVE",4)){
-	fprintf(stderr,"%s: Not a WAVE file.\n",argv[i]);
+	fprintf(stderr,"%s: Not a WAVE file.\n",fname);
 	exit(1);
       }
 
       while(fread(buffer,1,8,f)==8){
-	int chunklen=buffer[4]|(buffer[5]<<8)|(buffer[6]<<16)|(buffer[7]<<24);
+	unsigned long chunklen=
+	  buffer[4]|(buffer[5]<<8)|(buffer[6]<<16)|(buffer[7]<<24);
 
 	if(!strncmp(buffer,"fmt ",4)){
 	  int ltype;
@@ -1555,7 +1671,7 @@ int main(int argc, char **argv){
 	  int lbits;
 
 	  if(chunklen>80){
-	    fprintf(stderr,"%s: WAVE file fmt chunk too large to parse.\n",argv[i]);
+	    fprintf(stderr,"%s: WAVE file fmt chunk too large to parse.\n",fname);
 	    exit(1);
 	  }
 	  fread(buffer,1,chunklen,f);
@@ -1566,7 +1682,7 @@ int main(int argc, char **argv){
 	  lbits=buffer[14]|(buffer[15]<<8);
 
 	  if(ltype!=1){
-	    fprintf(stderr,"%s: WAVE file not PCM.\n",argv[i]);
+	    fprintf(stderr,"%s: WAVE file not PCM.\n",fname);
 	    exit(1);
 	  }
 
@@ -1577,15 +1693,15 @@ int main(int argc, char **argv){
 	    if(inbytes>1)signp=1;
 	  }else{
 	    if(ch!=lch){
-	      fprintf(stderr,"%s: WAVE files must all have same number of channels.\n",argv[i]);
+	      fprintf(stderr,"%s: WAVE files must all have same number of channels.\n",fname);
 	      exit(1);
 	    }
 	    if(rate!=lrate){
-	      fprintf(stderr,"%s: WAVE files must all be same sampling rate.\n",argv[i]);
+	      fprintf(stderr,"%s: WAVE files must all be same sampling rate.\n",fname);
 	      exit(1);
 	    }
 	    if(inbytes!=lbits/8){
-	      fprintf(stderr,"%s: WAVE files must all be same sample width.\n",argv[i]);
+	      fprintf(stderr,"%s: WAVE files must all be same sample width.\n",fname);
 	      exit(1);
 	    }
 	  }
@@ -1593,53 +1709,63 @@ int main(int argc, char **argv){
 	} else if(!strncmp(buffer,"data",4)){
 	  off_t pos=ftello(f);
 	  if(!fmtp){
-	    fprintf(stderr,"%s: WAVE fmt chunk must preceed data chunk.\n",argv[i]);
+	    fprintf(stderr,"%s: WAVE fmt chunk must preceed data chunk.\n",fname);
 	    exit(1);
 	  }
 	  datap=1;
 	  
-	  filelength=(filelength-pos)/(ch*inbytes)*(ch*inbytes)+pos;
-	  
-	  if(chunklen+pos<=filelength){
+	  if(seekable)
+	    filelength=(filelength-pos)/(ch*inbytes)*(ch*inbytes)+pos;
+
+	  if(chunklen==0UL ||
+	     chunklen==0x7fffffffUL || 
+	     chunklen==0xffffffffUL){
+	    file_list[i-1].begin=total;
+	    total=file_list[i-1].end=0;
+	    fprintf(stderr,"%s: Incomplete header; assuming stream.\n",fname);
+	  }else if(filelength==-1 || chunklen+pos<=filelength){
 	    file_list[i-1].begin=total;
 	    total=file_list[i-1].end=total+chunklen;
-	    fprintf(stderr,"%s: Using declared file size.\n",argv[i]);
+	    fprintf(stderr,"%s: Using declared file size.\n",fname);
 	  }else{
 	    file_list[i-1].begin=total;
 	    total=file_list[i-1].end=total+filelength-pos;
-	    fprintf(stderr,"%s: Using actual file size.\n",argv[i]);
+	    fprintf(stderr,"%s: Using actual file size.\n",fname);
 	  }
 	  file_list[i-1].data=ftello(f);
+	  
 	  break;
 	} else {
-	  fprintf(stderr,"%s: Unknown chunk type %c%c%c%c; skipping.\n",argv[i],
+	  fprintf(stderr,"%s: Unknown chunk type %c%c%c%c; skipping.\n",fname,
 		  buffer[0],buffer[1],buffer[2],buffer[3]);
-	  for(j=0;j<chunklen;j++)
+	  for(j=0;j<(int)chunklen;j++)
 	    if(fgetc(f)==EOF)break;
 	}
       }
 
       if(!datap){
-	fprintf(stderr,"%s: WAVE file has no data chunk.\n",argv[i]);
+	fprintf(stderr,"%s: WAVE file has no data chunk.\n",fname);
 	exit(1);
       }
       
     }else{
-      fprintf(stderr,"%s: Unable to open file.\n",argv[i]);
+      fprintf(stderr,"%s: Unable to open file.\n",fname);
       exit(1);
     }
   }
+
+  /* look at stdout... do we have a file or device? */
+  if(!isatty(STDOUT_FILENO)){
+    /* apparently; assume this is the file/device for output */
+    outfileno=dup(STDOUT_FILENO);
+    dup2(STDERR_FILENO,STDOUT_FILENO);
+  }
+
 
   /* load config */
   {
     configfd=open(".postfishrc",O_RDWR|O_CREAT,0666);
     if(configfd>=0)load_settings(configfd);
-  }
-
-  /* are we running in batch mode? */
-  if(!strcmp(argv[0],"postfish-batch")){
-    playback_thread("stdout");
-    exit(0);
   }
 
   /* set up the hack for interthread ncurses event triggering through
@@ -1688,9 +1814,9 @@ int main(int argc, char **argv){
     form_init(&editf,120,1);
     form_init(&noneditf,50,0);
     box(stdscr,0,0);
-    mvaddstr(0, 2, " Postfish Filter $Id: postfish.c,v 1.2 2002/11/30 07:30:29 xiphmont Exp $ ");
+    mvaddstr(0, 2, " Postfish Filter $Id: postfish.c,v 1.3 2002/12/01 06:30:17 xiphmont Exp $ ");
     mvaddstr(LINES-1, 2, 
-	     " [<]<<   [,]<   [Spc] Play/Pause   [Bksp] Stop   [.]>   [>]>>   [p] Process ");
+	     "  [<]<<   [,]<   [Spc] Play/Pause   [Bksp] Stop/Cue   [.]>   [>]>>  ");
 
     mvaddstr(LINES-1, COLS-12, " [q] Quit ");
 
@@ -1710,7 +1836,7 @@ int main(int argc, char **argv){
     update_static_0();
 
     refresh();
-    
+
     signal(SIGINT,SIG_IGN);
 
     while(1){
@@ -1755,7 +1881,8 @@ int main(int argc, char **argv){
 	break;
       case 'l':
 	pthread_mutex_lock(&master_mutex);
-	wc.dyn_p=!wc.dyn_p;
+	wc.dyn_p++;
+	if(wc.dyn_p>2)wc.dyn_p=0;
 	pthread_mutex_unlock(&master_mutex);
 	update_D();
 	break;
@@ -1823,9 +1950,9 @@ int main(int argc, char **argv){
 	  }
 	  update_a();
 	}else{
-	  Acursor=time_to_cursor(A);
 	  aseek(Acursor);
 	  pthread_mutex_unlock(&master_mutex);
+	  update_play();
 	}
 	break;	    
       case 'b':
@@ -1843,6 +1970,7 @@ int main(int argc, char **argv){
 	  update_b();
 	}else
 	  pthread_mutex_unlock(&master_mutex);
+	  update_play();
 	break;
       case 'A':
 	pthread_mutex_lock(&master_mutex);
@@ -1873,7 +2001,7 @@ int main(int argc, char **argv){
 	      break;
 	  }
 	}
-	cursor=Acursor;
+	aseek(Acursor);
 	pthread_mutex_unlock(&master_mutex);
 	update_play();
 	break;
@@ -1883,7 +2011,7 @@ int main(int argc, char **argv){
 	  playback_active=1;
 	  pthread_mutex_unlock(&master_mutex);
 	  update_play();
-	  pthread_create(&playback_thread_id,NULL,&playback_thread,"/dev/dsp");
+	  pthread_create(&playback_thread_id,NULL,&playback_thread,NULL);
 	}else{
 	  playback_exit=1;
 	  pthread_mutex_unlock(&master_mutex);

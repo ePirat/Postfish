@@ -29,17 +29,17 @@ typedef struct {
   int y;
   int width;
   int editwidth;
-  int editgroup;
 
   int min;
   int max;
   int dpoint;
   
   void *var;
-  int  *flag;
+  void (*cb)(void);
   struct form *form;
 
   int cursor;
+  int active;
 } formfield;
 
 typedef struct form {
@@ -56,6 +56,7 @@ extern void form_clear(form *f);
 extern void draw_field(formfield *f);
 extern void form_redraw(form *f);
 extern formfield *field_add(form *f,enum field_type type,int x,int y,
-			    int width,int group,void *var,int *flag,
+			    int width,void *var,void (*)(void),
 			    int d,int min, int max);
 extern int form_handle_char(form *f,int c);
+extern void field_active(formfield *f,int activep);
