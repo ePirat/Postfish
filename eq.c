@@ -21,6 +21,7 @@
  * 
  */
 
+#include <sys/types.h>
 #include "postfish.h"
 #include "feedback.h"
 #include "freq.h"
@@ -38,7 +39,7 @@ int pull_eq_feedback(double **peak,double **rms){
 
 /* called only by initial setup */
 int eq_load(void){
-  return freq_load(&eq,input_size);
+  return freq_load(&eq,input_size*2);
 }
 
 /* called only in playback thread */
@@ -46,8 +47,38 @@ int eq_reset(){
   return freq_reset(&eq);
 }
 
+sig_atomic_t settings[freqs];
+
+void eq_set(int freq, double value){
+  settings[freq]=rint(value*10.);
+}
+  
 static void workfunc(double *data,freq_state *f,
 		     double *peak, double *rms){
+  int i,j,k;
+  double work[f->blocksize+1];
+  double sq_mags[f->blocksize+1];
+
+  if(eq_active){
+    memset(work,0,sizeof(work));
+    
+    for(i=0;i<freqs;i++){
+      double set=fromdB(settings[i]*.1);
+      for(k=0,j=f->ho_bin_lo[i];j<f->ho_bin_hi[i];j++,k++)
+	work[j]+=f->ho_window[i][k]*set;
+      peak[i]*=set;
+      rms[i]*=set;
+    }
+    
+    data[0]*=work[0];
+    data[f->blocksize*2-1]*=work[f->blocksize];
+    for(i=1;i<f->blocksize;i++){
+      data[i*2]*=work[i];
+      data[i*2-1]*=work[i];
+    }
+  }
+
+  freq_metric_work(data,f,sq_mags,peak,rms);
 
   return;
 }

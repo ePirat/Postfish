@@ -328,8 +328,10 @@ void clippanel_feedback(void){
       val[1]=(count?clip[i]*100./count-.1:-1);
       zero[1]=-1.;
       multibar_set(MULTIBAR(feedback_bars[i]),zero,val,2);
-      val[1]=(count?peak[i]:-1);
-      multibar_set(MULTIBAR(trigger_bars[i]),zero,val,2);
+
+      val[0]=(count?peak[i]:-1);
+      multibar_set(MULTIBAR(trigger_bars[i]),zero,val,1);
+
       if(clip[i]){
 	multibar_setwarn(MULTIBAR(mainpanel_inbar));
 	multibar_setwarn(MULTIBAR(feedback_bars[i]));

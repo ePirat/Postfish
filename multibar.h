@@ -64,6 +64,7 @@ struct _Multibar{
   GdkPixmap *backing;
 
   int labels;
+  int readout;
   PangoLayout **layout;
   double       *levels;
 
@@ -107,6 +108,9 @@ struct _MultibarClass{
 GType          multibar_get_type        (void);
 GtkWidget*     multibar_new             (int n, char **labels, double *levels,
 					 int thumbs, int flags);
+GtkWidget*     multibar_slider_new (int n, char **labels, double *levels, 
+				    int thumbs);
+
 void	       multibar_clear           (Multibar *m);
 void	       multibar_set             (Multibar *m,double *lo,double *hi, int n);
 void	       multibar_thumb_set       (Multibar *m,double v, int n);

@@ -26,4 +26,5 @@
 extern int pull_eq_feedback(double **peak,double **rms);
 extern int eq_load(void);
 extern int eq_reset();
+extern void eq_set(int freq, double value);
 extern time_linkage *eq_read(time_linkage *in);

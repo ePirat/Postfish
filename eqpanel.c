@@ -53,7 +53,7 @@ static void slider_change(GtkWidget *w,gpointer in){
   sprintf(buffer,"%+5.1f dB",val);
   readout_set(READOUT(b->readout),buffer);
   
-  //eq_setlevel(val,p->number);
+  eq_set(b->number,val);
 
 }
 
@@ -73,26 +73,27 @@ void eqpanel_create(postfish_mainpanel *mp,
   GtkWidget *slidertable=gtk_table_new(freqs,3,0);
 
   for(i=0;i<freqs;i++){
-    const char *labeltext="";
-    if((i&1)==0)labeltext=freq_frequency_label(i);
+    const char *labeltext=freq_frequency_label(i);
 
     GtkWidget *label=gtk_label_new(labeltext);
+    gtk_widget_set_name(label,"smallmarker");
+
     bars[i].readout=readout_new("+00.0 dB");
     bars[i].slider=multibar_new(15,labels,levels,1,
-				LO_ATTACK|LO_DECAY|HI_DECAY);
+				LO_DECAY|HI_DECAY|LO_ATTACK|HI_ATTACK);
     bars[i].number=i;
 
     multibar_callback(MULTIBAR(bars[i].slider),slider_change,bars+i);
     multibar_thumb_set(MULTIBAR(bars[i].slider),0.,0);
-    multibar_thumb_bounds(MULTIBAR(bars[i].slider),-60,30);
+    multibar_thumb_bounds(MULTIBAR(bars[i].slider),-40,30);
 
     gtk_misc_set_alignment(GTK_MISC(label),1,.5);
 
     gtk_table_attach(GTK_TABLE(slidertable),label,0,1,i,i+1,
 		     GTK_FILL,0,10,0);
-    gtk_table_attach(GTK_TABLE(slidertable),bars[i].readout,1,2,i,i+1,
+    gtk_table_attach(GTK_TABLE(slidertable),bars[i].readout,2,3,i,i+1,
 		     GTK_FILL,0,0,0);
-    gtk_table_attach(GTK_TABLE(slidertable),bars[i].slider,2,3,i,i+1,
+    gtk_table_attach(GTK_TABLE(slidertable),bars[i].slider,1,2,i,i+1,
 		     GTK_FILL|GTK_EXPAND,GTK_FILL|GTK_EXPAND,0,0);
   }
 
@@ -100,28 +101,25 @@ void eqpanel_create(postfish_mainpanel *mp,
 
 }
 
+static double **peakfeed=0;
+static double **rmsfeed=0;
+
 void eqpanel_feedback(void){
-#if 0
-  int clip[input_ch],count;
-  double peak[input_ch];
-  if(pull_declip_feedback(clip,peak,&count)){
-    int i;
-    for(i=0;i<input_ch;i++){
-      double val[2],zero[2];
-      val[0]=-1.,zero[0]=-1.;
-      val[1]=(count?clip[i]*100./count-.1:-1);
-      zero[1]=-1.;
-      multibar_set(MULTIBAR(feedback_bars[i]),zero,val,2);
-      val[1]=(count?peak[i]:-1);
-      multibar_set(MULTIBAR(trigger_bars[i]),zero,val,2);
-      if(clip[i]){
-	multibar_setwarn(MULTIBAR(mainpanel_inbar));
-	multibar_setwarn(MULTIBAR(feedback_bars[i]));
-	multibar_setwarn(MULTIBAR(trigger_bars[i]));
-      }
+  int i;
+  if(!peakfeed){
+    peakfeed=malloc(sizeof(*peakfeed)*freqs);
+    rmsfeed=malloc(sizeof(*rmsfeed)*freqs);
+
+    for(i=0;i<freqs;i++){
+      peakfeed[i]=malloc(sizeof(**peakfeed)*input_ch);
+      rmsfeed[i]=malloc(sizeof(**rmsfeed)*input_ch);
     }
   }
-#endif
+  
+  if(pull_eq_feedback(peakfeed,rmsfeed))
+    for(i=0;i<freqs;i++)
+      multibar_set(MULTIBAR(bars[i].slider),rmsfeed[i],peakfeed[i],input_ch);
+
 }
 
 void eqpanel_reset(void){
@@ -129,3 +127,9 @@ void eqpanel_reset(void){
   for(i=0;i<freqs;i++)
     multibar_reset(MULTIBAR(bars[i].slider));
 }
+
+
+
+
+
+

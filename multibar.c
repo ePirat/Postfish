@@ -30,9 +30,10 @@
 static GdkBitmap *stipple=NULL;
 static GdkBitmap *stippleB=NULL;
 
-static double compute_dampening(double target,double current,double delta,int zerodamp){
+static double compute_dampening(double width, double target,double current,double delta,int zerodamp){
   double raw_delta=target-current;
-  
+  double testdelta=delta+(raw_delta*.2);
+
   if(target<0 && !zerodamp){
     if(current>0)
       raw_delta=target-current;
@@ -42,13 +43,13 @@ static double compute_dampening(double target,double current,double delta,int ze
     if(delta>0){
       raw_delta=0.;
     }else{
-      if(raw_delta<delta-1)raw_delta=delta-1;
+      if(raw_delta<testdelta)raw_delta=testdelta;
     }
   }else{
     if(delta<0){
       raw_delta=0.;
     }else{
-      if(raw_delta>delta+1)raw_delta=delta+1;
+      if(raw_delta>testdelta)raw_delta=testdelta;
     }
   }
   return raw_delta;
@@ -61,6 +62,7 @@ static void compute(GtkWidget *widget,double *lowvals, double *highvals, int n){
   Multibar *m=MULTIBAR(widget);
   double max=-400;
   int height=widget->allocation.height;
+  int width=widget->allocation.width;
 
   /* figure out the x padding */
   if(m->thumbs<1){
@@ -73,113 +75,115 @@ static void compute(GtkWidget *widget,double *lowvals, double *highvals, int n){
   }
   m->xpad=xpad;
 
-  if(n>m->bars){
-    if(!m->bartrackers)
-      m->bartrackers=calloc(n,sizeof(*m->bartrackers));
+  if(m->readout){
+    if(n>m->bars){
+      if(!m->bartrackers)
+	m->bartrackers=calloc(n,sizeof(*m->bartrackers));
+      else{
+	m->bartrackers=realloc(m->bartrackers,
+			       n*sizeof(*m->bartrackers));
+	memset(m->bartrackers+m->bars,0,
+	       sizeof(*m->bartrackers)*(n-m->bars));
+      }
+      
+      for(i=m->bars;i<n;i++){
+	m->bartrackers[i].pixelposlo=-400;
+	m->bartrackers[i].pixelposhi=-400;
+	m->bartrackers[i].pixeldeltalo=0;
+	m->bartrackers[i].pixeldeltahi=0;
+      }
+      
+      m->bars=n;
+    }else if(n<m->bars)
+      m->bars=n;
+    
+    for(i=0;i<n;i++)
+      if(highvals[i]>max)max=highvals[i];
+    
+    if(m->clipdelay>0)
+      m->clipdelay--;
+    else
+      m->clipdelay=0;
+    
+    if(m->peakdelay>0)
+      m->peakdelay--;
     else{
-      m->bartrackers=realloc(m->bartrackers,
-			     n*sizeof(*m->bartrackers));
-      memset(m->bartrackers+m->bars,0,
-	     sizeof(*m->bartrackers)*(n-m->bars));
+      m->peakdelay=0;
+      m->peakdelta--;
+      m->peak+=m->peakdelta;
     }
     
-    for(i=m->bars;i<n;i++){
-      m->bartrackers[i].pixelposlo=-400;
-      m->bartrackers[i].pixelposhi=-400;
-      m->bartrackers[i].pixeldeltalo=0;
-      m->bartrackers[i].pixeldeltahi=0;
+    if(max>m->peak){
+      m->peak=max;
+      m->peakdelay=15*2; /* ~2 second hold */
+      m->peakdelta=0;
     }
     
-    m->bars=n;
-  }else if(n<m->bars)
-    m->bars=n;
-  
-   for(i=0;i<n;i++)
-    if(highvals[i]>max)max=highvals[i];
-
-  if(m->clipdelay>0)
-    m->clipdelay--;
-  else
-    m->clipdelay=0;
-
-  if(m->peakdelay>0)
-    m->peakdelay--;
-  else{
-    m->peakdelay=0;
-    m->peakdelta--;
-    m->peak+=m->peakdelta;
-  }
-
-  if(max>m->peak){
-    m->peak=max;
-    m->peakdelay=15*2; /* ~2 second hold */
-    m->peakdelta=0;
-  }
-
-  {
-    int *pixhi=alloca(n*sizeof(*pixhi));
-    int *pixlo=alloca(n*sizeof(*pixlo));
-    
-    for(i=0;i<n;i++){
-      pixlo[i]=-1;
-      for(j=0;j<=m->labels;j++)
-	if(lowvals[i]>=m->levels[j]){
-	  if(lowvals[i]<=m->levels[j+1]){
-	    double del=(lowvals[i]-m->levels[j])/(m->levels[j+1]-m->levels[j]);
-	    pixlo[i]=(j+del)/m->labels*(widget->allocation.width-xpad*2)-xpad;
+    {
+      int *pixhi=alloca(n*sizeof(*pixhi));
+      int *pixlo=alloca(n*sizeof(*pixlo));
+      
+      for(i=0;i<n;i++){
+	pixlo[i]=-1;
+	for(j=0;j<=m->labels;j++)
+	  if(lowvals[i]>=m->levels[j]){
+	    if(lowvals[i]<=m->levels[j+1]){
+	      double del=(lowvals[i]-m->levels[j])/(m->levels[j+1]-m->levels[j]);
+	      pixlo[i]=(j+del)/m->labels*(widget->allocation.width-xpad*2)-xpad;
+	      break;
+	    }else if(j==m->labels){
+	      pixlo[i]=widget->allocation.width-xpad+1;
+	    }
+	  }else
 	    break;
-	  }else if(j==m->labels){
-	    pixlo[i]=widget->allocation.width-xpad+1;
-	  }
-	}else
-	  break;
-
-      pixhi[i]=pixlo[i];
-      for(;j<=m->labels;j++)
-	if(highvals[i]>=m->levels[j]){
-	  if(highvals[i]<=m->levels[j+1]){
-	    double del=(highvals[i]-m->levels[j])/(m->levels[j+1]-m->levels[j]);
-	    pixhi[i]=(j+del)/m->labels*(widget->allocation.width-xpad*2)+xpad;
+	
+	pixhi[i]=pixlo[i];
+	for(;j<=m->labels;j++)
+	  if(highvals[i]>=m->levels[j]){
+	    if(highvals[i]<=m->levels[j+1]){
+	      double del=(highvals[i]-m->levels[j])/(m->levels[j+1]-m->levels[j]);
+	      pixhi[i]=(j+del)/m->labels*(widget->allocation.width-xpad*2)+xpad;
+	      break;
+	    }else if(j==m->labels){
+	      pixhi[i]=widget->allocation.width-xpad+1;
+	    }
+	  }else
 	    break;
-	  }else if(j==m->labels){
-	    pixhi[i]=widget->allocation.width-xpad+1;
-	  }
-	}else
-	  break;
-
-    }
-
-    /* dampen movement according to setup */
-
-    for(i=0;i<n;i++){
-      double trackhi=m->bartrackers[i].pixelposhi;
-      double tracklo=m->bartrackers[i].pixelposlo;
-      double delhi=m->bartrackers[i].pixeldeltahi;
-      double dello=m->bartrackers[i].pixeldeltalo;
-
-      /* hi */
-      delhi = compute_dampening(pixhi[i],trackhi,delhi,m->dampen_flags & ZERO_DAMP);
-
-      if(pixhi[i]>trackhi){
-	if(m->dampen_flags & HI_ATTACK)pixhi[i]=trackhi+delhi;
-      }else{
-	if(m->dampen_flags & HI_DECAY)pixhi[i]=trackhi+delhi;
+	
       }
-      m->bartrackers[i].pixelposhi=pixhi[i];
-      m->bartrackers[i].pixeldeltahi=delhi;
-
-      /* lo */
-      dello = compute_dampening(pixlo[i],tracklo,dello,m->dampen_flags & ZERO_DAMP);
-      if(pixlo[i]>tracklo){
-	if(m->dampen_flags & LO_ATTACK)pixlo[i]=tracklo+dello;
-      }else{
-	if(m->dampen_flags & LO_DECAY)pixlo[i]=tracklo+dello;
+      
+      /* dampen movement according to setup */
+      
+      for(i=0;i<n;i++){
+	double trackhi=m->bartrackers[i].pixelposhi;
+	double tracklo=m->bartrackers[i].pixelposlo;
+	double delhi=m->bartrackers[i].pixeldeltahi;
+	double dello=m->bartrackers[i].pixeldeltalo;
+	
+	/* hi */
+	delhi = compute_dampening(width-xpad*2,pixhi[i],trackhi,delhi,m->dampen_flags & ZERO_DAMP);
+	
+	if(pixhi[i]>trackhi){
+	  if(m->dampen_flags & HI_ATTACK)pixhi[i]=trackhi+delhi;
+	}else{
+	  if(m->dampen_flags & HI_DECAY)pixhi[i]=trackhi+delhi;
+	}
+	m->bartrackers[i].pixelposhi=pixhi[i];
+	m->bartrackers[i].pixeldeltahi=delhi;
+	
+	/* lo */
+	dello = compute_dampening(width-xpad*2,pixlo[i],tracklo,dello,m->dampen_flags & ZERO_DAMP);
+	if(pixlo[i]>tracklo){
+	  if(m->dampen_flags & LO_ATTACK)pixlo[i]=tracklo+dello;
+	}else{
+	  if(m->dampen_flags & LO_DECAY)pixlo[i]=tracklo+dello;
+	}
+	m->bartrackers[i].pixelposlo=pixlo[i];
+	m->bartrackers[i].pixeldeltalo=dello;
+	
       }
-      m->bartrackers[i].pixelposlo=pixlo[i];
-      m->bartrackers[i].pixeldeltalo=dello;
-
+      
     }
-
   }
 }
 
@@ -188,6 +192,7 @@ static void draw(GtkWidget *widget,int n){
   Multibar *m=MULTIBAR(widget);
   int xpad=m->xpad,upad=2,lpad=2;
   int height=widget->allocation.height;
+  GtkWidget *parent=gtk_widget_get_parent(widget);
 
   if(m->thumbs>0){
     int leftover=height-widget->requisition.height;
@@ -201,172 +206,183 @@ static void draw(GtkWidget *widget,int n){
     m->boxcolor=gdk_gc_new(m->backing);
     gdk_gc_copy(m->boxcolor,widget->style->black_gc);
   }
-
-  /* draw the pixel positions */
-  while(x<widget->allocation.width){
-    int r=0xffff,g=0xffff,b=0xffff;
-    GdkColor rgb={0,0,0,0};
-    int next=widget->allocation.width;
-    for(i=0;i<n;i++){
-      if(m->bartrackers[i].pixelposlo>x && m->bartrackers[i].pixelposlo<next)
-	next=m->bartrackers[i].pixelposlo;
-      if(m->bartrackers[i].pixelposhi>x && m->bartrackers[i].pixelposhi<next)
-	next=m->bartrackers[i].pixelposhi;
-    }
+    
+  if(m->readout){
+    /* draw the pixel positions */
+    while(x<widget->allocation.width){
+      int r=0xffff,g=0xffff,b=0xffff;
+      GdkColor rgb={0,0,0,0};
+      int next=widget->allocation.width;
+      for(i=0;i<n;i++){
+	if(m->bartrackers[i].pixelposlo>x && m->bartrackers[i].pixelposlo<next)
+	  next=m->bartrackers[i].pixelposlo;
+	if(m->bartrackers[i].pixelposhi>x && m->bartrackers[i].pixelposhi<next)
+	  next=m->bartrackers[i].pixelposhi;
+      }
       
-    for(i=0;i<n;i++){
-      if(m->bartrackers[i].pixelposlo<=x && m->bartrackers[i].pixelposhi>=next){
-	switch(i%8){
-	case 0:
-	  r*=.65;
-	  g*=.65;
-	  b*=.65;
-	  break;
-	case 1:
-	  r*=1.;
-	  g*=.5;
-	  b*=.5;
-	  break;
-	case 2:
-	  r*=.6;
-	  g*=.6;
-	  b*=1.;
-	  break;
-	case 3:
-	  r*=.4;
-	  g*=.9;
-	  b*=.4;
-	  break;
-	case 4:
-	  r*=.7;
-	  g*=.6;
-	  b*=.3;
-	  break;
-	case 5:
-	  r*=.7;
-	  g*=.4;
-	  b*=.8;
-	  break;
-	case 6:
-	  r*=.3;
-	  g*=.7;
-	  b*=.7;
-	  break;
-	case 7:
-	  r*=.4;
-	  g*=.4;
-	  b*=.4;
-	  break;
+      for(i=0;i<n;i++){
+	if(m->bartrackers[i].pixelposlo<=x && m->bartrackers[i].pixelposhi>=next){
+	  switch(i%8){
+	  case 0:
+	    r*=.65;
+	    g*=.65;
+	    b*=.65;
+	    break;
+	  case 1:
+	    r*=1.;
+	    g*=.5;
+	    b*=.5;
+	    break;
+	  case 2:
+	    r*=.6;
+	    g*=.6;
+	    b*=1.;
+	    break;
+	  case 3:
+	    r*=.4;
+	    g*=.9;
+	    b*=.4;
+	    break;
+	  case 4:
+	    r*=.7;
+	    g*=.6;
+	    b*=.3;
+	    break;
+	  case 5:
+	    r*=.7;
+	    g*=.4;
+	    b*=.8;
+	    break;
+	  case 6:
+	    r*=.3;
+	    g*=.7;
+	    b*=.7;
+	    break;
+	  case 7:
+	    r*=.4;
+	    g*=.4;
+	    b*=.4;
+	    break;
+	  }
 	}
       }
+      rgb.red=r;
+      rgb.green=g;
+      rgb.blue=b;
+      gdk_gc_set_rgb_fg_color(m->boxcolor,&rgb);
+      
+      gdk_draw_rectangle(m->backing,m->boxcolor,1,x+1,upad+1,next-x,widget->allocation.height-lpad-upad-3);
+      
+      x=next;
     }
-    rgb.red=r;
-    rgb.green=g;
-    rgb.blue=b;
-    gdk_gc_set_rgb_fg_color(m->boxcolor,&rgb);
-
-    gdk_draw_rectangle(m->backing,m->boxcolor,1,x+1,upad+1,next-x,widget->allocation.height-lpad-upad-3);
-    
-    x=next;
-  }
-
-  gdk_draw_line (m->backing,
-		 widget->style->white_gc,
-		 xpad, widget->allocation.height-lpad-1, 
-		 widget->allocation.width-1-xpad, 
-		 widget->allocation.height-lpad-1);
-
-  if(m->clipdelay){
-    gdk_draw_line (m->backing,
-		   widget->style->fg_gc[1],
-		   xpad, upad, widget->allocation.width-1-xpad, upad);
-    
-    gdk_draw_line (m->backing,
-		   widget->style->fg_gc[1],
-		   xpad, widget->allocation.height-lpad-2, 
-		   widget->allocation.width-1-xpad, 
-		   widget->allocation.height-lpad-2);
-  }else{
-    gdk_draw_line (m->backing,
-		   widget->style->white_gc,
-		   xpad, upad, widget->allocation.width-1-xpad, upad);
     
     gdk_draw_line (m->backing,
 		   widget->style->white_gc,
-		   xpad, widget->allocation.height-lpad-2, 
+		   xpad, widget->allocation.height-lpad-1, 
 		   widget->allocation.width-1-xpad, 
-		   widget->allocation.height-lpad-2);
-  }
-  
-  /* peak follower */
-  if(m->dampen_flags & PEAK_FOLLOW){
-    int x=-10;
-    for(j=0;j<=m->labels+1;j++)
-      if(m->peak>=m->levels[j]){
-	if(m->peak<=m->levels[j+1]){
-	  double del=(m->peak-m->levels[j])/(m->levels[j+1]-m->levels[j]);
-	  x=(j+del)/m->labels*(widget->allocation.width-xpad*2)+xpad;
+		   widget->allocation.height-lpad-1);
+    
+    if(m->clipdelay){
+      gdk_draw_line (m->backing,
+		     widget->style->fg_gc[1],
+		     xpad, upad, widget->allocation.width-1-xpad, upad);
+      
+      gdk_draw_line (m->backing,
+		     widget->style->fg_gc[1],
+		     xpad, widget->allocation.height-lpad-2, 
+		     widget->allocation.width-1-xpad, 
+		     widget->allocation.height-lpad-2);
+    }else{
+      gdk_draw_line (m->backing,
+		     widget->style->white_gc,
+		     xpad, upad, widget->allocation.width-1-xpad, upad);
+      
+      gdk_draw_line (m->backing,
+		     widget->style->white_gc,
+		     xpad, widget->allocation.height-lpad-2, 
+		     widget->allocation.width-1-xpad, 
+		     widget->allocation.height-lpad-2);
+    }
+    
+    /* peak follower */
+    if(m->dampen_flags & PEAK_FOLLOW){
+      int x=-10;
+      for(j=0;j<=m->labels+1;j++)
+	if(m->peak>=m->levels[j]){
+	  if(m->peak<=m->levels[j+1]){
+	    double del=(m->peak-m->levels[j])/(m->levels[j+1]-m->levels[j]);
+	    x=(j+del)/m->labels*(widget->allocation.width-xpad*2)+xpad;
+	    break;
+	  }else if (j==m->labels){
+	    x=widget->allocation.width-xpad+1;
+	  }
+	}else
 	  break;
-	}else if (j==m->labels){
-	  x=widget->allocation.width-xpad+1;
-	}
-      }else
-	break;
-    
-    for(j=0;j<n;j++)
-      if(x<m->bartrackers[j].pixelposhi)
-	x=m->bartrackers[j].pixelposhi;
-    
-    {
-      int y=widget->allocation.height-lpad-1;
       
-      gdk_draw_line(m->backing,widget->style->fg_gc[0],
-		    x-3,upad,x+3,upad);
-      gdk_draw_line(m->backing,widget->style->fg_gc[0],
-		    x-2,upad+1,x+2,upad+1);
-      gdk_draw_line(m->backing,widget->style->fg_gc[0],
-		    x-1,upad+2,x+1,upad+2);
-      gdk_draw_line(m->backing,widget->style->fg_gc[0],
-		    x-3,y-1,x+3,y-1);
-      gdk_draw_line(m->backing,widget->style->fg_gc[0],
-		    x-2,y-2,x+2,y-2);
-      gdk_draw_line(m->backing,widget->style->fg_gc[0],
-		    x-1,y-3,x+1,y-3);
+      for(j=0;j<n;j++)
+	if(x<m->bartrackers[j].pixelposhi)
+	  x=m->bartrackers[j].pixelposhi;
       
-      gdk_draw_line(m->backing,widget->style->fg_gc[1],
-		    x,upad+1,x,y-2);
+      {
+	int y=widget->allocation.height-lpad-1;
+	
+	gdk_draw_line(m->backing,widget->style->fg_gc[0],
+		      x-3,upad,x+3,upad);
+	gdk_draw_line(m->backing,widget->style->fg_gc[0],
+		      x-2,upad+1,x+2,upad+1);
+	gdk_draw_line(m->backing,widget->style->fg_gc[0],
+		      x-1,upad+2,x+1,upad+2);
+	gdk_draw_line(m->backing,widget->style->fg_gc[0],
+		      x-3,y-1,x+3,y-1);
+	gdk_draw_line(m->backing,widget->style->fg_gc[0],
+		      x-2,y-2,x+2,y-2);
+	gdk_draw_line(m->backing,widget->style->fg_gc[0],
+		      x-1,y-3,x+1,y-3);
+	
+	gdk_draw_line(m->backing,widget->style->fg_gc[1],
+		      x,upad+1,x,y-2);
+      }
     }
+  }else{
+
+    int width=widget->allocation.width-xpad;
+    int height=widget->allocation.height;
+    GdkGC *gc=parent->style->bg_gc[0];
+
+    /* blank scale to bg of parent */
+    gdk_draw_rectangle(m->backing,gc,1,xpad,0,width-xpad+1,height-lpad);
+
   }
 
-  for(i=0;i<m->labels;i++){
-    int x=rint((i+1.)/m->labels*(widget->allocation.width-xpad*2)+xpad);
+  for(i=0;i<m->labels+1;i++){
+    int x=rint(((double)i)/m->labels*(widget->allocation.width-xpad*2)+xpad);
     int y=widget->allocation.height-lpad-upad;
     int px,py;
     int gc=0;
     
-    if(m->levels[i+1]>=0)gc=1;
+    if(m->levels[i]>=0)gc=1;
     
     gdk_draw_line (m->backing,
 		   widget->style->text_gc[gc],
 		   x, upad, x, y+upad);
     
-    pango_layout_get_pixel_size(m->layout[i],&px,&py);
-    x-=px+2;
-    y-=py;
-    y/=2;
-
-    gdk_draw_layout (m->backing,
-		     widget->style->text_gc[gc],
-		     x, y+upad,
-		     m->layout[i]);
-
+    if(i>0){
+      pango_layout_get_pixel_size(m->layout[i-1],&px,&py);
+      x-=px+2;
+      y-=py;
+      y/=2;
+      
+      gdk_draw_layout (m->backing,
+		       widget->style->text_gc[gc],
+		       x, y+upad,
+		       m->layout[i-1]);
+    }
   }
 
   /* draw frame */
   {
     int width=widget->allocation.width-xpad;
     int height=widget->allocation.height;
-    GtkWidget *parent=gtk_widget_get_parent(widget);
     GdkGC *gc=parent->style->bg_gc[0];
     GdkGC *light_gc=parent->style->light_gc[0];
     GdkGC *dark_gc=parent->style->dark_gc[0];
@@ -374,54 +390,60 @@ static void draw(GtkWidget *widget,int n){
 
     /* blank side padding to bg of parent */
     gdk_draw_rectangle(m->backing,gc,1,0,0,xpad,height);
-    gdk_draw_rectangle(m->backing,gc,1,width,0,xpad,height);
+    gdk_draw_rectangle(m->backing,gc,1,width+1,0,xpad-1,height);
 
 
     /* blank sides of trough */
     gdk_draw_rectangle(m->backing,gc,1,
 		       0,height-lpad,
-		       m->thumblo_x+xpad,lpad);
+		       m->thumblo_x+xpad-1,lpad);
     gdk_draw_rectangle(m->backing,gc,1,
 		       m->thumbhi_x+xpad,height-lpad,
 		       width-m->thumbhi_x,lpad);
     
     /* frame */
-    gdk_draw_line(m->backing,dark_gc,xpad-1,0,width,0);
-    gdk_draw_line(m->backing,dark_gc,xpad-1,0,xpad-1,height-lpad);
-    gdk_draw_line(m->backing,dark_gc,xpad,height-lpad,width,height-lpad);
-    gdk_draw_line(m->backing,dark_gc,width,height-lpad,width,1);
-
-    gdk_draw_line(m->backing,light_gc,xpad-1,height-lpad+1,
-		  width+1,height-lpad+1);
-    gdk_draw_line(m->backing,light_gc,width+1,0,width+1,height-lpad+1);
-    gdk_draw_line(m->backing,light_gc,xpad,1,width-1,1);
-    gdk_draw_line(m->backing,light_gc,xpad,1,xpad,height-lpad-1);
-
+    if(m->readout){
+      gdk_draw_line(m->backing,dark_gc,xpad-1,0,width,0);
+      gdk_draw_line(m->backing,dark_gc,xpad-1,0,xpad-1,height-lpad);
+      gdk_draw_line(m->backing,dark_gc,xpad,height-lpad,width,height-lpad);
+      gdk_draw_line(m->backing,dark_gc,width,height-lpad,width,1);
+      
+      gdk_draw_line(m->backing,light_gc,xpad-1,height-lpad+1,
+		    width+1,height-lpad+1);
+      gdk_draw_line(m->backing,light_gc,width+1,0,width+1,height-lpad+1);
+      gdk_draw_line(m->backing,light_gc,xpad,1,width-1,1);
+      gdk_draw_line(m->backing,light_gc,xpad,1,xpad,height-lpad-1);
+    }
 
 
     /* dark trough */
-    if(lpad>2){
-      gdk_draw_rectangle(m->backing,mid_gc,1,
-			 xpad+m->thumblo_x,height-lpad+1,
-			 m->thumbhi_x-m->thumblo_x+1,lpad-1);
-
-      gdk_draw_line(m->backing,dark_gc,
-		    m->thumblo_x+xpad-1,height-lpad+1,
-		    m->thumblo_x+xpad-1,height-1);
+    if(lpad>2 || m->readout==0){
+      if(lpad>2){
+	gdk_draw_rectangle(m->backing,mid_gc,1,
+			   xpad+m->thumblo_x,height-lpad+1,
+			   m->thumbhi_x-m->thumblo_x+1,lpad-1);
+	
+	gdk_draw_line(m->backing,dark_gc,
+		      m->thumblo_x+xpad-1,height-lpad,
+		      m->thumblo_x+xpad-1,height-1);
+	
+      }
 
       gdk_draw_line(m->backing,light_gc,
 		    m->thumblo_x+xpad-1,height-1,
 		    m->thumbhi_x+xpad+1,height-1);
 
-      gdk_draw_line(m->backing,light_gc,
-		    m->thumbhi_x+xpad+1,height-1,
-		    m->thumbhi_x+xpad+1,height-lpad+1);
-
       dark_gc=widget->style->dark_gc[GTK_STATE_ACTIVE];
+
       gdk_draw_line(m->backing,dark_gc,
-		    m->thumblo_x+xpad,height-lpad,
-		    m->thumbhi_x+xpad,height-lpad);
+		    m->thumblo_x+xpad-1,height-lpad,
+		    m->thumbhi_x+xpad+1,height-lpad);
       
+      if(lpad>2)
+	gdk_draw_line(m->backing,light_gc,
+		      m->thumbhi_x+xpad+1,height-1,
+		      m->thumbhi_x+xpad+1,height-lpad);
+
 
     }
 
@@ -1058,6 +1080,18 @@ GtkWidget* multibar_new (int n, char **labels, double *levels, int thumbs,
 			  GDK_FOCUS_CHANGE_MASK  );
   }
 
+  m->readout=1;
+  return ret;
+}
+
+GtkWidget* multibar_slider_new (int n, char **labels, double *levels, 
+				int thumbs){
+  int i;
+  GtkWidget *ret= multibar_new(n,labels,levels,thumbs,0);
+  Multibar *m=MULTIBAR(ret);
+  m->readout=0;
+  gtk_widget_set_name(ret,"Multislide");
+
   return ret;
 }
 
@@ -1164,6 +1198,4 @@ void multibar_thumb_bounds(Multibar *m,double lo, double hi){
   if(m->callback)m->callback(GTK_WIDGET(m),m->callbackp);
   draw_and_expose(w);
 }
-
-
 

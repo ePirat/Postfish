@@ -24,7 +24,7 @@
 #include "postfish.h"
 #include "smallft.h"
 
-#define freqs 39
+#define freqs 30
 
 typedef struct {
   drft_lookup fft;
@@ -53,3 +53,6 @@ extern const char *freq_frequency_label(int n);
 extern time_linkage *freq_read(time_linkage *in, freq_state *f,
 			       void (*func)(double *data,freq_state *f,
 					    double *peak, double *rms));
+
+extern void freq_metric_work(double *work,freq_state *f,
+			    double *sq_mags,double *peak,double *rms);

@@ -29,7 +29,9 @@
 #include "input.h"
 #include "output.h"
 #include "declip.h"
+#include "eq.h"
 
+extern int input_size;
 sig_atomic_t playback_active=0;
 sig_atomic_t playback_exit=0;
 sig_atomic_t playback_seeking=0;
@@ -51,6 +53,7 @@ void pipeline_reset(){
 
   input_reset();  /* clear any persistent lapping state */
   declip_reset();  /* clear any persistent lapping state */
+  eq_reset();      /* clear any persistent lapping state */
   output_reset(); /* clear any persistent lapping state */
 }
 
@@ -124,6 +127,16 @@ static int isachr(FILE *f){
   return 0;
 }
 
+static int ilog(long x){
+  int ret=-1;
+
+  while(x>0){
+    x>>=1;
+    ret++;
+  }
+  return ret;
+}
+
 static int outbytes;
 static FILE *playback_startup(int outfileno, int ch, int r, int *bep){
   FILE *playback_fd=NULL;
@@ -142,9 +155,11 @@ static FILE *playback_startup(int outfileno, int ch, int r, int *bep){
 
   /* is this file a block device? */
   if(isachr(playback_fd)){
-    int fragment=0x0004000d;
+    long bytesperframe=input_size*ch*2;
     int fd=fileno(playback_fd);
     int format=AFMT_S16_NE;
+    int fraglog=ilog(bytesperframe);
+    int fragment=0x00040000|fraglog;
     outbytes=2;
 
     /* try to lower the DSP delay; this ioctl may fail gracefully */
@@ -208,6 +223,8 @@ void *playback_thread(void *dummy){
     link=input_read();
     result=link->samples;
     link=declip_read(link);
+    result|=link->samples;
+    link=eq_read(link);
     result|=link->samples;
     
     if(!result)break;

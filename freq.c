@@ -27,32 +27,7 @@
 #include "feedback.h"
 #include "freq.h"
 
-extern int input_rate;
-extern int input_ch;
-extern int input_size;
-
-/* feedback! */
-typedef struct freq_feedback{
-  feedback_generic parent_class;
-  double **peak;
-  double **rms;
-} freq_feedback;
-
-/* accessed only in playback thread/setup */
-static double frequencies[freqs+1];
-static char *freq_labels[freqs]={
-  "31", "37","44","53",
-  "63", "75","88","105",
-  "125","150","180","210",
-  "250","300","350","420",
-  "500","600", "700", "840",
-  "1k", "1.2k", "1.4k", "1.7k",
-  "2k", "2.4k", "2.8k", "3.4k",
-  "4k", "4.8k", "5.6k", "6.7k",
-  "8k", "9.5k", "11k", "13k",
-  "16k","19k",  "22k"
-};
-
+#include <stdio.h>
 void _analysis(char *base,int i,double *v,int n,int bark,int dB){
   int j;
   FILE *of;
@@ -72,10 +47,10 @@ void _analysis(char *base,int i,double *v,int n,int bark,int dB){
     
     if(dB){
       if(j==0||j==n-1)
-	fprintf(of,"%f\n",todB(v[j]));
+        fprintf(of,"%f\n",todB(v[j]));
       else{
-	fprintf(of,"%f\n",todB(hypot(v[j],v[j+1])));
-	j++;
+        fprintf(of,"%f\n",todB(hypot(v[j],v[j+1])));
+        j++;
       }
     }else{
       fprintf(of,"%f\n",v[j]);
@@ -83,6 +58,33 @@ void _analysis(char *base,int i,double *v,int n,int bark,int dB){
   }
   fclose(of);
 }
+
+extern int input_rate;
+extern int input_ch;
+extern int input_size;
+
+/* feedback! */
+typedef struct freq_feedback{
+  feedback_generic parent_class;
+  double **peak;
+  double **rms;
+} freq_feedback;
+
+/* accessed only in playback thread/setup */
+static double frequencies[freqs+1]={
+  25,31.5,40,50,63,80,
+  100,125,160,200,250,315,
+  400,500,630,800,1000,1250,1600,
+  2000,2500,3150,4000,5000,6300,
+  8000,10000,12500,16000,20000,9e10};
+
+static char *freq_labels[freqs]={
+  "25","31.5","40","50","63","80",
+  "100","125","160","200","250","315",
+  "400","500","630","800","1k","1.2k","1.6k",
+  "2k","2.5k","3.1k","4k","5k","6.3k",
+  "8k","10k","12.5k","16k","20k"
+};
 
 static feedback_generic *new_freq_feedback(void){
   int i;
@@ -145,14 +147,6 @@ int freq_load(freq_state *f,int blocksize){
   for(i=0;i<input_ch;i++)
     f->out.data[i]=malloc(input_size*sizeof(**f->out.data));
 
-  /* fill out the frequencies we potentially offer */
-  /* yes this gets repeated.  it's pre-threading, not a big deal */
-  for(i=0;i<freqs;i++)
-    frequencies[i]=fromOC(i*.25-1.);
-  frequencies[freqs-1]=22000.;
-  frequencies[freqs]=1e20;
-
-
   /* unlike old postfish, we offer all frequencies via smoothly
      supersampling the spectrum */
   /* I'm too lazy to figure out the integral symbolically, use this
@@ -160,10 +154,10 @@ int freq_load(freq_state *f,int blocksize){
   
   f->ho_window=malloc(freqs*sizeof(*f->ho_window));
   {
-    double lastf=0.;
     double *working=alloca((blocksize+1)*sizeof(*working));
 
     for(i=0;i<freqs;i++){
+      double lastf=(i>0?frequencies[i-1]:0);
       double thisf=frequencies[i];
       double nextf=frequencies[i+1];
 
@@ -237,40 +231,46 @@ const char *freq_frequency_label(int n){
   return freq_labels[n];
 }
 
-static void transform_work(double *work,freq_state *f,double *peak,double *rms){
+static void transform_work(double *work,freq_state *f){
   double *workoff=work+f->blocksize/2;
   int i,j,k;
   
   /* window the time data */
-  memset(work,0,sizeof(*work)*f->blocksize);
+  memset(work,0,sizeof(*work)*f->blocksize/2);
   memset(work+f->blocksize*3/2,0,sizeof(*work)*f->blocksize/2);
   for(i=0;i<f->blocksize;i++)workoff[i]*=f->window[i];
   
   /* transform the time data */
   drft_forward(&f->fft,work);
-  for(i=0;i<f->blocksize;i++)workoff[i]*=(1./f->blocksize);
+  for(i=0;i<f->blocksize*2;i++)work[i]*=(.5/f->blocksize);
+}
+
+
+void freq_metric_work(double *work,freq_state *f,
+		      double *sq_mags,double *peak,double *rms){
+  int i,j,k;
 
   /* fill in metrics */
   memset(peak,0,sizeof(*peak)*freqs);
   memset(rms,0,sizeof(*rms)*freqs);
-  {
-    double sq_mags[f->blocksize+1];
-    sq_mags[0]=work[0]*work[0];
-    sq_mags[f->blocksize]=work[f->blocksize*2-1]*work[f->blocksize*2-1];
-    for(i=1;i<f->blocksize;i++)
-      sq_mags[i]=work[i*2]*work[i*2]+work[i*2-1]*work[i*2-1];
+  sq_mags[0]=work[0]*work[0]*44.4444444;
+  sq_mags[f->blocksize]=
+    work[f->blocksize*2-1]*work[f->blocksize*2-1]*44.44444444;
+  for(i=1;i<f->blocksize;i++)
+    sq_mags[i]=(work[i*2]*work[i*2]+work[i*2-1]*work[i*2-1])*44.444444;
+  
+  for(i=0;i<freqs;i++){
+    double *ho_window=f->ho_window[i];
+    for(k=0,j=f->ho_bin_lo[i];j<f->ho_bin_hi[i];j++,k++){
+      double val=sq_mags[j]*ho_window[k];
 
-    for(i=0;i<freqs;i++){
-      double *ho_window=f->ho_window[i];
-      for(k=0,j=f->ho_bin_lo[i];j<f->ho_bin_hi[i];j++,k++){
-	double val=sq_mags[j]*ho_window[k];
-	rms[i]+=val;
-	if(val>peak[i])peak[i]=val;
-      }
-      rms[i]=sqrt(rms[i]*f->ho_area[i]);
-      peak[i]=sqrt(peak[i]);
+      rms[i]+=val;
+      if(val>peak[i])peak[i]=val;
     }
+    rms[i]=sqrt(rms[i]*f->ho_area[i]);
+    peak[i]=sqrt(peak[i]);
   }
+
 }
 
 static void feedback_work(double *peak,double *rms,
@@ -314,21 +314,26 @@ time_linkage *freq_read(time_linkage *in, freq_state *f,
 
   int blocks=0;
 
-  memset(peak,0,sizeof(peak));
-  memset(rms,0,sizeof(rms));
+  memset(feedback_peak,0,sizeof(feedback_peak));
+  memset(feedback_rms,0,sizeof(feedback_rms));
 
   {
     double work[f->blocksize*2];
     
     switch(f->fillstate){
     case 0: /* prime the lapping and cache */
+      if(in->samples==0){
+	f->out.samples=0;
+	return &f->out;
+      }
+
       for(i=0;i<input_ch;i++){
 	double *temp=in->data[i];
 
 	memset(work+f->blocksize/2,0,sizeof(*work)*f->blocksize/2);
 	memcpy(work+f->blocksize,temp,sizeof(*work)*f->blocksize/2);
 
-	transform_work(work,f,peak,rms);
+	transform_work(work,f);
 	func(work,f,peak,rms);
 	feedback_work(peak,rms,feedback_peak[i],feedback_rms[i]);
 	lap_work(work,f->lap[i],0,f);
@@ -357,7 +362,7 @@ time_linkage *freq_read(time_linkage *in, freq_state *f,
 	  memcpy(work+f->blocksize/2,temp+j,sizeof(*work)*f->blocksize);
 	  memset(work+f->blocksize*3/2,0,sizeof(*work)*f->blocksize/2);
 
-	  transform_work(work,f,&peak[i],&rms[i]);
+	  transform_work(work,f);
 	  func(work,f,peak,rms);
 	  feedback_work(peak,rms,feedback_peak[i],feedback_rms[i]);
 	  lap_work(work,f->lap[i],f->out.data[i]+j,f);
@@ -369,7 +374,7 @@ time_linkage *freq_read(time_linkage *in, freq_state *f,
 	memcpy(work+f->blocksize,in->data[i],sizeof(*work)*f->blocksize/2);
 	memset(work+f->blocksize*3/2,0,sizeof(*work)*f->blocksize/2);
 	
-	transform_work(work,f,&peak[i],&rms[i]);
+	transform_work(work,f);
 	func(work,f,peak,rms);
 	feedback_work(peak,rms,feedback_peak[i],feedback_rms[i]);
 	lap_work(work,f->lap[i],f->out.data[i]+j,f);
@@ -396,9 +401,10 @@ time_linkage *freq_read(time_linkage *in, freq_state *f,
       (freq_feedback *)feedback_new(&f->feedpool,new_freq_feedback);
 
     for(i=0;i<input_ch;i++)
-      for(j=0;j<freqs;j++)
-	feedback_rms[i][j]=sqrt(feedback_rms[i][j]*scale);
-
+      for(j=0;j<freqs;j++){
+	feedback_rms[i][j]=todB(sqrt(feedback_rms[i][j]*scale));
+	feedback_peak[i][j]=todB(feedback_peak[i][j]);
+      }
       
     for(i=0;i<input_ch;i++){
       memcpy(ff->peak[i],feedback_peak[i],freqs*sizeof(**feedback_peak));

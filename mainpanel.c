@@ -261,7 +261,7 @@ sig_atomic_t master_att;
 static void masterdB_change(GtkWidget *dummy, gpointer in){
   postfish_mainpanel *p=in;
   char buf[80];
-  gdouble val=gtk_range_get_value(GTK_RANGE(p->masterdB_s));
+  gdouble val=multibar_get_value(MULTIBAR(p->masterdB_s),0);
   sprintf(buf,"%.1f dB",val);
   readout_set(READOUT(p->masterdB_r),buf);
 
@@ -398,20 +398,20 @@ static gboolean mainpanel_keybinding(GtkWidget *widget,
     gtk_widget_activate(p->masterdB_a);
     break;
   case GDK_minus:
-    gtk_range_set_value(GTK_RANGE(p->masterdB_s),
-			gtk_range_get_value(GTK_RANGE(p->masterdB_s))-.1);
+    multibar_thumb_set(MULTIBAR(p->masterdB_s),
+		       multibar_get_value(MULTIBAR(p->masterdB_s),0)-.1,0);
     break;
   case GDK_underscore:
-    gtk_range_set_value(GTK_RANGE(p->masterdB_s),
-			gtk_range_get_value(GTK_RANGE(p->masterdB_s))-1.);
+    multibar_thumb_set(MULTIBAR(p->masterdB_s),
+		       multibar_get_value(MULTIBAR(p->masterdB_s),0)-1.,0);
     break;
   case GDK_equal:
-    gtk_range_set_value(GTK_RANGE(p->masterdB_s),
-			gtk_range_get_value(GTK_RANGE(p->masterdB_s))+.1);
+    multibar_thumb_set(MULTIBAR(p->masterdB_s),
+		       multibar_get_value(MULTIBAR(p->masterdB_s),0)+.1,0);
     break;
   case GDK_plus:
-    gtk_range_set_value(GTK_RANGE(p->masterdB_s),
-			gtk_range_get_value(GTK_RANGE(p->masterdB_s))+1.);
+    multibar_thumb_set(MULTIBAR(p->masterdB_s),
+		       multibar_get_value(MULTIBAR(p->masterdB_s),0)+1.,0);
     break;
   case GDK_d:
     gtk_widget_activate(p->buttonactive[0]);
@@ -647,38 +647,39 @@ void mainpanel_create(postfish_mainpanel *panel,char **chlabels){
     gtk_table_attach(GTK_TABLE(ttable),show,0,1,0,1,GTK_FILL|GTK_SHRINK,GTK_FILL|GTK_SHRINK,0,0);
     gtk_table_attach(GTK_TABLE(ttable),in,0,1,1,2,GTK_FILL|GTK_SHRINK,GTK_FILL|GTK_SHRINK,0,0);
     gtk_table_attach(GTK_TABLE(ttable),out,0,1,2,3,GTK_FILL|GTK_SHRINK,GTK_FILL|GTK_SHRINK,0,0);
-    gtk_table_attach_defaults(GTK_TABLE(ttable),panel->inbar,1,3,1,2);
-    gtk_table_attach_defaults(GTK_TABLE(ttable),panel->outbar,1,3,2,3);
+    gtk_table_attach(GTK_TABLE(ttable),panel->inbar,1,3,1,2,GTK_EXPAND|GTK_FILL,GTK_EXPAND|GTK_FILL,0,0);
+    gtk_table_attach(GTK_TABLE(ttable),panel->outbar,1,3,2,3,GTK_EXPAND|GTK_FILL,GTK_EXPAND|GTK_FILL,0,0);
 
+    gtk_table_set_row_spacing(GTK_TABLE(ttable),1,1);
+    gtk_table_set_row_spacing(GTK_TABLE(ttable),2,2);
 
     /* master dB slider */
     {
+      char *sliderlabels[10]={"-40","-30","-20","-10","0","+10","+20","+30","+40","+50"};
+      double sliderlevels[11]={-50,-40,-30,-20,-10,0,10,20,30,40,50};
+      
       GtkWidget *box=gtk_hbox_new(0,0);
 
       GtkWidget *masterlabel=gtk_label_new("master:");
       panel->masterdB_a=gtk_toggle_button_new_with_label("[m] active");
       panel->masterdB_r=readout_new("  0.0 dB");
-      panel->masterdB_s=gtk_hscale_new_with_range(-50,50,.1);
+      panel->masterdB_s=multibar_slider_new(10,sliderlabels,sliderlevels,1);
+      
+      multibar_thumb_set(MULTIBAR(panel->masterdB_s),0.,0);
 
       gtk_misc_set_alignment(GTK_MISC(masterlabel),1,.5);
-
-      gtk_range_set_value(GTK_RANGE(panel->masterdB_s),0);
-      gtk_scale_set_draw_value(GTK_SCALE(panel->masterdB_s),FALSE);
     
       gtk_table_attach(GTK_TABLE(ttable),masterlabel,0,1,3,4,
 		       GTK_FILL,GTK_FILL,0,0);
       
       gtk_box_pack_start(GTK_BOX(box),panel->masterdB_a,0,0,2);
-      gtk_box_pack_start(GTK_BOX(box),panel->masterdB_r,0,0,0);
       gtk_box_pack_start(GTK_BOX(box),panel->masterdB_s,1,1,0);
+      gtk_box_pack_start(GTK_BOX(box),panel->masterdB_r,0,0,0);
       
       gtk_table_attach_defaults(GTK_TABLE(ttable),box,1,3,3,4);
 
-      g_signal_connect (G_OBJECT (panel->masterdB_s), "key-press-event",
-			G_CALLBACK (slider_keymodify), NULL);
-
-      g_signal_connect_after (G_OBJECT(panel->masterdB_s), "value-changed",
-			G_CALLBACK(masterdB_change), (gpointer)panel);
+      multibar_callback(MULTIBAR(panel->masterdB_s),
+			masterdB_change,(gpointer)panel);
 
       g_signal_connect_after (G_OBJECT(panel->masterdB_a), "clicked",
 			G_CALLBACK(masterdB_change), (gpointer)panel);

@@ -19,6 +19,10 @@ style "panel-text" {
 	font_name = "sans 9"
 }
 
+style "small-marker" {
+	font_name = "sans 8"
+}
+
 style "frame-label" {
 	font_name = "sans bold 10"
 }
@@ -58,6 +62,20 @@ style "multibar" {
         font_name = "sans 6"    
 }
 
+style "multislide" {
+        bg[NORMAL]="#80a0ff" 
+        bg[ACTIVE]="#b0b0b0" 
+        bg[PRELIGHT]="#c0f0ff" 
+
+        fg[NORMAL]="#000000" 
+        fg[ACTIVE]="#ff8080" 
+        fg[PRELIGHT]="#f0f080" 
+
+        text[NORMAL]="#707070" 
+        text[ACTIVE]="#905050" 
+        font_name = "sans 6"    
+}
+
 style "clipbar" {
 	fg[NORMAL]="#404040" 
 	fg[ACTIVE]="#ff8080" 
@@ -72,7 +90,7 @@ style "readout" {
 	bg[NORMAL]="#ffffff" 
 	bg[ACTIVE]="#ffffff" 
 
-	font_name = "Nimbus Mono L, Courier, Monospace 9"	
+	font_name = "Fixed, Nimbus Mono L, Courier, Monospace 10"	
 }
 
 style "darkpanel" {
@@ -120,6 +138,7 @@ style "side" {
 }
 
 widget "*.GtkLabel" style "panel-text"
+widget "*.smallmarker" style "small-marker"
 
 widget "*.color0" style "left"
 widget "*.color1" style "right"
@@ -146,10 +165,7 @@ widget "*.quitbutton.GtkLabel" style "quitbutton"
 widget "*.panelbutton*" style "button-poppy"
 widget "*.panelbutton*.GtkLabel" style "panel-label"
 widget "*.Multibar*" style "multibar"
+widget "*.Multislide*" style "multislide"
 
 widget "*.clipbar*" style "clipbar"
-
-
-
-
 
