@@ -10,7 +10,7 @@
 
 # use the below for x86 and most other platforms where 'float' is 32 bit IEEE754
 
-ADD_DEF= -DUGLY_IEEE754_FLOAT32_HACK=1 -march=athlon-mp
+ADD_DEF= -DUGLY_IEEE754_FLOAT32_HACK=1 
 
 # use the below for anything without IEE754 floats (eg, VAX)
 
