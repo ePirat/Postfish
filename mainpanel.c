@@ -284,18 +284,37 @@ static gboolean keybinding(GtkWidget *widget,
 			   gpointer in){
   postfish_mainpanel *p=in;
 
-#if 0
   fprintf(stderr,"keypress: M%d C%d S%d L%d '%x'\n",
 	  event->state&GDK_MOD1_MASK,
 	  event->state&GDK_CONTROL_MASK,
 	  event->state&GDK_SHIFT_MASK,
 	  event->state&GDK_LOCK_MASK,
 	  event->keyval);
-#endif
 
   /* do not capture Alt accellerators */
   if(event->state&GDK_MOD1_MASK) return FALSE;
   if(event->state&GDK_CONTROL_MASK) return FALSE;
+
+
+  switch(event->keyval){
+  case GDK_less:
+  case GDK_comma:
+  case GDK_period:
+  case GDK_greater:
+    
+    /* GTK has one unfortunate bit of hardwiring; if a key is held down
+       and autorepeats, the default pushbutton widget-unactivate timeout
+       is 250 ms, far slower than autorepeat.  We must defeat this to
+       have autorepeat accellerators function at full speed. */
+    
+    {
+      GdkEventKey copy=*event;
+      copy.type=GDK_KEY_RELEASE;
+      gtk_main_do_event((GdkEvent *)(&copy));
+    }
+    while (gtk_events_pending ())  gtk_main_iteration ();
+  }
+
 
   switch(event->keyval){
   case GDK_m:
@@ -364,6 +383,10 @@ static gboolean keybinding(GtkWidget *widget,
     gtk_widget_activate(p->deckactive[3]);
     break;
   case GDK_period:
+
+
+
+
     gtk_widget_activate(p->deckactive[4]);
     break;
   case GDK_greater:
