@@ -33,7 +33,7 @@ static int clippanel_hide(GtkWidget *widget,
 			  gpointer in){
   subpanel_generic *p=in;
   gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->subpanel_windowbutton),0);
-  return FALSE;
+  return TRUE;
 }
 static int windowbutton_action(GtkWidget *widget,
 			gpointer in){
@@ -157,7 +157,7 @@ subpanel_generic *subpanel_create(postfish_mainpanel *mp,
 			  panel);
 
   /* delete should == hide */
-  g_signal_connect (G_OBJECT (panel->mainpanel->toplevel), "delete-event",
+  g_signal_connect (G_OBJECT (panel->subpanel_toplevel), "delete-event",
 		    G_CALLBACK (clippanel_hide), 
 		    panel);
 
