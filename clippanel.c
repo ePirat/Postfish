@@ -41,8 +41,8 @@ GtkWidget **feedback_bars;
 GtkWidget *samplereadout;
 GtkWidget *msreadout;
 GtkWidget *hzreadout;
-GtkWidget *creadout;
-GtkWidget *ireadout;
+GtkWidget *depth_readout;
+GtkWidget *limit_readout;
 
 GtkWidget *mainpanel_inbar;
 
@@ -85,19 +85,23 @@ static void blocksize_slider_change(GtkWidget *w,gpointer in){
   declip_setblock(blocksize);
 }
 
-static void converge_slider_change(GtkWidget *w,gpointer in){
+static void depth_slider_change(GtkWidget *w,gpointer in){
+  char buffer[80];
+  double dB=gtk_range_get_value(GTK_RANGE(w));
+
+  sprintf(buffer,"%3ddB",(int)dB);
+  readout_set(READOUT(depth_readout),buffer);
+
+  declip_setconvergence(fromdB(-dB));
+}
+
+static void limit_slider_change(GtkWidget *w,gpointer in){
   char buffer[80];
   double percent=gtk_range_get_value(GTK_RANGE(w));
-  double sigfigs=percent*.05+2.8;
-  double epsilon=pow(10.,-sigfigs);
 
-  sprintf(buffer,"%3.1f",sigfigs);
-  readout_set(READOUT(creadout),buffer);
+  sprintf(buffer,"%3d%%",(int)percent);
+  readout_set(READOUT(limit_readout),buffer);
 
-  sprintf(buffer,"%3.0f%%",percent);
-  readout_set(READOUT(ireadout),buffer);
-
-  declip_setconvergence(epsilon);
   declip_setiterations(percent*.01);
 }
 
@@ -114,16 +118,21 @@ void clippanel_create(postfish_mainpanel *mp,
 					  "_Declipping filter setup"," [d] ");
   
   GtkWidget *framebox=gtk_hbox_new(1,0);
+  GtkWidget *framebox_right=gtk_vbox_new(0,0);
   GtkWidget *blocksize_box=gtk_vbox_new(0,0);
   GtkWidget *blocksize_frame=gtk_frame_new (" filter width ");
   GtkWidget *converge_frame=gtk_frame_new (" filter convergence ");
+  GtkWidget *limit_frame=gtk_frame_new (" filter CPU throttle ");
   GtkWidget *converge_box=gtk_vbox_new(0,0);
+  GtkWidget *limit_box=gtk_vbox_new(0,0);
   GtkWidget *channel_table=gtk_table_new(input_ch,4,0);
 
   gtk_widget_set_name(blocksize_box,"choiceframe");
   gtk_widget_set_name(converge_box,"choiceframe");
+  gtk_widget_set_name(limit_box,"choiceframe");
   gtk_container_set_border_width(GTK_CONTAINER(blocksize_box),2);
   gtk_container_set_border_width(GTK_CONTAINER(converge_box),2);
+  gtk_container_set_border_width(GTK_CONTAINER(limit_box),2);
 
   feedback_bars=calloc(input_ch,sizeof(*feedback_bars));
 
@@ -165,48 +174,81 @@ void clippanel_create(postfish_mainpanel *mp,
 		      G_CALLBACK (slider_keymodify), NULL);
     g_signal_connect_after (G_OBJECT(slider), "value-changed",
 			    G_CALLBACK(blocksize_slider_change), 0);
-    gtk_range_set_value(GTK_RANGE(slider),3.);
+    gtk_range_set_value(GTK_RANGE(slider),2.);
     
   }
   gtk_container_add(GTK_CONTAINER(blocksize_frame),blocksize_box);
 
   /* set up convergence config */
   {
-    GtkWidget *table=gtk_table_new(3,2,0);
+    GtkWidget *table=gtk_table_new(2,2,0);
     GtkWidget *sliderbox=gtk_hbox_new(0,0);
     GtkWidget *fastlabel=gtk_label_new("fastest");
     GtkWidget *qualitylabel=gtk_label_new("best");
-    GtkWidget *slider=gtk_hscale_new_with_range(10,200,1);
-    GtkWidget *clabel=gtk_label_new("significant figures target");
-    GtkWidget *ilabel=gtk_label_new("limit predicted iterations");
-    creadout=readout_new("000 ");
-    ireadout=readout_new("000%");
+    GtkWidget *slider=gtk_hscale_new_with_range(1,140,1);
+    GtkWidget *label=gtk_label_new("solution depth");
+    depth_readout=readout_new("000dB");
 
     gtk_scale_set_draw_value(GTK_SCALE(slider),FALSE);
-    gtk_misc_set_alignment(GTK_MISC(clabel),1,.5);
-    gtk_misc_set_alignment(GTK_MISC(ilabel),1,.5);
+    gtk_misc_set_alignment(GTK_MISC(label),1,.5);
 
     gtk_box_pack_start(GTK_BOX(sliderbox),fastlabel,0,0,4);
     gtk_box_pack_start(GTK_BOX(sliderbox),slider,1,1,0);
     gtk_box_pack_start(GTK_BOX(sliderbox),qualitylabel,0,0,4);
     gtk_table_attach(GTK_TABLE(table),sliderbox,0,2,0,1,GTK_FILL|GTK_EXPAND,0,0,8);
-    gtk_table_attach(GTK_TABLE(table),clabel,0,1,1,2,GTK_FILL|GTK_EXPAND,GTK_FILL,0,0);
-    gtk_table_attach(GTK_TABLE(table),ilabel,0,1,2,3,GTK_FILL|GTK_EXPAND,GTK_FILL,0,0);
+    gtk_table_attach(GTK_TABLE(table),label,0,1,1,2,GTK_FILL|GTK_EXPAND,GTK_FILL,0,0);
 
-    gtk_table_attach(GTK_TABLE(table),creadout,1,2,1,2,GTK_FILL,0,5,0);
-    gtk_table_attach(GTK_TABLE(table),ireadout,1,2,2,3,GTK_FILL,0,5,0);
+    gtk_table_attach(GTK_TABLE(table),depth_readout,1,2,1,2,GTK_FILL,0,5,0);
+
     gtk_container_add(GTK_CONTAINER(converge_box),table);
 
     g_signal_connect (G_OBJECT (slider), "key-press-event",
 		      G_CALLBACK (slider_keymodify), NULL);
     g_signal_connect_after (G_OBJECT(slider), "value-changed",
-			    G_CALLBACK(converge_slider_change), 0);
-    gtk_range_set_value(GTK_RANGE(slider),25.);
+			    G_CALLBACK(depth_slider_change), 0);
+    gtk_range_set_value(GTK_RANGE(slider),60.);
   }
-  gtk_container_add(GTK_CONTAINER(converge_frame),converge_box);
 
-  gtk_box_pack_start(GTK_BOX(framebox),blocksize_frame,0,1,4);
-  gtk_box_pack_start(GTK_BOX(framebox),converge_frame,0,1,4);
+
+  /* set up limit config */
+  {
+    GtkWidget *table=gtk_table_new(2,2,0);
+    GtkWidget *sliderbox=gtk_hbox_new(0,0);
+    GtkWidget *fastlabel=gtk_label_new("fastest");
+    GtkWidget *qualitylabel=gtk_label_new("best");
+    GtkWidget *slider=gtk_hscale_new_with_range(1,100,1);
+    GtkWidget *label=gtk_label_new("hard iteration limit");
+    limit_readout=readout_new("000%");
+
+    gtk_scale_set_draw_value(GTK_SCALE(slider),FALSE);
+    gtk_misc_set_alignment(GTK_MISC(label),1,.5);
+
+    gtk_box_pack_start(GTK_BOX(sliderbox),fastlabel,0,0,4);
+    gtk_box_pack_start(GTK_BOX(sliderbox),slider,1,1,0);
+    gtk_box_pack_start(GTK_BOX(sliderbox),qualitylabel,0,0,4);
+    gtk_table_attach(GTK_TABLE(table),sliderbox,0,2,0,1,GTK_FILL|GTK_EXPAND,0,0,8);
+    gtk_table_attach(GTK_TABLE(table),label,0,1,1,2,GTK_FILL|GTK_EXPAND,GTK_FILL,0,0);
+
+    gtk_table_attach(GTK_TABLE(table),limit_readout,1,2,1,2,GTK_FILL,0,5,0);
+
+    gtk_container_add(GTK_CONTAINER(limit_box),table);
+
+    g_signal_connect (G_OBJECT (slider), "key-press-event",
+		      G_CALLBACK (slider_keymodify), NULL);
+    g_signal_connect_after (G_OBJECT(slider), "value-changed",
+			    G_CALLBACK(limit_slider_change), 0);
+    gtk_range_set_value(GTK_RANGE(slider),100.);
+  }
+
+
+  gtk_container_add(GTK_CONTAINER(converge_frame),converge_box);
+  gtk_container_add(GTK_CONTAINER(limit_frame),limit_box);
+
+  gtk_box_pack_start(GTK_BOX(framebox),blocksize_frame,1,1,4);
+  gtk_box_pack_start(GTK_BOX(framebox),framebox_right,1,1,4);
+
+  gtk_box_pack_start(GTK_BOX(framebox_right),converge_frame,1,1,0);
+  gtk_box_pack_start(GTK_BOX(framebox_right),limit_frame,1,1,0);
 
   gtk_box_pack_start(GTK_BOX(panel->subpanel_box),framebox,0,1,4);
   gtk_box_pack_start(GTK_BOX(panel->subpanel_box),channel_table,0,1,4);

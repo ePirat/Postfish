@@ -28,8 +28,35 @@
    Agonizing Pain' for the additional understanding needed to make the
    n^3 -> n^2 log n jump possible. Google for it, you'll find it. */
 
+#include <string.h>
 #include "smallft.h"
 #include "reconstruct.h"
+
+static void AtWA(drft_lookup *fft, double *x, double *w,int n){
+  int i;
+  drft_forward(fft,x);
+  for(i=0;i<n;i++)x[i]*=w[i];
+  drft_backward(fft,x); /* this is almost the same as A'; see the
+			   correction factor rolled into w at the
+			   beginning of reconstruct() */
+}
+
+/* This is not the inverse of XA'WAX; the algebra isn't valid (due to
+   the singularity of the selection matrix X) and as such is useless
+   for direct solution.  However, it does _approximate_ the inverse
+   and as such makes an excellent system preconditioner. */
+static void precondition(drft_lookup *fft, double *x, double *w,int n){
+  int i;
+
+  /* no need to remove scaling of result; the relative stretching of
+     the solution space is what's important */
+
+  drft_forward(fft,x); /* almost the same as A^-1'; see the correction
+			  factor rolled into w at the beginning of
+			  reconstruct() */
+  for(i=0;i<n;i++)x[i]/=w[i];  
+  drft_backward(fft,x);
+}
 
 static double inner_product(double *a, double *b, int n){
   int i;
@@ -38,73 +65,64 @@ static double inner_product(double *a, double *b, int n){
   return acc;
 }
 
-static void compute_AtAx(drft_lookup *fft,
-			 double *x,double *w,int *flag,int mask,int n,
-			 double *out){
-  int i;
-
-  if(mask){
-    for(i=0;i<n;i++)
-      if(!flag[i])
-	out[i]=0;
-      else
-	out[i]=x[i];
-  }else
-    for(i=0;i<n;i++)
-      if(flag[i])
-	out[i]=0;
-      else
-	out[i]=x[i];
-  
-  drft_forward(fft,out);
-  for(i=0;i<n;i++)out[i]*=w[i];
-  drft_backward(fft,out);
-
-  for(i=0;i<n;i++)
-    if(!flag[i])out[i]=0;
-  
-}
-
-static void compute_Atb_minus_AtAx(drft_lookup *fft,
-				   double *x,double *w,double *Atb,int *flag,
-				   int n,double *out){
-  int i;
-  compute_AtAx(fft,x,w,flag,1,n,out);
-  for(i=0;i<n;i++)out[i]=Atb[i]-out[i];
-}
-
+#include <stdio.h>
 void reconstruct(drft_lookup *fft,
-		 double *x, double *w, int *flag, double e,int max,int n){
+		 double *x, double *w, 
+		 double *flag, double e,int max,int n){
   int i,j;
   double Atb[n];
   double r[n];
   double d[n];
   double q[n];
-  double phi_new,phi_old,phi_0;
+  double s[n];
+  double phi_new,phi_old,res_0,res_new;
   double alpha,beta;
 
+  /* hack; roll a correction factor for A'/A-1 into w */
+  for(j=1;j<n-1;j++)w[j]*=.5;
+
   /* compute initial Atb */
-  compute_AtAx(fft,x,w,flag,0,n,Atb);
-  for(j=0;j<n;j++)Atb[j]= -Atb[j];
+  for(j=0;j<n;j++)Atb[j]=x[j]*(flag[j]-1.);
+  AtWA(fft,Atb,w,n);
 
-  compute_Atb_minus_AtAx(fft,x,w,Atb,flag,n,r);
-  memcpy(d,r,sizeof(d));
-  phi_0=phi_new=inner_product(r,r,n);
+  /* compute initial residue */
+  for(j=0;j<n;j++)r[j]=x[j]*flag[j];
+  AtWA(fft,r,w,n);
+  for(j=0;j<n;j++)d[j]=r[j]=(Atb[j]-r[j])*flag[j];
 
-  for(i=0;i<max && phi_new>e*e*phi_0;i++){
-    compute_AtAx(fft,d,w,flag,1,n,q);
+  /* initial preconditioning */
+  precondition(fft,d,w,n);
+  for(j=0;j<n;j++)q[j]=d[j]*=flag[j];
+
+  phi_new=inner_product(r,d,n);
+  res_new=res_0=inner_product(Atb,Atb,n);
+
+  for(i=0;i<max && sqrt(res_new)/sqrt(res_0)>e;i++){
+    AtWA(fft,q,w,n);
     alpha=phi_new/inner_product(d,q,n);
     for(j=0;j<n;j++)x[j]+=alpha*d[j];
 
-    if((i & 0x3f)==0x3f)
-      compute_Atb_minus_AtAx(fft,x,w,Atb,flag,n,r);
-    else
-      for(j=0;j<n;j++)r[j]-=alpha*q[j];
+    if((i & 0x3f)==0x3f){
+      for(j=0;j<n;j++)r[j]=x[j]*flag[j];
+      AtWA(fft,r,w,n);
+      for(j=0;j<n;j++)r[j]=(Atb[j]-r[j])*flag[j];
+    }else
+      for(j=0;j<n;j++)r[j]-=alpha*q[j]*flag[j];
     
+    /* apply preconditioner */
+    for(j=0;j<n;j++)s[j]=r[j]*flag[j];
+    precondition(fft,s,w,n);
+    for(j=0;j<n;j++)s[j]*=flag[j];
+
     phi_old=phi_new;
-    phi_new=inner_product(r,r,n);
+    phi_new=inner_product(r,s,n);
+    res_new=inner_product(r,r,n);
     beta=phi_new/phi_old;
-    for(j=0;j<n;j++) d[j]=r[j]+beta*d[j];
+    for(j=0;j<n;j++) q[j]=d[j]=s[j]+beta*d[j];
+
   }
+
+  fprintf(stderr,"converged in %d with res=%f\n",i,sqrt(res_new)/sqrt(res_0));
+
 }
 

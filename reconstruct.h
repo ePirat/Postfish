@@ -21,5 +21,5 @@
  * 
  */
 
-extern void reconstruct(drft_lookup *fft,double *x, double *w, int *flag, 
+extern void reconstruct(drft_lookup *fft,double *x, double *w, double *flag, 
 			double e,int max,int n);

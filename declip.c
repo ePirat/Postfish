@@ -217,14 +217,14 @@ static void declip(double *data,double *lap,double *out,
 		   double epsilon, double iteration,
 		   int *runningtotal, int *runningcount){
   double freq[blocksize];
-  int    flag[blocksize];
+  double flag[blocksize];
   int    iterbound,i,j,count=0;
   
-  for(i=0;i<blocksize/8;i++)flag[i]=0;
+  for(i=0;i<blocksize/8;i++)flag[i]=0.;
   for(;i<blocksize*7/8;i++){
-    flag[i]=0;
+    flag[i]=0.;
     if(data[i]>=trigger || data[i]<=-trigger){
-      flag[i]=1;
+      flag[i]=1.;
       count++;
     }
   }
@@ -234,21 +234,16 @@ static void declip(double *data,double *lap,double *out,
 
   if(declip_active){
 
-    for(;i<blocksize;i++)flag[i]=0;
+    for(;i<blocksize;i++)flag[i]=0.;
     for(i=0;i<blocksize;i++)data[i]*=window[i];
     memcpy(freq,data,sizeof(freq));
     drft_forward(&fft,freq);
     sliding_bark_average(freq,freq,blocksize,width);
     
-    if(iteration<1.){
-      iterbound=count*iteration;
-    }else{
-      iterbound=count+blocksize*(iteration-1.);
-    }
-    if(iterbound<20)iterbound=20;
+    iterbound=count*iteration;
+    if(iterbound<10)iterbound=10;
+    if(count)reconstruct(&fft,data,freq,flag,epsilon,iterbound,blocksize);
     
-    if(count)reconstruct(&fft,data,freq,flag,epsilon*count,iterbound,blocksize);
-
     if(out)
       for(i=0;i<blocksize/2;i++)
 	out[i]=lap[i]+data[i]*window[i];
@@ -360,6 +355,7 @@ time_linkage *declip_read(time_linkage *in){
 	}
 	memcpy(work,temp+j,sizeof(*work)*blocksize/2);
 	memcpy(work+blocksize/2,in->data[i],sizeof(*work)*blocksize/2);
+
 	declip(work,lap[i],out.data[i]+j,blocksize,
 	       local_trigger[i],local_convergence,local_iterations,
 	       &total,count+i);
