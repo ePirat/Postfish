@@ -24,6 +24,7 @@
 #include "postfish.h"
 #include "window.h"
 
+static pthread_mutex_t window_mutex=PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
 static float ***window_func=0; /* sin(), sin()^2, sin(sin()^2),sin(sin^2)^2 
 				  
 				  1,2,4,8,16,32,64,128,256,512,1024,
@@ -54,6 +55,7 @@ float *window_get(int type,int n){
   if(type<0)return 0;
   if(type>3)return 0;
 
+  pthread_mutex_lock(&window_mutex);
   if(!window_func)
     window_func=calloc(4,sizeof(*window_func));
 
@@ -74,5 +76,6 @@ float *window_get(int type,int n){
 			   window_func[type][bits][i];
   }
 
+  pthread_mutex_unlock(&window_mutex);
   return window_func[type][bits];
 }

@@ -70,7 +70,7 @@ time_linkage *mute_read(time_linkage *in){
     float *x=in->data[i];
     if(mixpanel_active[i]){
       retval|= (1<<i);
-      
+
       if(mute_channel_muted(channel_state.active_prev,i)){
 	/* mute->active */
 	for(j=0;j<input_size;j++)
@@ -81,6 +81,7 @@ time_linkage *mute_read(time_linkage *in){
       if(!mute_channel_muted(channel_state.active_prev,i)){
 	/* active->mute; ramp to zero and temporarily keep this
            channel active for this frame while ramping */
+
 	retval|= (1<<i);
 	for(j=0;j<input_size;j++)
 	  x[j]*=channel_state.leftwindow[input_size-j]; 
@@ -91,5 +92,6 @@ time_linkage *mute_read(time_linkage *in){
 
   in->active=retval;
   channel_state.active_prev=preval;
+  channel_state.init_state=1;
   return(in);
 }

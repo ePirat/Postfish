@@ -26,6 +26,7 @@
 #include <sys/types.h>
 #include <fftw3.h>
 #include "reconstruct.h"
+#include "window.h"
 #include "feedback.h"
 
 extern int input_rate;
@@ -42,7 +43,11 @@ static float *freq;
 static int blocksize=0;
 static int lopad=0,hipad=0;
 static u_int32_t *widthlookup=0;
-static float *window=0;
+
+static float *leftwindow=0;
+static float *rightwindow=0;
+static int left=0;
+static int right=0;
 static float width=.5;
 static float **lap;
 static float **cache;
@@ -105,24 +110,35 @@ int pull_declip_feedback(int *clip,float *peak,int *total){
   return 1;
 }
 
-static void setup_window(int left,int right){
-  int max=(left<right?right:left);
+static void apply_window(float *out,float *data,int sq){
   int i,j;
+  int half=max(left,right);
 
-  for(i=0;i<max-left;i++)
-    window[i]=0;
+  for(i=0;i<half-left;i++)
+    out[i]=0;
 
-  for(j=0;j<left;i++,j++)
-    window[i]=sin( M_PIl*j/(left*2) );
+  if(sq){
+    for(j=0;i<half;i++,j++)
+      out[i]=data[i]*leftwindow[j]*leftwindow[j];
+    for(j=0;j<right;i++,j++)
+      out[i]=data[i]*rightwindow[right-j]*rightwindow[right-j];
+  }else{
+    for(j=0;i<half;i++,j++)
+      out[i]=data[i]*leftwindow[j];
+    for(j=0;j<right;i++,j++)
+      out[i]=data[i]*rightwindow[right-j];
+  }
 
-  for(j=right;j<right*2;i++,j++)
-    window[i]=sin( M_PIl*j/(right*2) );
+  for(;i<half*2;i++)
+    out[i]=0;
+}
 
-  for(;i<max*2;i++)
-    window[i]=0;
+static void setup_window(int lleft,int lright){
+  left=lleft;
+  right=lright;
 
-  for(i=0;i<max*2;i++) window[i]*=window[i];
-  for(i=0;i<max*2;i++) window[i]=sin(window[i]*M_PIl*.5);
+  leftwindow=window_get(2,left);
+  rightwindow=window_get(2,right);
 }
 
 static void setup_blocksize(int newblocksize){
@@ -169,8 +185,6 @@ int declip_load(void){
   for(i=0;i<input_ch;i++)
     lap[i]=malloc(input_size*sizeof(**lap));
   
-  window=malloc(input_size*2*sizeof(*window));
-
   {    
     /* alloc for largest possible blocksize */
     int blocksize=input_size*2;
@@ -268,7 +282,7 @@ static void declip(int blocksize,float trigger,
   if(count){
     for(i=0;i<blocksize/2;i++)flag[i]=0.;
     for(i=blocksize*3/2;i<blocksize*2;i++)flag[i]=0.;
-    for(i=0;i<blocksize;i++)work[i+blocksize/2]*=window[i];
+    apply_window(work+blocksize/2,work+blocksize/2,0);
     
     fftwf_execute(fftwf_weight);
     sliding_bark_average(freq,blocksize*2,width);
@@ -277,9 +291,9 @@ static void declip(int blocksize,float trigger,
     
     reconstruct(work,freq,flag,epsilon,iterbound);
 
-    for(i=0;i<blocksize;i++)work[i+blocksize/2]*=window[i];
+    apply_window(work+blocksize/2,work+blocksize/2,0);
   }else
-    for(i=0;i<blocksize;i++)work[i+blocksize/2]*=window[i]*window[i];
+    apply_window(work+blocksize/2,work+blocksize/2,1);
 
 }
 
@@ -390,7 +404,7 @@ time_linkage *declip_read(time_linkage *in){
     }
 
     /* the gap piece is also special in that it may need to deal with
-       a transition to/from mute and/or a transition to/from bypass */
+       a transition to/from bypass */
     
     for(i=0;i<input_ch;i++){
       int channel_active=declip_active[i];
@@ -402,157 +416,132 @@ time_linkage *declip_read(time_linkage *in){
 	  if(fabs(l[j])>peak[i])peak[i]=fabs(l[j]);
       }
 
-      if( mute_channel_muted(in->active,i) &&
-	  mute_channel_muted(cache_active,i)){
-	/* Cache: Muted=True , Bypass=X 
-	   Input: Muted=True , Bypass=X */
 
+      if(mute_channel_muted(cache_active,i)){
+	
 	/* we may need cache for a later transition, so keep it up to date */
 	float *temp=cache[i];
 	cache[i]=in->data[i];
 	in->data[i]=temp;
-
+	
+	/* zero the lap */
+	if(!mute_channel_muted(in->active,i))
+	  memset(lap[i],0,sizeof(*lap[i])*input_size);
+	
       }else{
-	if(mute_channel_muted(cache_active,i)){
-	  if(channel_active){
-	    /* Cache: Muted=True , Bypass=X 
-	       Input: Muted=False, Bypass=False */
+	
+	active|=(1<<i); /* audible output in out.data[i] */
+	
+	if(mute_channel_muted(in->active,i)){
+	  if(declip_prev_active[i]){
+	    /* Cache: Muted=False, Bypass=False
+	       Input: Muted=True,  Bypass=X     */
 	    
-	    /* rotate cache */
+	    /* transition to mute, so lap is finished output.  Rotate all */
 	    float *temp=cache[i];
 	    cache[i]=in->data[i];
 	    in->data[i]=temp;
-	    /* zero the lap */
-	    memset(lap[i],0,sizeof(*lap[i])*blocksize/2);
-
+	    
+	    temp=out.data[i];
+	    out.data[i]=lap[i];
+	    lap[i]=temp;
 	  }else{
-	  /* Cache: Muted=True , Bypass=X 
-	     Input: Muted=False, Bypass=True */
-
-	    /* silence->bypass; transition must happen in the current outblock */
-	    active|=(1<<i); /* audible output in out.data[i] */
-	    memset(out.data[i],0,sizeof(*out.data[i])*input_size);
-	    for(j=input_size-blocksize/2,k=0;j<input_size;j++,k++)
-	      out.data[i][j]=cache[i][j]*window[k]*window[k];
-
-	    float *temp=cache[i];
+	    /* Cache: Muted=False, Bypass=True
+	       Input: Muted=True,  Bypass=X     */
+	    
+	    /* rotate in/cache/out, transition out */
+	    float *temp=out.data[i];
+	    out.data[i]=cache[i];
 	    cache[i]=in->data[i];
 	    in->data[i]=temp;
+	    
 	  }
 	}else{
-	  active|=(1<<i); /* audible output in out.data[i] */
-
-	  if(mute_channel_muted(in->active,i)){
-	    if(declip_prev_active[i]){
-	      /* Cache: Muted=False, Bypass=False
-		 Input: Muted=True,  Bypass=X     */
-
-	      /* transition to mute, so lap is finished output.  Rotate all */
-	      float *temp=cache[i];
-	      cache[i]=in->data[i];
-	      in->data[i]=temp;
-
-	      temp=out.data[i];
-	      out.data[i]=lap[i];
-	      lap[i]=temp;
-	    }else{
+	  if(!declip_prev_active[i]){
+	    if(!channel_active){
 	      /* Cache: Muted=False, Bypass=True
-		 Input: Muted=True,  Bypass=X     */
+		 Input: Muted=False, Bypass=True     */
 	      
-	      /* rotate in/cache/out, transition out */
+	      /* all bypass! rotate in/cache/out */
 	      float *temp=out.data[i];
 	      out.data[i]=cache[i];
 	      cache[i]=in->data[i];
 	      in->data[i]=temp;
-	      for(j=input_size-blocksize/2,k=0;j<input_size;j++,k++){
-		float w=(1.-window[k]);
-		out.data[i][j]*=w*w;
-	      }
+	    }else{
+	      /* Cache: Muted=False, Bypass=True
+		 Input: Muted=False, Bypass=False     */
+	      
+	      /* transition the lap; right window to left of in */
+	      for(j=0;j<right;j++)
+		lap[i][j]=in->data[i][j]*
+		  rightwindow[right-j]*rightwindow[right-j];
+	      
+	      /* all rotate in/cache/out */
+	      float *temp=out.data[i];
+	      out.data[i]=cache[i];
+	      cache[i]=in->data[i];
+	      in->data[i]=temp;
 	    }
 	  }else{
-	    if(!declip_prev_active[i]){
-	      if(!channel_active){
-		/* Cache: Muted=False, Bypass=True
-		   Input: Muted=False, Bypass=True     */
-
-		/* all bypass! rotate in/cache/out */
-		float *temp=out.data[i];
-		out.data[i]=cache[i];
-		cache[i]=in->data[i];
-		in->data[i]=temp;
-	      }else{
-		/* Cache: Muted=False, Bypass=True
-		   Input: Muted=False, Bypass=False     */
-		
-		/* transition the lap */
-		for(j=0,k=blocksize/2;j<blocksize/2;j++,k++)
-		  lap[i][j]=in->data[i][j]*window[k]*window[k];
+	    if(!channel_active){
+	      /* Cache: Muted=False, Bypass=False
+		 Input: Muted=False, Bypass=True     */
 	      
-		/* all rotate in/cache/out */
-		float *temp=out.data[i];
-		out.data[i]=cache[i];
-		cache[i]=in->data[i];
-		in->data[i]=temp;
-	      }
+	      /* finish off lap, then rotate all */
+	      /* left window to end of cache */
+	      for(j=input_size-left,k=0;j<input_size;j++,k++)
+		lap[i][j]+=cache[i][j]*leftwindow[k]*leftwindow[k];
+	      float *temp=cache[i];
+	      cache[i]=in->data[i];
+	      in->data[i]=temp;
+	      
+	      temp=out.data[i];
+	      out.data[i]=lap[i];
+	      lap[i]=temp;
 	    }else{
-	      if(!channel_active){
-		/* Cache: Muted=False, Bypass=False
-		   Input: Muted=False, Bypass=True     */
-		
-		/* finish off lap, then rotate all */
-		for(j=input_size-blocksize/2,k=0;j<input_size;j++,k++)
-		  lap[i][j]+=cache[i][j]*window[k]*window[k];
-		float *temp=cache[i];
-		cache[i]=in->data[i];
-		in->data[i]=temp;
-		
-		temp=out.data[i];
-		out.data[i]=lap[i];
-		lap[i]=temp;
-	      }else{
-		/* Cache: Muted=False, Bypass=False
-		   Input: Muted=False, Bypass=False */
-
-		/* nominal case; the only one involving declipping the gap */
-		memset(work,0,sizeof(*work)*blocksize/2);
-		memcpy(work+blocksize/2,cache[i]+input_size-blocksize/2,sizeof(*work)*blocksize/2);
-		memcpy(work+blocksize,in->data[i],sizeof(*work)*blocksize/2);
-		memset(work+blocksize+blocksize/2,0,sizeof(*work)*blocksize/2);
-
-		declip(blocksize,local_trigger[i],local_convergence,local_iterations,
-		       total+i,count+i);
-
-		/* finish lap from last frame */
-		{
-		  float *llap=lap[i]+input_size-blocksize/2;
-		  float *lwork=work+blocksize/2;
-		  for(j=0;j<blocksize/2;j++)
-		    llap[j]+=lwork[j];
-		}
-		/* rotate buffers */
-		float *temp=out.data[i];
-		out.data[i]=lap[i];
-		lap[i]=temp;
-
-		temp=in->data[i];
-		in->data[i]=cache[i];
-		cache[i]=temp;
-		
-		/* begin lap for this frame */
-		memcpy(lap[i],work+blocksize,sizeof(*work)*blocksize/2);
+	      /* Cache: Muted=False, Bypass=False
+		 Input: Muted=False, Bypass=False */
+	      
+	      /* nominal case; the only one involving declipping the gap */
+	      memset(work,0,sizeof(*work)*blocksize/2);
+	      memcpy(work+blocksize/2,cache[i]+input_size-blocksize/2,sizeof(*work)*blocksize/2);
+	      memcpy(work+blocksize,in->data[i],sizeof(*work)*blocksize/2);
+	      memset(work+blocksize+blocksize/2,0,sizeof(*work)*blocksize/2);
+	      
+	      declip(blocksize,local_trigger[i],local_convergence,local_iterations,
+		     total+i,count+i);
+	      
+	      /* finish lap from last frame */
+	      {
+		float *llap=lap[i]+input_size-blocksize/2;
+		float *lwork=work+blocksize/2;
+		for(j=0;j<blocksize/2;j++)
+		  llap[j]+=lwork[j];
 	      }
+	      /* rotate buffers */
+	      float *temp=out.data[i];
+	      out.data[i]=lap[i];
+	      lap[i]=temp;
+	      
+	      temp=in->data[i];
+	      in->data[i]=cache[i];
+	      cache[i]=temp;
+	      
+	      /* begin lap for this frame */
+	      memcpy(lap[i],work+blocksize,sizeof(*work)*blocksize/2);
 	    }
 	  }
 	}
       }
+
       declip_prev_active[i]=channel_active;
     }
-
+    
     /* also rotate metadata */
     out.samples=cache_samples;
     cache_samples=in->samples;
     cache_active=in->active;
-
+    
     /* finish transition to new blocksize (if a change is in progress) */
     if(next_blocksize != orig_blocksize){
       if(next_blocksize <= orig_blocksize) setup_blocksize(next_blocksize);
