@@ -433,7 +433,7 @@ time_linkage *freq_read(time_linkage *in, freq_state *f,
       f->cache[i]=temp;
     }
       
-    f->cache_samples=in->samples;
+    f->cache_samples+=in->samples;
     f->fillstate=2;
     f->out.samples=0;
     if(in->samples==in->size)goto tidy_up;
@@ -468,8 +468,10 @@ time_linkage *freq_read(time_linkage *in, freq_state *f,
       f->cache[i]=in->data[i];
       in->data[i]=temp;
     }
-    f->out.samples=f->cache_samples;
-    f->cache_samples=in->samples;
+
+    f->cache_samples+=in->samples;
+    f->out.samples=(f->cache_samples>input_size?input_size:f->cache_samples);
+    f->cache_samples-=f->out.samples;
     if(f->out.samples<f->out.size)f->fillstate=3;
     break;
   case 3: /* we've pushed out EOF already */
