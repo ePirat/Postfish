@@ -435,8 +435,20 @@ void mainpanel_create(postfish_mainpanel *panel,char **chlabels){
   GtkWidget *topplace,*topal;
 
   char *text_bar[7]={"[bksp]","[<]","[,]","[space]","[.]","[>]","[end]"};
-
   GdkWindow *root=gdk_get_default_root_window();
+
+  char versionnum[20];
+  char versiondate[20];
+  char versiontime[20];
+  char versionmarkup[240];
+  sscanf(VERSION,"$Id: mainpanel.c,v 1.19 2003/10/18 07:29:47 xiphmont Exp $",
+	 versionnum,versiondate,versiontime);
+  snprintf(versionmarkup,240,"<span size=\"large\" weight=\"bold\" "
+	   "style=\"italic\" foreground=\"dark blue\">"
+	   "Postfish</span>  <span size=\"small\" foreground=\"#606060\">"
+	   "version %s %s %s</span> ",
+	   versionnum,versiondate,versiontime);
+
   panel->toplevel=gtk_window_new (GTK_WINDOW_TOPLEVEL);
   panel->topframe=gtk_frame_new (NULL);
   panel->toplabel=gtk_label_new (NULL);
@@ -510,10 +522,7 @@ void mainpanel_create(postfish_mainpanel *panel,char **chlabels){
   gtk_container_set_border_width (GTK_CONTAINER (panel->box1), 3);
   gtk_frame_set_shadow_type(GTK_FRAME(panel->topframe),GTK_SHADOW_ETCHED_IN);
   gtk_frame_set_label_widget(GTK_FRAME(panel->topframe),panel->toplabel);
-  gtk_label_set_markup(GTK_LABEL(panel->toplabel),
-		       "<span size=\"large\" weight=\"bold\" "
-		       "style=\"italic\" foreground=\"dark blue\">"
-		       "Postfish</span> "VERSION);
+  gtk_label_set_markup(GTK_LABEL(panel->toplabel),versionmarkup);
 
   gtk_container_add (GTK_CONTAINER(panel->topframe), panel->mainbox);
   gtk_box_pack_end(GTK_BOX(panel->mainbox),panel->box1,0,0,0);

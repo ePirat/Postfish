@@ -212,7 +212,7 @@ static void draw(GtkWidget *widget,double *lowvals, double *highvals, int n){
       rgb.green=g;
       rgb.blue=b;
       gdk_gc_set_rgb_fg_color(m->boxcolor,&rgb);
-      gdk_draw_rectangle(m->backing,m->boxcolor,1,x+1,1,next-x,widget->allocation.height-2);
+      gdk_draw_rectangle(m->backing,m->boxcolor,1,x+1,1,next-x,widget->allocation.height-3);
 
       x=next;
     }
@@ -225,8 +225,8 @@ static void draw(GtkWidget *widget,double *lowvals, double *highvals, int n){
       
       gdk_draw_line (m->backing,
 		     widget->style->fg_gc[1],
-		     0, widget->allocation.height-1, 
-		     widget->allocation.width-1, widget->allocation.height-1);
+		     0, widget->allocation.height-2, 
+		     widget->allocation.width-1, widget->allocation.height-2);
     }else{
       gdk_draw_line (m->backing,
 		     widget->style->white_gc,
@@ -234,8 +234,8 @@ static void draw(GtkWidget *widget,double *lowvals, double *highvals, int n){
       
       gdk_draw_line (m->backing,
 		     widget->style->white_gc,
-		     0, widget->allocation.height-1, 
-		     widget->allocation.width-1, widget->allocation.height-1);
+		     0, widget->allocation.height-2, 
+		     widget->allocation.width-1, widget->allocation.height-2);
     }
     
     /* peak follower */
@@ -256,16 +256,25 @@ static void draw(GtkWidget *widget,double *lowvals, double *highvals, int n){
       for(j=0;j<n;j++)
 	if(x<pixhi[j])x=pixhi[j];
       
-	 
-      gdk_draw_polygon(m->backing,widget->style->fg_gc[0],1,
-		       (GdkPoint[]){{x,5},{x+5,0},{x-4,0}},3);
-      gdk_draw_polygon(m->backing,widget->style->fg_gc[0],1,
-		       (GdkPoint[]){{x,widget->allocation.height-6},
-			 {x+5,widget->allocation.height},
-			   {x-5,widget->allocation.height}},3);
+      {
+	int y=widget->allocation.height-1;
+
+	gdk_draw_line(m->backing,widget->style->fg_gc[0],
+		      x-3,0,x+3,0);
+	gdk_draw_line(m->backing,widget->style->fg_gc[0],
+		      x-2,1,x+2,1);
+	gdk_draw_line(m->backing,widget->style->fg_gc[0],
+		      x-1,2,x+1,2);
+	gdk_draw_line(m->backing,widget->style->fg_gc[0],
+		      x-3,y-1,x+3,y-1);
+	gdk_draw_line(m->backing,widget->style->fg_gc[0],
+		      x-2,y-2,x+2,y-2);
+	gdk_draw_line(m->backing,widget->style->fg_gc[0],
+		      x-1,y-3,x+1,y-3);
       
-      
-      gdk_draw_line(m->backing,widget->style->fg_gc[0],x,0,x,widget->allocation.height-1);
+	gdk_draw_line(m->backing,widget->style->fg_gc[0],
+		      x,0,x,y-1);
+      }
     }
   }
 
