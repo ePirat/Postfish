@@ -302,6 +302,39 @@ void compute_iir_freefall2(float *x, int n, iir_state *is,
   
 }
 
+void compute_iir_decayonly2(float *x, int n, iir_state *is, 
+			    iir_filter *decay){
+  double d_c0=decay->c[0];
+  double d_c1=decay->c[1];
+  double d_g=decay->g;
+  
+  double x0=is->x[0];
+  double x1=is->x[1];
+  double y0=is->y[0];
+  double y1=is->y[1];
+  int i=0;
+
+  while(i<n){
+    double yd;
+
+    if(y1<y0)y1=y0; // slope fixup
+
+    yd = (x[i]+x0*2.+x1)/d_g + y0*d_c0+y1*d_c1;
+    
+    if(x[i]>yd)yd=x[i];
+    
+    x1=x0;x0=x[i];
+    y1=y0;x[i]=y0=yd;
+    i++;
+  }
+  
+  is->x[0]=x0;
+  is->x[1]=x1;
+  is->y[0]=y0;
+  is->y[1]=y1;
+  
+}
+
 void compute_iir_freefall3(float *x, int n, iir_state *is, 
 			  iir_filter *decay){
   double d_c0=decay->c[0];

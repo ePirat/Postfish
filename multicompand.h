@@ -82,7 +82,7 @@ typedef struct {
 } multicompand_settings;
 
 extern void multicompand_reset();
-extern int multicompand_load(void);
+extern int multicompand_load(int outch);
 
 extern time_linkage *multicompand_read_channel(time_linkage *in);
 extern time_linkage *multicompand_read_master(time_linkage *in);

@@ -66,7 +66,7 @@ static bar *eqpanel_create_helper(postfish_mainpanel *mp,
 			   eq_settings *es){
 
   int i;
-  char *labels[15]={"110","100","90","80","70","60","50","40",
+  char *labels[16]={"","110","100","90","80","70","60","50","40",
 		    "30","20","10","0","+10","+20","+30"};
   float levels[16]={-120,-110,-100,-90,-80,-70,-60,-50,-40,
 		     -30,-20,-10,0,10,20,30};
@@ -81,7 +81,7 @@ static bar *eqpanel_create_helper(postfish_mainpanel *mp,
     gtk_widget_set_name(label,"smallmarker");
 
     bars[i].readout=readout_new("+00dB");
-    bars[i].slider=multibar_new(15,labels,levels,1,
+    bars[i].slider=multibar_new(16,labels,levels,1,
 				LO_DECAY|HI_DECAY|LO_ATTACK|HI_ATTACK);
     bars[i].number=i;
     bars[i].s=es;
@@ -125,7 +125,7 @@ void eqpanel_create_channel(postfish_mainpanel *mp,
 				 GtkWidget **windowbutton,
 				 GtkWidget **activebutton){
   int i;
-  c_bars=malloc(input_ch*sizeof(*m_bars));
+  c_bars=malloc(input_ch*sizeof(*c_bars));
 
   /* a panel for each channel */
   for(i=0;i<input_ch;i++){
@@ -154,15 +154,15 @@ void eqpanel_feedback(int displayit){
     rmsfeed=malloc(sizeof(*rmsfeed)*eq_freqs);
 
     for(i=0;i<eq_freqs;i++){
-      peakfeed[i]=malloc(sizeof(**peakfeed)*input_ch);
-      rmsfeed[i]=malloc(sizeof(**rmsfeed)*input_ch);
+      peakfeed[i]=malloc(sizeof(**peakfeed)*max(input_ch,OUTPUT_CHANNELS));
+      rmsfeed[i]=malloc(sizeof(**rmsfeed)*max(input_ch,OUTPUT_CHANNELS));
     }
   }
   
   if(pull_eq_feedback_master(peakfeed,rmsfeed)==1)
     for(i=0;i<eq_freqs;i++)
       multibar_set(MULTIBAR(m_bars[i].slider),rmsfeed[i],peakfeed[i],
-		   input_ch,(displayit && eq_master_set.panel_visible));
+		   OUTPUT_CHANNELS,(displayit && eq_master_set.panel_visible));
   
 
   if(pull_eq_feedback_channel(peakfeed,rmsfeed)==1){

@@ -71,7 +71,7 @@ typedef struct {
 
 extern int pull_freq_feedback(freq_state *ff,float **peak,float **rms);
 extern int freq_class_load(freq_class_setup *f,const float *frequencies, int bands);
-extern int freq_load(freq_state *f,freq_class_setup *fc);
+extern int freq_load(freq_state *f,freq_class_setup *fc,int ch);
 
 extern int freq_reset(freq_state *f);
 extern time_linkage *freq_read(time_linkage *in, 

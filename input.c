@@ -327,23 +327,23 @@ int input_load(int n,char *list[]){
        4000:  256 */
 
   if(rate<6000){
-    input_size=out.size=256;
+    input_size=256;
   }else if(rate<15000){
-    input_size=out.size=512;
+    input_size=512;
   }else if(rate<25000){
-    input_size=out.size=1024;
+    input_size=1024;
   }else if(rate<50000){
-    input_size=out.size=2048;
+    input_size=2048;
   }else if(rate<100000){
-    input_size=out.size=4096;
+    input_size=4096;
   }else
-    input_size=out.size=8192;
+    input_size=8192;
 
   input_ch=out.channels=ch;
-  input_rate=out.rate=rate;
+  input_rate=rate;
   out.data=malloc(sizeof(*out.data)*ch);
   for(i=0;i<ch;i++)
-    out.data[i]=malloc(sizeof(*out.data[0])*out.size);
+    out.data[i]=malloc(sizeof(*out.data[0])*input_size);
   
   return 0;
 }
@@ -423,7 +423,7 @@ int pull_input_feedback(float *peak,float *rms,off_t *cursor){
 
 time_linkage *input_read(void){
   int read_b=0,i,j,k;
-  int toread_b=out.size*out.channels*inbytes;
+  int toread_b=input_size*out.channels*inbytes;
   unsigned char *readbuf;
   float *rms=alloca(sizeof(*rms)*(out.channels+2));
   float *peak=alloca(sizeof(*peak)*(out.channels+2));
@@ -551,7 +551,7 @@ time_linkage *input_read(void){
 
  tidy_up:
   {
-    int tozero=out.size-out.samples;
+    int tozero=input_size-out.samples;
     if(tozero)
       for(j=0;j<out.channels;j++)
 	memset(out.data[j]+out.samples,0,sizeof(**out.data)*tozero);

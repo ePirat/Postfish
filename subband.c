@@ -28,10 +28,9 @@
 
 extern int input_size;
 extern int input_rate;
-extern int input_ch;
 
 /* called only by initial setup */
-int subband_load(subband_state *f,int bands,int qblocksize){
+int subband_load(subband_state *f,int bands,int qblocksize,int ch){
   int i,j;
   memset(f,0,sizeof(*f));
 
@@ -40,44 +39,42 @@ int subband_load(subband_state *f,int bands,int qblocksize){
   f->fillstate=0;
   f->lap_samples=0;
   f->lap=malloc(bands*sizeof(*f->lap));
-  f->cache0=malloc(input_ch*sizeof(*f->cache0));
-  f->cache1=malloc(input_ch*sizeof(*f->cache1));
+  f->cache0=malloc(ch*sizeof(*f->cache0));
+  f->cache1=malloc(ch*sizeof(*f->cache1));
 
-  f->lap_activeP=malloc(input_ch*sizeof(*f->lap_activeP));
-  f->lap_active1=malloc(input_ch*sizeof(*f->lap_active1));
-  f->lap_active0=malloc(input_ch*sizeof(*f->lap_active0));
-  f->lap_activeC=malloc(input_ch*sizeof(*f->lap_activeC));
+  f->lap_activeP=malloc(ch*sizeof(*f->lap_activeP));
+  f->lap_active1=malloc(ch*sizeof(*f->lap_active1));
+  f->lap_active0=malloc(ch*sizeof(*f->lap_active0));
+  f->lap_activeC=malloc(ch*sizeof(*f->lap_activeC));
 
-  f->visible1=malloc(input_ch*sizeof(*f->visible1));
-  f->visible0=malloc(input_ch*sizeof(*f->visible0));
-  f->visibleC=malloc(input_ch*sizeof(*f->visibleC));
+  f->visible1=malloc(ch*sizeof(*f->visible1));
+  f->visible0=malloc(ch*sizeof(*f->visible0));
+  f->visibleC=malloc(ch*sizeof(*f->visibleC));
   
-  f->effect_activeP=malloc(input_ch*sizeof(*f->effect_activeP));
-  f->effect_active1=malloc(input_ch*sizeof(*f->effect_active1));
-  f->effect_active0=malloc(input_ch*sizeof(*f->effect_active0));
-  f->effect_activeC=malloc(input_ch*sizeof(*f->effect_activeC));
+  f->effect_activeP=malloc(ch*sizeof(*f->effect_activeP));
+  f->effect_active1=malloc(ch*sizeof(*f->effect_active1));
+  f->effect_active0=malloc(ch*sizeof(*f->effect_active0));
+  f->effect_activeC=malloc(ch*sizeof(*f->effect_activeC));
 
-  f->wP=calloc(input_ch,sizeof(*f->wP));
-  f->w1=calloc(input_ch,sizeof(*f->w1));
-  f->w0=calloc(input_ch,sizeof(*f->w0));
-  f->wC=calloc(input_ch,sizeof(*f->wC));
+  f->wP=calloc(ch,sizeof(*f->wP));
+  f->w1=calloc(ch,sizeof(*f->w1));
+  f->w0=calloc(ch,sizeof(*f->w0));
+  f->wC=calloc(ch,sizeof(*f->wC));
 
-  for(i=0;i<input_ch;i++)
+  for(i=0;i<ch;i++)
     f->cache0[i]=malloc(input_size*sizeof(**f->cache0));
-  for(i=0;i<input_ch;i++)
+  for(i=0;i<ch;i++)
     f->cache1[i]=malloc(input_size*sizeof(**f->cache1));
 
   for(i=0;i<bands;i++){
-    f->lap[i]=malloc(input_ch*sizeof(**f->lap));
-    for(j=0;j<input_ch;j++)
+    f->lap[i]=malloc(ch*sizeof(**f->lap));
+    for(j=0;j<ch;j++)
       f->lap[i][j]=malloc(input_size*3*sizeof(***f->lap));
   }
 
-  f->out.size=input_size;
-  f->out.channels=input_ch;
-  f->out.rate=input_rate;
-  f->out.data=malloc(input_ch*sizeof(*f->out.data));
-  for(i=0;i<input_ch;i++)
+  f->out.channels=ch;
+  f->out.data=malloc(ch*sizeof(*f->out.data));
+  for(i=0;i<ch;i++)
     f->out.data[i]=malloc(input_size*sizeof(**f->out.data));
 
   /* fill in time window */
@@ -116,82 +113,97 @@ int subband_load_freqs(subband_state *f,subband_window *w,
 
   w->freq_bands=bands;
 
-  /* supersample the spectrum */
+  /* unlike old postfish, we offer all frequencies via smoothly
+     supersampling the spectrum */
+  /* I'm too lazy to figure out the integral symbolically, use this
+     fancy CPU thingy for something */
+  
   w->ho_window=malloc(bands*sizeof(*w->ho_window));
-  {
-    float working[f->qblocksize*4+2];
-    
+  for(i=0;i<bands;i++)
+    w->ho_window[i]=calloc((f->qblocksize*2+1),sizeof(**w->ho_window));
+
+  /* first, build the first-pass desired, supersampled response */
+  for(j=0;j<(((f->qblocksize*2+1)/10)<<5);j++){
+    float localf= .5*j*input_rate/(f->qblocksize<<6);
+    int localbin= j>>5;
+
     for(i=0;i<bands;i++){
       float lastf=(i>0?freq_list[i-1]:0);
       float thisf=freq_list[i];
       float nextf=freq_list[i+1];
-      memset(working,0,sizeof(working));
-      
-      for(j=0;j<((f->qblocksize*2+1)<<5);j++){
-        float localf= .5*j*input_rate/(f->qblocksize<<6);
-        int localbin= j>>5;
-        float localwin;
 
-        if(localf>=lastf && localf<thisf){
-          if(i==0)
-            localwin=1.;
-          else
-            localwin= sin((localf-lastf)/(thisf-lastf)*M_PIl*.5);
-          localwin*=localwin;
-	  working[localbin]+=localwin*(1./32);
+      if(localf>=lastf && localf<nextf){
+	float localwin=1.;
+	if(localf<thisf){
+	  if(i!=0)localwin= sin((localf-lastf)/(thisf-lastf)*M_PIl*.5);
+	}else{
+	  if(i+1!=bands)localwin= sin((nextf-localf)/(nextf-thisf)*M_PIl*.5);
+	}
 
-        }else if(localf>=thisf && localf<nextf){
-          if(i+1==bands)
-            localwin=1.;
-          else
-            localwin= sin((nextf-localf)/(nextf-thisf)*M_PIl*.5);
-          
-          localwin*=localwin;
-          working[localbin]+=localwin*(1./32);
-          
-        }
+	localwin*=localwin;
+	w->ho_window[i][localbin]+=localwin*(1./32);
       }
-
-      /* window this desired response in the time domain so that our
-         convolution is properly padded against being circular */
-      memset(f->fftwf_backward_in,0,sizeof(*f->fftwf_backward_in)*
-	     (f->qblocksize*4+2));
-      for(j=0;j<f->qblocksize*2+2;j++)
-	f->fftwf_backward_in[j*2]=working[j];
-
-      fftwf_execute(f->fftwf_backward);
-
-      /* window response in time */
-      memcpy(f->fftwf_forward_in,f->fftwf_backward_out,
-	     f->qblocksize*4*sizeof(*f->fftwf_forward_in));
-      for(j=0;j<f->qblocksize;j++){
-	float val=cos(j*M_PI/(f->qblocksize*2));
-	val=sin(val*val*M_PIl*.5);
-	f->fftwf_forward_in[j]*= sin(val*val*M_PIl*.5);
-      }
-      
-      for(;j<f->qblocksize*3;j++)
-	f->fftwf_forward_in[j]=0.;
-      
-      for(;j<f->qblocksize*4;j++){
-	float val=sin((j-f->qblocksize*3)*M_PI/(f->qblocksize*2));
-	val=sin(val*val*M_PIl*.5);
-	f->fftwf_forward_in[j]*=sin(val*val*M_PIl*.5);
-      }
-      
-      /* back to frequency; this is all-real data still */
-      fftwf_execute(f->fftwf_forward);
-      for(j=0;j<f->qblocksize*4+2;j++)
-	f->fftwf_forward_out[j]/=f->qblocksize*4;
-      
-      /* now take what we learned and distill it a bit */
-      w->ho_window[i]=calloc((f->qblocksize*2+1),sizeof(**w->ho_window));
-      for(j=0;j<f->qblocksize*2+1;j++)
-        w->ho_window[i][j]=f->fftwf_forward_out[j*2];
-      
-      lastf=thisf;
-      
     }
+  }
+  j>>=5;
+  for(;j<f->qblocksize*2+1;j++){
+    float localf= .5*j*input_rate/(f->qblocksize<<1);
+
+    for(i=0;i<bands;i++){
+      float lastf=(i>0?freq_list[i-1]:0);
+      float thisf=freq_list[i];
+      float nextf=freq_list[i+1];
+
+      if(localf>=lastf && localf<nextf){
+	float localwin=1.;
+	if(localf<thisf){
+	  if(i!=0)localwin= sin((localf-lastf)/(thisf-lastf)*M_PIl*.5);
+	}else{
+	  if(i+1!=bands)localwin= sin((nextf-localf)/(nextf-thisf)*M_PIl*.5);
+	}
+
+	w->ho_window[i][j]+=localwin*localwin;
+      }
+    }
+  }
+
+  for(i=0;i<bands;i++){
+    /* window each desired response in the time domain so that our
+       convolution is properly padded against being circular */
+    memset(f->fftwf_backward_in,0,sizeof(*f->fftwf_backward_in)*
+	   (f->qblocksize*4+2));
+    for(j=0;j<f->qblocksize*2+1;j++)
+      f->fftwf_backward_in[j*2]=w->ho_window[i][j];
+    
+    fftwf_execute(f->fftwf_backward);
+    
+    /* window response in time */
+    memcpy(f->fftwf_forward_in,f->fftwf_backward_out,
+	   f->qblocksize*4*sizeof(*f->fftwf_forward_in));
+    for(j=0;j<f->qblocksize;j++){
+      float val=cos(j*M_PI/(f->qblocksize*2));
+      val=sin(val*val*M_PIl*.5);
+      f->fftwf_forward_in[j]*= sin(val*val*M_PIl*.5);
+    }
+    
+    for(;j<f->qblocksize*3;j++)
+      f->fftwf_forward_in[j]=0.;
+    
+    for(;j<f->qblocksize*4;j++){
+      float val=sin((j-f->qblocksize*3)*M_PI/(f->qblocksize*2));
+      val=sin(val*val*M_PIl*.5);
+      f->fftwf_forward_in[j]*=sin(val*val*M_PIl*.5);
+    }
+    
+    /* back to frequency; this is all-real data still */
+    fftwf_execute(f->fftwf_forward);
+    for(j=0;j<f->qblocksize*4+2;j++)
+      f->fftwf_forward_out[j]/=f->qblocksize*4;
+    
+    /* now take what we learned and distill it a bit */
+    for(j=0;j<f->qblocksize*2+1;j++)
+      w->ho_window[i][j]=f->fftwf_forward_out[j*2];
+    
   }
   
   return(0);
@@ -215,13 +227,13 @@ static void subband_work(subband_state *f,
 			 int      *active){
 
 
-  int i,j,k,l,off;
+  int i,j,k,l,off,ch=f->out.channels;
   float *workoff=f->fftwf_forward_in+f->qblocksize;
   u_int32_t mutemask=in->active;
 
   f->mutemaskC=mutemask;
 
-  for(i=0;i<input_ch;i++){
+  for(i=0;i<ch;i++){
 
     int content_p=  f->lap_activeC[i]= (visible[i]||active[i]) && !mute_channel_muted(mutemask,i);
     int content_p0= f->lap_active0[i];
@@ -320,10 +332,10 @@ static void subband_work(subband_state *f,
 }
 
 static void unsubband_work(subband_state *f,time_linkage *in, time_linkage *out){
-  int i,j,k;
+  int i,j,k,ch=f->out.channels;
 
   f->lap_samples+=in->samples;
-  for(i=0;i<input_ch;i++){
+  for(i=0;i<ch;i++){
     
     int content_pP= f->lap_activeP[i];
     int content_p1= f->lap_active1[i];
@@ -466,20 +478,20 @@ static void unsubband_work(subband_state *f,time_linkage *in, time_linkage *out)
 
   /* rotate full-frame data for next frame */
 
-  memcpy(f->effect_activeP,f->effect_active1,input_ch*sizeof(*f->effect_active1));
-  memcpy(f->effect_active1,f->effect_active0,input_ch*sizeof(*f->effect_active0));
-  memcpy(f->effect_active0,f->effect_activeC,input_ch*sizeof(*f->effect_activeC));
+  memcpy(f->effect_activeP,f->effect_active1,ch*sizeof(*f->effect_active1));
+  memcpy(f->effect_active1,f->effect_active0,ch*sizeof(*f->effect_active0));
+  memcpy(f->effect_active0,f->effect_activeC,ch*sizeof(*f->effect_activeC));
 
-  memcpy(f->visible1,f->visible0,input_ch*sizeof(*f->visible0));
-  memcpy(f->visible0,f->visibleC,input_ch*sizeof(*f->visibleC));
+  memcpy(f->visible1,f->visible0,ch*sizeof(*f->visible0));
+  memcpy(f->visible0,f->visibleC,ch*sizeof(*f->visibleC));
 
   f->mutemaskP=f->mutemask1;
   f->mutemask1=f->mutemask0;
   f->mutemask0=f->mutemaskC;
 
-  memcpy(f->wP,f->w1,input_ch*sizeof(*f->w1));
-  memcpy(f->w1,f->w0,input_ch*sizeof(*f->w0));
-  memcpy(f->w0,f->wC,input_ch*sizeof(*f->wC));
+  memcpy(f->wP,f->w1,ch*sizeof(*f->w1));
+  memcpy(f->w1,f->w0,ch*sizeof(*f->w0));
+  memcpy(f->w0,f->wC,ch*sizeof(*f->wC));
 
   f->lap_samples-=(out?f->out.samples:0);
 
@@ -489,7 +501,7 @@ static void unsubband_work(subband_state *f,time_linkage *in, time_linkage *out)
 time_linkage *subband_read(time_linkage *in, subband_state *f,
 			   subband_window **w,int *visible, int *active,
 			   void (*workfunc)(void *),void *arg){
-  int i,j;
+  int i,j,ch=f->out.channels;
   
   switch(f->fillstate){
   case 0: /* begin priming the lapping and cache */
@@ -499,7 +511,7 @@ time_linkage *subband_read(time_linkage *in, subband_state *f,
     }
     
     /* initially zero the lapping and cache */
-    for(i=0;i<input_ch;i++){    
+    for(i=0;i<ch;i++){    
       for(j=0;j<f->bands;j++)    
 	memset(f->lap[j][i],0,sizeof(***f->lap)*input_size*2);
       memset(f->cache1[i],0,sizeof(**f->cache1)*input_size);
@@ -511,12 +523,12 @@ time_linkage *subband_read(time_linkage *in, subband_state *f,
     /* set the vars to 'active' so that if the first frame is an
        active frame, we don't transition window into it (the window
        would have been in the previous frame */
-    for(i=0;i<input_ch;i++){
+    for(i=0;i<ch;i++){
       int set=(visible[i]||active[i]) && !mute_channel_muted(in->active,i);
-      memset(f->lap_activeP,set,sizeof(*f->lap_activeP)*input_ch);
-      memset(f->lap_active1,set,sizeof(*f->lap_active1)*input_ch);
-      memset(f->lap_active0,set,sizeof(*f->lap_active0)*input_ch);
-      //memset(f->lap_activeC,1,sizeof(*f->lap_activeC)*input_ch);
+      memset(f->lap_activeP,set,sizeof(*f->lap_activeP)*ch);
+      memset(f->lap_active1,set,sizeof(*f->lap_active1)*ch);
+      memset(f->lap_active0,set,sizeof(*f->lap_active0)*ch);
+      //memset(f->lap_activeC,1,sizeof(*f->lap_activeC)*ch);
 
       f->wP[i]=w[i];
       f->w1[i]=w[i];
@@ -524,13 +536,13 @@ time_linkage *subband_read(time_linkage *in, subband_state *f,
 
     }
     
-    memcpy(f->effect_activeP,active,sizeof(*f->effect_activeP)*input_ch);
-    memcpy(f->effect_active1,active,sizeof(*f->effect_active1)*input_ch);
-    memcpy(f->effect_active0,active,sizeof(*f->effect_active0)*input_ch);
-    //memset(f->effect_activeC,1,sizeof(*f->effect_activeC)*input_ch);
+    memcpy(f->effect_activeP,active,sizeof(*f->effect_activeP)*ch);
+    memcpy(f->effect_active1,active,sizeof(*f->effect_active1)*ch);
+    memcpy(f->effect_active0,active,sizeof(*f->effect_active0)*ch);
+    //memset(f->effect_activeC,1,sizeof(*f->effect_activeC)*ch);
 
-    memset(f->visible1,0,sizeof(*f->visible1)*input_ch);
-    memset(f->visible0,0,sizeof(*f->visible0)*input_ch);
+    memset(f->visible1,0,sizeof(*f->visible1)*ch);
+    memset(f->visible0,0,sizeof(*f->visible0)*ch);
     
     f->mutemaskP=in->active;
     f->mutemask1=in->active;
@@ -540,17 +552,17 @@ time_linkage *subband_read(time_linkage *in, subband_state *f,
     memset(f->fftwf_forward_in,0,f->qblocksize*4*sizeof(*f->fftwf_forward_in));
 
     /* extrapolation mechanism; avoid harsh transients at edges */
-    for(i=0;i<input_ch;i++){
+    for(i=0;i<ch;i++){
       
       if(f->lap_active0[i]){
 	preextrapolate_helper(in->data[i],input_size,
 			    f->cache0[i],input_size);
       
-	if(in->samples<in->size)
+	if(in->samples<input_size)
 	  postextrapolate_helper(f->cache0[i],input_size,
 				 in->data[i],in->samples,
 				 in->data[i]+in->samples,
-				 in->size-in->samples);
+				 input_size-in->samples);
       }
     }
       
@@ -560,10 +572,10 @@ time_linkage *subband_read(time_linkage *in, subband_state *f,
 
     f->fillstate=1;
     f->out.samples=0;
-    if(in->samples==in->size)goto tidy_up;
+    if(in->samples==input_size)goto tidy_up;
     
-    for(i=0;i<input_ch;i++)
-      memset(in->data[i],0,sizeof(**in->data)*in->size);
+    for(i=0;i<ch;i++)
+      memset(in->data[i],0,sizeof(**in->data)*input_size);
     in->samples=0;
     /* fall through */
 
@@ -571,13 +583,13 @@ time_linkage *subband_read(time_linkage *in, subband_state *f,
 
     /* extrapolation mechanism; avoid harsh transients at edges */
 
-    if(in->samples<in->size)
-      for(i=0;i<input_ch;i++){
+    if(in->samples<input_size)
+      for(i=0;i<ch;i++){
 	if((active[i] || visible[i]) && !mute_channel_muted(in->active,i))
 	  postextrapolate_helper(f->cache0[i],input_size,
 				 in->data[i],in->samples,
 				 in->data[i]+in->samples,
-				 in->size-in->samples);
+				 input_size-in->samples);
       }
       
     subband_work(f,in,w,visible,active);
@@ -586,29 +598,29 @@ time_linkage *subband_read(time_linkage *in, subband_state *f,
 
     f->fillstate=2;
     f->out.samples=0;
-    if(in->samples==in->size)goto tidy_up;
+    if(in->samples==input_size)goto tidy_up;
     
-    for(i=0;i<input_ch;i++)
-      memset(in->data[i],0,sizeof(**in->data)*in->size);
+    for(i=0;i<ch;i++)
+      memset(in->data[i],0,sizeof(**in->data)*input_size);
     in->samples=0;
     /* fall through */
 
   case 2: /* nominal processing */
     
-    if(in->samples<in->size)
-      for(i=0;i<input_ch;i++){
+    if(in->samples<input_size)
+      for(i=0;i<ch;i++){
 	if((active[i] || visible[i]) && !mute_channel_muted(in->active,i))
 	  postextrapolate_helper(f->cache0[i],input_size,
 				 in->data[i],in->samples,
 				 in->data[i]+in->samples,
-				 in->size-in->samples);
+				 input_size-in->samples);
       }
       
     subband_work(f,in,w,visible,active);
     workfunc(arg);
     unsubband_work(f,in,&f->out);
 
-    if(f->out.samples<f->out.size)f->fillstate=3;
+    if(f->out.samples<input_size)f->fillstate=3;
     break;
 
   case 3: /* we've pushed out EOF already */
@@ -618,7 +630,7 @@ time_linkage *subband_read(time_linkage *in, subband_state *f,
 
  tidy_up:
   {
-    int tozero=f->out.size-f->out.samples;
+    int tozero=input_size-f->out.samples;
     if(tozero)
       for(i=0;i<f->out.channels;i++)
         memset(f->out.data[i]+f->out.samples,0,sizeof(**f->out.data)*tozero);

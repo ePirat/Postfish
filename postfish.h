@@ -50,6 +50,8 @@
 #include <signal.h>
 #include <fcntl.h>
 
+#define OUTPUT_CHANNELS 6
+
 static inline float todB(float x){
   return logf((x)*(x)+1e-30f)*4.34294480f;
 }
@@ -65,7 +67,7 @@ static inline float todB_a(const float *x){
 }
 
 static inline float fromdB_a(float x){
-  int y=1.39331762961e+06f*(x+764.6161886f);
+  int y=1.39331762961e+06f*((x<-400?-400:x)+764.6161886f);
   return *(float *)&y;
 }
 
@@ -81,16 +83,19 @@ static inline float fromdB_a(float x){
 
 #endif
 
+#ifndef max
+#define max(x,y) ((x)>(y)?(x):(y))
+#endif
+
+
 #define toOC(n)     (log(n)*1.442695f-5.965784f)
 #define fromOC(o)   (exp(((o)+5.965784f)*.693147f))
 #define toBark(n)   (13.1f*atan(.00074f*(n))+2.24f*atan((n)*(n)*1.85e-8f)+1e-4f*(n))
 #define fromBark(z) (102.f*(z)-2.f*pow(z,2.f)+.4f*pow(z,3.f)+pow(1.46f,z)-1.f)
 
 typedef struct time_linkage {
-  int size;
   int samples;  /* normally same as size; exception is EOF */
   int channels;
-  int rate;
   float **data;
   u_int32_t active; /* active channel bitmask */
 } time_linkage;

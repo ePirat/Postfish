@@ -63,10 +63,10 @@ typedef struct{
 
   int mutemaskP;
   int mutemask0;
-
+  int ch;
 } singlecomp_state;
 
-float *window;
+static float *window;
 
 singlecomp_settings  singlecomp_master_set;
 singlecomp_settings *singlecomp_channel_set;
@@ -95,9 +95,9 @@ static int pull_singlecomp_feedback(singlecomp_state *scs, float *peak,float *rm
   if(!f)return 0;
   
   if(peak)
-    memcpy(peak,f->peak,sizeof(*peak)*input_ch);
+    memcpy(peak,f->peak,sizeof(*peak)*scs->ch);
   if(rms)
-    memcpy(rms,f->rms,sizeof(*rms)*input_ch);
+    memcpy(rms,f->rms,sizeof(*rms)*scs->ch);
   feedback_old(&scs->feedpool,(feedback_generic *)f);
   return 1;
 }
@@ -110,47 +110,46 @@ int pull_singlecomp_feedback_channel(float *peak,float *rms){
   return pull_singlecomp_feedback(&channel_state,peak,rms);
 }
 
-static void singlecomp_load_helper(singlecomp_state *scs){
+static void singlecomp_load_helper(singlecomp_state *scs,int ch){
   int i;
   memset(scs,0,sizeof(scs));
 
-  scs->activeP=calloc(input_ch,sizeof(*scs->activeP));
-  scs->active0=calloc(input_ch,sizeof(*scs->active0));
+  scs->ch=ch;
+  scs->activeP=calloc(scs->ch,sizeof(*scs->activeP));
+  scs->active0=calloc(scs->ch,sizeof(*scs->active0));
 
-  scs->o_attack=calloc(input_ch,sizeof(*scs->o_attack));
-  scs->o_decay=calloc(input_ch,sizeof(*scs->o_decay));
-  scs->u_attack=calloc(input_ch,sizeof(*scs->u_attack));
-  scs->u_decay=calloc(input_ch,sizeof(*scs->u_decay));
-  scs->b_attack=calloc(input_ch,sizeof(*scs->b_attack));
-  scs->b_decay=calloc(input_ch,sizeof(*scs->b_decay));
+  scs->o_attack=calloc(scs->ch,sizeof(*scs->o_attack));
+  scs->o_decay=calloc(scs->ch,sizeof(*scs->o_decay));
+  scs->u_attack=calloc(scs->ch,sizeof(*scs->u_attack));
+  scs->u_decay=calloc(scs->ch,sizeof(*scs->u_decay));
+  scs->b_attack=calloc(scs->ch,sizeof(*scs->b_attack));
+  scs->b_decay=calloc(scs->ch,sizeof(*scs->b_decay));
 
-  scs->o_iir=calloc(input_ch,sizeof(*scs->o_iir));
-  scs->b_iir=calloc(input_ch,sizeof(*scs->b_iir));
-  scs->u_iir=calloc(input_ch,sizeof(*scs->u_iir));
+  scs->o_iir=calloc(scs->ch,sizeof(*scs->o_iir));
+  scs->b_iir=calloc(scs->ch,sizeof(*scs->b_iir));
+  scs->u_iir=calloc(scs->ch,sizeof(*scs->u_iir));
 
-  scs->o_peak=calloc(input_ch,sizeof(*scs->o_peak));
-  scs->b_peak=calloc(input_ch,sizeof(*scs->b_peak));
-  scs->u_peak=calloc(input_ch,sizeof(*scs->u_peak));
+  scs->o_peak=calloc(scs->ch,sizeof(*scs->o_peak));
+  scs->b_peak=calloc(scs->ch,sizeof(*scs->b_peak));
+  scs->u_peak=calloc(scs->ch,sizeof(*scs->u_peak));
 
-  scs->out.size=input_size;
-  scs->out.channels=input_ch;
-  scs->out.rate=input_rate;
-  scs->out.data=malloc(input_ch*sizeof(*scs->out.data));
-  for(i=0;i<input_ch;i++)
+  scs->out.channels=scs->ch;
+  scs->out.data=malloc(scs->ch*sizeof(*scs->out.data));
+  for(i=0;i<scs->ch;i++)
     scs->out.data[i]=malloc(input_size*sizeof(**scs->out.data));
 
   scs->fillstate=0;
-  scs->cache=malloc(input_ch*sizeof(*scs->cache));
-  for(i=0;i<input_ch;i++)
+  scs->cache=malloc(scs->ch*sizeof(*scs->cache));
+  for(i=0;i<scs->ch;i++)
     scs->cache[i]=malloc(input_size*sizeof(**scs->cache));
 
 }
 
 /* called only by initial setup */
-int singlecomp_load(void){
+int singlecomp_load(int outch){
   int i;
-  singlecomp_load_helper(&master_state);
-  singlecomp_load_helper(&channel_state);
+  singlecomp_load_helper(&master_state,outch);
+  singlecomp_load_helper(&channel_state,input_ch);
 
   window=malloc(input_size/2*sizeof(*window));
   for(i=0;i<input_size/2;i++){
@@ -159,12 +158,12 @@ int singlecomp_load(void){
   }
 
   singlecomp_channel_set=calloc(input_ch,sizeof(*singlecomp_channel_set));
-  master_set_bundle=malloc(input_ch*sizeof(*master_set_bundle));
+  master_set_bundle=malloc(outch*sizeof(*master_set_bundle));
   channel_set_bundle=malloc(input_ch*sizeof(*channel_set_bundle));
-  for(i=0;i<input_ch;i++){
-    master_set_bundle[i]=&singlecomp_master_set;
+  for(i=0;i<input_ch;i++)
     channel_set_bundle[i]=&singlecomp_channel_set[i];
-  }
+  for(i=0;i<outch;i++)
+    master_set_bundle[i]=&singlecomp_master_set;
 
   return 0;
 }
@@ -188,12 +187,12 @@ static void filter_set(float msec,
 }
 
 static void reset_filter(singlecomp_state *scs){
-  memset(scs->o_peak,0,input_ch*sizeof(&scs->o_peak));
-  memset(scs->u_peak,0,input_ch*sizeof(&scs->u_peak));
-  memset(scs->b_peak,0,input_ch*sizeof(&scs->b_peak));
-  memset(scs->o_iir,0,input_ch*sizeof(&scs->o_iir));
-  memset(scs->u_iir,0,input_ch*sizeof(&scs->u_iir));
-  memset(scs->b_iir,0,input_ch*sizeof(&scs->b_iir));
+  memset(scs->o_peak,0,scs->ch*sizeof(&scs->o_peak));
+  memset(scs->u_peak,0,scs->ch*sizeof(&scs->u_peak));
+  memset(scs->b_peak,0,scs->ch*sizeof(&scs->b_peak));
+  memset(scs->o_iir,0,scs->ch*sizeof(&scs->o_iir));
+  memset(scs->u_iir,0,scs->ch*sizeof(&scs->u_iir));
+  memset(scs->b_iir,0,scs->ch*sizeof(&scs->b_iir));
 }
 
 /* called only in playback thread */
@@ -374,12 +373,12 @@ static void work_and_lapping(singlecomp_state *scs,
   u_int32_t mutemask0=scs->mutemask0;
   u_int32_t mutemaskP=scs->mutemaskP;
 
-  float peakfeed[input_ch];
-  float rmsfeed[input_ch];
+  float peakfeed[scs->ch];
+  float rmsfeed[scs->ch];
   memset(peakfeed,0,sizeof(peakfeed));
   memset(rmsfeed,0,sizeof(rmsfeed));
   
-  for(i=0;i<input_ch;i++){
+  for(i=0;i<scs->ch;i++){
 
     int activeC= active[i] && !mute_channel_muted(mutemaskC,i);
     int active0= scs->active0[i];
@@ -551,10 +550,10 @@ static void work_and_lapping(singlecomp_state *scs,
       (singlecomp_feedback *)feedback_new(&scs->feedpool,new_singlecomp_feedback);
     
     if(!ff->peak)
-      ff->peak=malloc(input_ch*sizeof(*ff->peak));
+      ff->peak=malloc(scs->ch*sizeof(*ff->peak));
     
     if(!ff->rms)
-      ff->rms=malloc(input_ch*sizeof(*ff->rms));
+      ff->rms=malloc(scs->ch*sizeof(*ff->rms));
     
     memcpy(ff->peak,peakfeed,sizeof(peakfeed));
     memcpy(ff->rms,rmsfeed,sizeof(rmsfeed));
@@ -583,7 +582,7 @@ time_linkage *singlecomp_read_helper(time_linkage *in,
       return &scs->out;
     }
     
-    for(i=0;i<input_ch;i++){
+    for(i=0;i<scs->ch;i++){
       memset(scs->o_iir+i,0,sizeof(*scs->o_iir));
       memset(scs->u_iir+i,0,sizeof(*scs->u_iir));
       memset(scs->b_iir+i,0,sizeof(*scs->b_iir));
@@ -599,17 +598,17 @@ time_linkage *singlecomp_read_helper(time_linkage *in,
 
     scs->fillstate=1;
     scs->out.samples=0;
-    if(in->samples==in->size)goto tidy_up;
+    if(in->samples==input_size)goto tidy_up;
     
-    for(i=0;i<input_ch;i++)
-      memset(in->data[i],0,sizeof(**in->data)*in->size);
+    for(i=0;i<scs->ch;i++)
+      memset(in->data[i],0,sizeof(**in->data)*input_size);
     in->samples=0;
     /* fall through */
   case 1: /* nominal processing */
 
     work_and_lapping(scs,scset,in,&scs->out,active);
 
-    if(scs->out.samples<scs->out.size)scs->fillstate=2;
+    if(scs->out.samples<input_size)scs->fillstate=2;
     break;
   case 2: /* we've pushed out EOF already */
     scs->out.samples=0;
@@ -617,7 +616,7 @@ time_linkage *singlecomp_read_helper(time_linkage *in,
   
  tidy_up:
   {
-    int tozero=scs->out.size-scs->out.samples;
+    int tozero=input_size-scs->out.samples;
     if(tozero)
       for(i=0;i<scs->out.channels;i++)
         memset(scs->out.data[i]+scs->out.samples,0,sizeof(**scs->out.data)*tozero);
@@ -627,20 +626,20 @@ time_linkage *singlecomp_read_helper(time_linkage *in,
 }
 
 time_linkage *singlecomp_read_master(time_linkage *in){
-  int active[input_ch],i;
+  int active[master_state.ch],i;
 
   /* local copy required to avoid concurrency problems */
-  for(i=0;i<input_ch;i++)
+  for(i=0;i<master_state.ch;i++)
     active[i]=singlecomp_master_set.panel_active;
 
   return singlecomp_read_helper(in, &master_state, master_set_bundle,active);
 }
 
 time_linkage *singlecomp_read_channel(time_linkage *in){
-  int active[input_ch],i;
+  int active[channel_state.ch],i;
 
   /* local copy required to avoid concurrency problems */
-  for(i=0;i<input_ch;i++)
+  for(i=0;i<channel_state.ch;i++)
     active[i]=singlecomp_channel_set[i].panel_active;
   
   return singlecomp_read_helper(in, &channel_state, channel_set_bundle,active);

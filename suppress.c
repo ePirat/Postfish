@@ -104,7 +104,7 @@ int suppress_load(void){
 
   suppress_channel_set.active=calloc(input_ch,sizeof(*suppress_channel_set.active));
 
-  subband_load(&channel_state.ss,suppress_freqs,qblocksize);
+  subband_load(&channel_state.ss,suppress_freqs,qblocksize,input_ch);
   subband_load_freqs(&channel_state.ss,&sw,suppress_freq_list,suppress_freqs);
    
   for(i=0;i<suppress_freqs;i++){

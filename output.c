@@ -35,8 +35,10 @@
 #include "suppress.h"
 #include "limit.h"
 #include "mute.h"
+#include "mix.h"
 
 extern int input_size;
+extern int input_rate;
 sig_atomic_t playback_active=0;
 sig_atomic_t playback_exit=0;
 sig_atomic_t playback_seeking=0;
@@ -64,6 +66,7 @@ void pipeline_reset(){
   suppress_reset(); /* clear any persistent lapping state */
   limit_reset(); /* clear any persistent lapping state */
   output_reset(); /* clear any persistent lapping state */
+  mix_reset();
 }
 
 typedef struct output_feedback{
@@ -247,6 +250,9 @@ void *playback_thread(void *dummy){
     link=eq_read_channel(link);
     result|=link->samples;
 
+    link=mix_read(link,0,0);
+    result|=link->samples;
+
     link=multicompand_read_master(link);
     result|=link->samples;
     link=singlecomp_read_master(link);
@@ -267,11 +273,6 @@ void *playback_thread(void *dummy){
     }    
 
 
-    /* the limiter is single-block zero additional latency */
-    for(i=0;i<input_ch;i++)
-      if(mute_channel_muted(link->active,i))
-	memset(link->data[i],0,sizeof(**link->data)*input_size);
-
     link=limit_read(link);
 
     /************/
@@ -281,7 +282,10 @@ void *playback_thread(void *dummy){
       memset(rms,0,sizeof(*rms)*(input_ch+2));
       memset(peak,0,sizeof(*peak)*(input_ch+2));
       ch=link->channels;
-      rate=link->rate;
+      rate=input_rate;
+
+      /* temporary! */
+      if(ch>2)ch=2;
       
       /* lazy playbak setup; we couldn't do it until we had rate and
 	 channel information from the pipeline */
@@ -295,8 +299,8 @@ void *playback_thread(void *dummy){
 	setupp=1;
       }
       
-      if(audiobufsize<link->channels*link->samples*outbytes){
-	audiobufsize=link->channels*link->samples*outbytes;
+      if(audiobufsize<ch*link->samples*outbytes){
+	audiobufsize=ch*link->samples*outbytes;
 	if(audiobuf)
 	  audiobuf=realloc(audiobuf,sizeof(*audiobuf)*audiobufsize);
 	else
@@ -309,7 +313,7 @@ void *playback_thread(void *dummy){
 	float mean=0.;
 	float divrms=0.;
 	
-	for(j=0;j<link->channels;j++){
+	for(j=0;j<ch;j++){
 	  float dval=link->data[j][i];
 
 	  switch(outbytes){
@@ -358,12 +362,12 @@ void *playback_thread(void *dummy){
 	rms[input_ch]+= mean*mean;
 	
 	/* div */
-	for(j=0;j<link->channels;j++){
+	for(j=0;j<ch;j++){
 	  float dval=mean-link->data[j][i];
 	  if(fabs(dval)>peak[input_ch+1])peak[input_ch+1]=fabs(dval);
 	  divrms+=dval*dval;
 	}
-	rms[input_ch+1]+=divrms/link->channels;
+	rms[input_ch+1]+=divrms/ch;
 	
       }
 
@@ -372,7 +376,7 @@ void *playback_thread(void *dummy){
 	rms[j]=sqrt(rms[j]);
       }
       
-      count+=fwrite(audiobuf,1,link->channels*link->samples*outbytes,playback_fd);
+      count+=fwrite(audiobuf,1,ch*link->samples*outbytes,playback_fd);
       
       /* inform Lord Vader his shuttle is ready */
       push_output_feedback(peak,rms);

@@ -350,7 +350,7 @@ static void draw(GtkWidget *widget,int n){
 
   }
 
-  for(i=0;i<m->labels+1;i++){
+  for(i=0;i<=m->labels;i++){
     int x=rint(((float)i)/m->labels*(widget->allocation.width-xpad*2-1))+xpad;
     int y=widget->allocation.height-lpad-upad;
     int px,py;
@@ -367,17 +367,22 @@ static void draw(GtkWidget *widget,int n){
 		     widget->style->text_gc[gc],
 		     x, y/4+upad, x, y+upad);
 
-    if(i>0){
-      pango_layout_get_pixel_size(m->layout[i-1],&px,&py);
+    pango_layout_get_pixel_size(m->layout[i],&px,&py);
+
+    if(i==0){
+      x+=2;
+      y-=py;
+      y/=2;
+    }else{
       x-=px+2;
       y-=py;
       y/=2;
-      
-      gdk_draw_layout (m->backing,
-		       widget->style->text_gc[gc],
-		       x, y+upad,
-		       m->layout[i-1]);
     }
+    gdk_draw_layout (m->backing,
+		     widget->style->text_gc[gc],
+		     x, y+upad,
+		     m->layout[i]);
+
   }
 
   /* draw frame */
@@ -1079,18 +1084,18 @@ GtkWidget* multibar_new (int n, char **labels, float *levels, int thumbs,
 
   /* not the *proper* way to do it, but this is a one-shot */
   m->levels=calloc((n+1),sizeof(*m->levels));
-  m->labels=n;
-  memcpy(m->levels,levels,(n+1)*sizeof(*levels));
+  m->labels=n-1;
+  memcpy(m->levels,levels,n*sizeof(*levels));
 
-  m->layout=calloc(m->labels,sizeof(*m->layout));
-  for(i=0;i<m->labels;i++)
+  m->layout=calloc(n,sizeof(*m->layout));
+  for(i=0;i<n;i++)
     m->layout[i]=gtk_widget_create_pango_layout(ret,labels[i]);
 
   m->dampen_flags=flags;
   m->thumbfocus=-1;
   m->thumbgrab=-1;
   m->thumblo=levels[0];
-  m->thumbhi=levels[n];
+  m->thumbhi=levels[n-1];
   m->thumblo_x=val_to_pixel(m,m->thumblo);
   m->thumbhi_x=val_to_pixel(m,m->thumbhi);
 

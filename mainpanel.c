@@ -57,6 +57,7 @@ static void action_zero(GtkWidget *widget,postfish_mainpanel *p){
   compandpanel_reset();
   singlepanel_reset();
   limitpanel_reset();
+  mixpanel_reset();
   meterhold_reset(p);
 }
 
@@ -75,6 +76,7 @@ static void action_end(GtkWidget *widget,postfish_mainpanel *p){
   compandpanel_reset();
   singlepanel_reset();
   limitpanel_reset();
+  mixpanel_reset();
   meterhold_reset(p);
 }
 
@@ -452,14 +454,15 @@ static void mainpanel_chentry(postfish_mainpanel *p,
 			      GtkWidget *table,
 			      char *label,
 			      int i,
-			      int masterwinp,
-			      int channelwinp,
-			      void (*panel_create)
+			      void (*single_create)
+			      (postfish_mainpanel *,
+			       GtkWidget **, GtkWidget **),
+			      void (*multi_create)
 			      (postfish_mainpanel *,
 			       GtkWidget **, GtkWidget **)){  
   
   int j;
-  GtkWidget *wm[input_ch];
+  GtkWidget *wm[input_ch+1];
   GtkWidget *wa[input_ch];
   
   for(j=0;j<input_ch;j++){
@@ -467,7 +470,7 @@ static void mainpanel_chentry(postfish_mainpanel *p,
     sprintf(buffer,"  %d ",j+1);
     p->channel_wa[i][j]=wa[j]=gtk_toggle_button_new_with_label(buffer);
 
-    if(channelwinp){
+    if(multi_create){
       /* a panel button per channel, multiple accellerated labels */
       GtkWidget *l=gtk_label_new_with_mnemonic(label);
       GtkWidget *a=gtk_alignment_new(0,.5,0,0);
@@ -477,7 +480,7 @@ static void mainpanel_chentry(postfish_mainpanel *p,
       gtk_container_add(GTK_CONTAINER(a),wm[j]);
       gtk_table_attach_defaults(GTK_TABLE(table),a,2+j*2,4+j*2,i+1,i+2);
       gtk_table_attach(GTK_TABLE(table),l,1,2,i+1,i+2,GTK_FILL,0,0,0);
-      if(j>0)gtk_widget_set_size_request(l,0,0);
+      if(j>0 || single_create)gtk_widget_set_size_request(l,0,0);
       gtk_label_set_mnemonic_widget(GTK_LABEL(l),wm[j]);
 
       {
@@ -494,28 +497,30 @@ static void mainpanel_chentry(postfish_mainpanel *p,
     }
   }
 
-  if(masterwinp){
+  if(single_create){
     /* one master windowbutton, one label */
-    wm[0]=windowbutton_new(label);
-    gtk_table_attach_defaults(GTK_TABLE(table),wm[0],0,2,i+1,i+2);
-  }else{
-    if (!channelwinp){  
-      GtkWidget *l=gtk_label_new(label);
-    
-      gtk_widget_set_name(l,"windowbuttonlike");
-      gtk_misc_set_alignment(GTK_MISC(l),0,.5);
-      gtk_table_attach_defaults(GTK_TABLE(table),l,1,2,i+1,i+2);
-    }
-    {
-      GtkWidget *b=windowbutton_new(NULL);
-      
-      gtk_widget_set_sensitive(b,FALSE);
-      gtk_table_attach_defaults(GTK_TABLE(table),b,0,1,i+1,i+2);
-    }
+    wm[input_ch]=windowbutton_new(label);
+    gtk_table_attach_defaults(GTK_TABLE(table),wm[input_ch],0,2,i+1,i+2);
 
+    (*single_create)(p,wm+input_ch,wa);
+  }else{
+    GtkWidget *b=windowbutton_new(NULL);
+    
+    gtk_widget_set_sensitive(b,FALSE);
+    gtk_table_attach_defaults(GTK_TABLE(table),b,0,1,i+1,i+2);
   }
 
-  if(panel_create)(*panel_create)(p,wm,wa);
+  if(multi_create)
+    (*multi_create)(p,wm,wa);
+  
+  if (!single_create && !multi_create){  
+    GtkWidget *l=gtk_label_new(label);
+    
+    gtk_widget_set_name(l,"windowbuttonlike");
+    gtk_misc_set_alignment(GTK_MISC(l),0,.5);
+    gtk_table_attach_defaults(GTK_TABLE(table),l,1,2,i+1,i+2);
+  }
+
 }
 
 static void mainpanel_masterentry(postfish_mainpanel *p,
@@ -687,7 +692,7 @@ void mainpanel_create(postfish_mainpanel *panel,char **chlabels){
 
   /* left side of main panel */
   {
-    char *labels[12]={"-96","-72","-60","-48","-36","-24",
+    char *labels[13]={"","-96","-72","-60","-48","-36","-24",
 		      "-16","-8","-3","0","+3","+6"};
     float levels[13]={-140.,-96.,-72.,-60.,-48.,-36.,-24.,
 		       -16.,-8.,-3.,0.,+3.,+6.};
@@ -700,9 +705,9 @@ void mainpanel_create(postfish_mainpanel *panel,char **chlabels){
     GtkWidget *inbox=gtk_hbox_new(0,0);
     GtkWidget *outbox=gtk_hbox_new(0,0);
 
-    panel->inbar=multibar_new(12,labels,levels, 0,
+    panel->inbar=multibar_new(13,labels,levels, 0,
 			      LO_ATTACK|LO_DECAY|HI_DECAY|PEAK_FOLLOW );
-    panel->outbar=multibar_new(12,labels,levels, 0,
+    panel->outbar=multibar_new(13,labels,levels, 0,
 			       LO_ATTACK|LO_DECAY|HI_DECAY|PEAK_FOLLOW );
     panel->inreadout=readout_new("------");
     panel->outreadout=readout_new("------");
@@ -748,7 +753,7 @@ void mainpanel_create(postfish_mainpanel *panel,char **chlabels){
 
     /* master dB slider */
     {
-      char *sliderlabels[10]={"-40","-30","-20","-10","0","+10","+20","+30","+40","+50"};
+      char *sliderlabels[11]={"","-40","-30","-20","-10","0","+10","+20","+30","+40","+50"};
       float sliderlevels[11]={-50,-40,-30,-20,-10,0,10,20,30,40,50};
       
       GtkWidget *box=gtk_hbox_new(0,0);
@@ -756,7 +761,7 @@ void mainpanel_create(postfish_mainpanel *panel,char **chlabels){
       GtkWidget *masterlabel=gtk_label_new("master:");
       panel->masterdB_a=gtk_toggle_button_new_with_label("a[t]ten");
       panel->masterdB_r=readout_new("  0.0dB");
-      panel->masterdB_s=multibar_slider_new(10,sliderlabels,sliderlevels,1);
+      panel->masterdB_s=multibar_slider_new(11,sliderlabels,sliderlevels,1);
       
       multibar_thumb_set(MULTIBAR(panel->masterdB_s),0.,0);
       multibar_thumb_increment(MULTIBAR(panel->masterdB_s),.1,1.);
@@ -952,13 +957,14 @@ void mainpanel_create(postfish_mainpanel *panel,char **chlabels){
     gtk_table_attach_defaults(GTK_TABLE(channeltable),temp,1,2+input_ch*2,0,1);
   }
 
-  mainpanel_chentry(panel,channeltable,"Mute ",0,0,0,mutedummy_create);
-  mainpanel_chentry(panel,channeltable,"_Declip ",1,1,0,clippanel_create);
-  mainpanel_chentry(panel,channeltable,"_Multicomp ",2,0,1,compandpanel_create_channel);
-  mainpanel_chentry(panel,channeltable,"_Singlecomp ",3,0,1,singlepanel_create_channel);
-  mainpanel_chentry(panel,channeltable,"De_verb ",4,1,0,suppresspanel_create_channel);
-  mainpanel_chentry(panel,channeltable,"_Reverb ",5,1,0,0);
-  mainpanel_chentry(panel,channeltable,"_EQ ",6,0,1,eqpanel_create_channel);
+  mainpanel_chentry(panel,channeltable,"_Declip ",0,clippanel_create,0);
+  mainpanel_chentry(panel,channeltable,"_Multicomp ",1,0,compandpanel_create_channel);
+  mainpanel_chentry(panel,channeltable,"_Singlecomp ",2,0,singlepanel_create_channel);
+  mainpanel_chentry(panel,channeltable,"De_verb ",3,suppresspanel_create_channel,0);
+  mainpanel_chentry(panel,channeltable,"_EQ ",4,0,eqpanel_create_channel);
+  mainpanel_chentry(panel,channeltable,"_Reverb ",5,0,0);
+  mainpanel_chentry(panel,channeltable,"Atten/Mi_x ",6,attenpanel_create,
+		    mixpanel_create_channel);
 
   /* master panel */
   {
@@ -981,13 +987,46 @@ void mainpanel_create(postfish_mainpanel *panel,char **chlabels){
     gtk_table_attach_defaults(GTK_TABLE(mastertable),temp,1,2,0,1);
   }
 
-  mainpanel_masterentry(panel,mastertable,"_Crossmix "," c ",GDK_c,0,0);
-  mainpanel_masterentry(panel,mastertable,"_Multicomp "," m ",GDK_m,1,compandpanel_create_master);
-  mainpanel_masterentry(panel,mastertable,"_Singlecomp "," s ",GDK_s,2,singlepanel_create_master);
-  mainpanel_masterentry(panel,mastertable,"_Reverb "," r ",GDK_r,3,0);
-  mainpanel_masterentry(panel,mastertable,"_EQ "," e ",GDK_e,4,eqpanel_create_master);
-  mainpanel_masterentry(panel,mastertable,"_Limit "," l ",GDK_l,5,limitpanel_create);
-  mainpanel_masterentry(panel,mastertable,"_Output ",NULL,GDK_l,6,0);
+  mainpanel_masterentry(panel,mastertable,"_Multicomp "," m ",GDK_m,0,compandpanel_create_master);
+  mainpanel_masterentry(panel,mastertable,"_Singlecomp "," s ",GDK_s,1,singlepanel_create_master);
+  mainpanel_masterentry(panel,mastertable,"_Reverb "," r ",GDK_r,2,0);
+  mainpanel_masterentry(panel,mastertable,"_EQ "," e ",GDK_e,3,eqpanel_create_master);
+  mainpanel_masterentry(panel,mastertable,"_Limit "," l ",GDK_l,4,limitpanel_create);
+
+  /* output has three activity buttons not in the main grid */
+  {
+    GtkWidget *ww=windowbutton_new("_Output ");
+
+    GtkWidget *std=gtk_toggle_button_new_with_label("o");
+    GtkWidget *ply=gtk_toggle_button_new_with_label("p");
+    GtkWidget *fil=gtk_toggle_button_new_with_label("f");
+    GtkWidget *box=gtk_hbox_new(0,0);
+    GtkWidget *box2=gtk_hbox_new(1,0);
+
+    GtkWidget *fw=windowbutton_new(NULL);
+    GtkWidget *fr=gtk_frame_new(NULL);
+  
+    gtk_frame_set_shadow_type(GTK_FRAME(fr),GTK_SHADOW_ETCHED_IN);
+    gtk_widget_set_sensitive(fw,FALSE);
+      
+    gtk_widget_add_accelerator (std, "activate", panel->group, GDK_o, 0, 0);
+    gtk_widget_add_accelerator (ply, "activate", panel->group, GDK_p, 0, 0);
+    gtk_widget_add_accelerator (fil, "activate", panel->group, GDK_f, 0, 0);
+      
+    gtk_box_pack_start(GTK_BOX(box),ww,0,0,0);
+    gtk_box_pack_start(GTK_BOX(box),box2,1,1,2);
+    gtk_box_pack_start(GTK_BOX(box2),ply,1,1,0);
+    gtk_box_pack_start(GTK_BOX(box2),fil,1,1,0);
+    
+
+    gtk_table_attach_defaults(GTK_TABLE(mastertable),fw,0,1,6,7);
+    gtk_table_attach_defaults(GTK_TABLE(mastertable),fr,1,2,6,7);
+
+    gtk_table_attach_defaults(GTK_TABLE(mastertable),box,0,1,7,8);
+    gtk_table_attach_defaults(GTK_TABLE(mastertable),std,1,2,7,8);
+
+    //if(panel_create)(*panel_create)(p,ww,(shortcut?wa:0));
+  }
 
   g_signal_connect (G_OBJECT (panel->toplevel), "delete_event",
 		    G_CALLBACK (shutdown), NULL);
@@ -1074,6 +1113,7 @@ static void feedback_process(postfish_mainpanel *panel){
       compandpanel_feedback(current_p);
       singlepanel_feedback(current_p);
       limitpanel_feedback(current_p);
+      mixpanel_feedback(current_p);
       
     }
   }
@@ -1090,6 +1130,14 @@ static gboolean async_event_handle(GIOChannel *channel,
   return TRUE;
 }
 
+static int look_for_gtkrc(char *filename){
+  FILE *f=fopen(filename,"r");
+  if(!f)return 0;
+  fprintf(stderr,"Loading postfish-gtkrc file found at %s\n",filename);
+  gtk_rc_add_default_file(filename);
+  return 1;
+}
+
 #include <stdlib.h>
 void mainpanel_go(int argc,char *argv[], int ch){
   postfish_mainpanel p;
@@ -1097,9 +1145,48 @@ void mainpanel_go(int argc,char *argv[], int ch){
   char *labels[11];
   char  buffer[20];
   int i;
-
+  int found=0;
   memset(&p,0,sizeof(p));
-  gtk_rc_add_default_file("/etc/postfish/postfish-gtkrc");
+
+  found|=look_for_gtkrc(ETCDIR"/postfish-gtkrc");
+  {
+    char *rcdir=getenv("HOME");
+    if(rcdir){
+      char *rcfile="/.postfish/postfish-gtkrc";
+      char *homerc=calloc(1,strlen(rcdir)+strlen(rcfile)+1);
+      strcat(homerc,homedir);
+      strcat(homerc,rcfile);
+      found|=look_for_gtkrc(homerc);
+    }
+  }
+  {
+    char *rcdir=getenv("POSTFISH_RCDIR");
+    if(rcdir){
+      char *rcfile="/postfish-gtkrc";
+      char *homerc=calloc(1,strlen(rcdir)+strlen(rcfile)+1);
+      strcat(homerc,homedir);
+      strcat(homerc,rcfile);
+      found|=look_for_gtkrc(homerc);
+    }
+  }
+  found|=look_for_gtkrc("./postfish-gtkrc");
+
+  if(!found){
+  
+    fprintf(stderr,"Postfish could not find the postfish-gtkrc configuration file normally\n"
+	    "installed with Postfish and located in one of the following places:\n"
+
+	    "\t./postfish-gtkrc\n"
+	    "\t$(POSTFISHDIR)/postfish-gtkrc\n"
+	    "\t~/.postfish/postfish-gtkrc\n\t"
+	    ETCDIR"/postfish-gtkrc\n"
+	    "This configuration file is used to tune the color, font and other detail aspects\n"
+	    "of the Postfish user interface.  Although Postfish will work without it, the UI\n"
+	    "appearence will likely make the application harder to use due to missing visual\n"
+	    "cues.\n");
+  }
+
+  gtk_rc_add_default_file(ETCDIR"/postfish-gtkrc");
   if(homedir){
     char *rcfile="/.postfish-gtkrc";
     char *homerc=calloc(1,strlen(homedir)+strlen(rcfile)+1);
@@ -1114,13 +1201,13 @@ void mainpanel_go(int argc,char *argv[], int ch){
   memset(labels,0,sizeof(labels));
   switch(ch){
   case 1:
-    labels[0]="_0 mono";
+    labels[0]="_1 mono";
     break;
   case 2:
-    labels[0]="_0 left";
-    labels[1]="_1 right";
-    labels[2]="_2 mid";
-    labels[3]="_3 side";
+    labels[0]="_1 left";
+    labels[1]="_2 right";
+    labels[2]="_y mid";
+    labels[3]="_z side";
     break;
   case 3:
   case 4:
@@ -1136,14 +1223,17 @@ void mainpanel_go(int argc,char *argv[], int ch){
   case 14:
   case 15:
   case 16:
-    for(i=0;i<ch;i++){
-      sprintf(buffer,"_%d",i);
+    for(i=0;i<ch && i<9;i++){
+      sprintf(buffer,"_%d",i+1);
       labels[i]=strdup(buffer);
     }
-    sprintf(buffer,"_%d mid",i);
-    labels[i++]=strdup(buffer);
-    sprintf(buffer,"_%d div",i);
-    labels[i++]=strdup(buffer);
+    for(;i<ch;i++){
+      sprintf(buffer,"%d_%d",(i+1)/10,(i+1)%10);
+      labels[i]=strdup(buffer);
+    }
+    labels[i++]=strdup("_y mid");
+    labels[i++]=strdup("_z div");
+
     break;
   default:
     fprintf(stderr,"\nPostfish currently supports inputs of one to sixteen\n"

@@ -2,7 +2,7 @@
  *
  *  postfish
  *    
- *      Copyright (C) 2002-2004 Monty and Xiph.Org
+ *      Copyright (C) 2002-2004 Monty
  *
  *  Postfish is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -21,30 +21,18 @@
  * 
  */
 
-#include <sys/types.h>
-#include "postfish.h"
-#include "mix.h"
-#include "mute.h"
+typedef struct {
+  sig_atomic_t panel_active;
+  sig_atomic_t panel_visible;
 
-extern int input_ch;
-extern sig_atomic_t *mixpanel_active;
+  sig_atomic_t time;     /* 1-1000 */
+  sig_atomic_t damping;  /* 0.-1. * 1000 */ 
+  sig_atomic_t wet;      /* 0.-1. * 1000 */
+} plate_set;
 
-int mute_load(void){
-  return 0;
-}
-
-int mute_channel_muted(u_int32_t active,int i){
-  return(!(active&(1<<i)));
-}
-
-time_linkage *mute_read(time_linkage *in){
-  u_int32_t val=0;
-  int i;
-
-  for(i=0;i<input_ch;i++)
-    if(mixpanel_active[i])
-      val|= (1<<i);
-
-  in->active=val;
-  return(in);
-}
+extern void plate_reset(void);
+extern int plate_load(int outch);
+extern time_linkage *plate_read_channel(time_linkage *in,
+					time_linkage **revA,
+					time_linkage **revB);
+extern time_linkage *plate_read_master(time_linkage *in);

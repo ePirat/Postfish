@@ -2,26 +2,34 @@
 # Fuck the horse it rode in on
 # and Fuck its little dog Libtool too
 
-ADD_DEF= -DUGLY_IEEE754_FLOAT32_HACK=1
+
+ADD_DEF= -DUGLY_IEEE754_FLOAT32_HACK=1 -maltivec
+
+# use for PPC with altivec.  IF YOU HAVE ALTIVEC, YOU MUST USE THIS
+# LINE, otherwise FFTW3 will randomly crash whenever it uses Altivec
+# and any math denormalizes.
+
+#ADD_DEF= -DUGLY_IEEE754_FLOAT32_HACK=1 -maltivec
+
 CC=gcc 
 LD=gcc
 INSTALL=install
 PREFIX=/usr/local
 BINDIR=$PREFIX/bin
-ETCDIR=/etc
+ETCDIR=/etc/postfish
 MANDIR=$PREFIX/man
 
 SRC = main.c mainpanel.c multibar.c readout.c input.c output.c clippanel.c \
 	declip.c reconstruct.c multicompand.c windowbutton.c subpanel.c \
 	feedback.c freq.c eq.c eqpanel.c compandpanel.c subband.c lpc.c \
 	bessel.c suppresspanel.c suppress.c singlecomp.c singlepanel.c \
-	limit.c limitpanel.c mute.c mutedummy.c
+	limit.c limitpanel.c mute.c mixpanel.c mix.c reverb.c
 OBJ = main.o mainpanel.o multibar.o readout.o input.o output.o clippanel.o \
 	declip.o reconstruct.o multicompand.o windowbutton.o subpanel.o \
 	feedback.o freq.o eq.o eqpanel.o compandpanel.o subband.o lpc.o \
 	bessel.o suppresspanel.o suppress.o singlecomp.o singlepanel.o \
-	limit.o limitpanel.o mute.o mutedummy.o
-GCF = `pkg-config --cflags gtk+-2.0` -DG_DISABLE_DEPRECATED -DGDK_DISABLE_DEPRECATED -DGTK_DISABLE_DEPRECATED -DGDK_PIXBUF_DISABLE_DEPRECATED
+	limit.o limitpanel.o mute.o mixpanel.o mix.o reverb.o
+GCF = -DETCDIR=\\\"$(ETCDIR)\\\" `pkg-config --cflags gtk+-2.0` -DG_DISABLE_DEPRECATED -DGDK_DISABLE_DEPRECATED -DGTK_DISABLE_DEPRECATED -DGDK_PIXBUF_DISABLE_DEPRECATED
 
 all:	
 	$(MAKE) target CFLAGS="-O3 -ffast-math -fomit-frame-pointer $(GCF) $(ADD_DEF)"
@@ -30,27 +38,44 @@ debug:
 	$(MAKE) target CFLAGS="-g -Wall -W -Wno-unused-parameter -D__NO_MATH_INLINES $(GCF) $(ADD_DEF)"
 
 profile:
-	$(MAKE) target CFLAGS="-pg -g -O3 -ffast-math $(GCF) $(ADD_DEF)" LIBS="-lgprof-helper"
+	$(MAKE) target CFLAGS="-pg -g -O3 -ffast-math $(GCF) $(ADD_DEF)" LIBS="-lgprof-helper "
 
 clean:
-	rm -f $(OBJ) *.d *.d.* gmon.out
+	rm -f $(OBJ) *.d *.d.* gmon.out postfish
+
+distclean: clean
+	rm -f postfish-wisdomrc
 
 %.d: %.c
-	$(CC) -M $(GCF) $< > $@.$$$$; sed 's,\($*\)\.o[ :]*,\1.o $@ : ,g' < $@.$$$$ > $@; rm -f $@.$$$$
+	$(CC) -M $(CFLAGS) $< > $@.$$$$; sed 's,\($*\)\.o[ :]*,\1.o $@ : ,g' < $@.$$$$ > $@; rm -f $@.$$$$
 
-ifneq ($(MAKECMDGOALS),clean)
+postfish-wisdomrc:
+	fftwf-wisdom -v -o postfish-wisdomrc \
+	rif32 rof32 rib32 rob32 \
+	rif64 rof64 rib64 rob64 \
+	rif128 rof128 rib128 rob128 \
+	rif256 rof256 rib256 rob256 \
+	rif512 rof512 rib512 rob512 \
+	rif1024 rof1024 rib1024 rob1024 \
+	rif2048 rof2048 rib2048 rob2048 \
+	rif4096 rof4096 rib4096 rob4096 \
+	rif8192 rof8192 rib8192 rob8192 \
+	rif16384 rof16384 rib16384 rob16384
+
+ifeq ($(MAKECMDGOALS),target)
 include $(SRC:.c=.d)
 endif
 
-target: $(OBJ) 
+target:  $(OBJ) postfish-wisdomrc
 	./touch-version
-	$(LD) $(OBJ) $(CFLAGS) -o postfish $(LIBS) `pkg-config --libs gtk+-2.0` -lpthread -lfftw3f -lm
+	$(LD) $(OBJ) $(CFLAGS) -o postfish $(LIBS) `pkg-config --libs gtk+-2.0` -lpthread -lfftw3f -lm 
 
-install:
+install: target
 	$(INSTALL) -d -m 0755 $(BINDIR)
 	$(INSTALL) -m 0755 postfish $(BINDIR)
 	$(INSTALL) -d -m 0755 $(ETCDIR)
 	$(INSTALL) -m 0644 postfish-gtkrc $(ETCDIR)
+	$(INSTALL) -m 0644 postfish-wisdomrc $(ETCDIR)
 #	$(INSTALL) -d -m 0755 $(MANDIR)
 #	$(INSTALL) -d -m 0755 $(MANDIR)/man1
 #	$(INSTALL) -m 0644 postfish.1 $(MANDIR)/man1

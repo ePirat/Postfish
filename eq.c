@@ -32,6 +32,7 @@ extern int input_size;
 typedef struct{
 
   freq_state eq;
+  int ch;
 
 } eq_state;
 
@@ -41,7 +42,6 @@ eq_settings *eq_channel_set;
 static freq_class_setup fc;
 static eq_state master_state;
 static eq_state channel_state;
-
 
 /* accessed only in playback thread/setup */
 int pull_eq_feedback_master(float **peak,float **rms){
@@ -53,15 +53,17 @@ int pull_eq_feedback_channel(float **peak,float **rms){
 }
 
 /* called only by initial setup */
-int eq_load(void){
+int eq_load(int outch){
   int i;
 
   eq_channel_set=calloc(input_ch,sizeof(*eq_channel_set));
 
   freq_class_load(&fc,eq_freq_list,eq_freqs);
 
-  freq_load(&master_state.eq,&fc);
-  freq_load(&channel_state.eq,&fc);
+  freq_load(&master_state.eq,&fc,outch);
+  master_state.ch=outch;
+  freq_load(&channel_state.eq,&fc,input_ch);
+  channel_state.ch=input_ch;
 
   eq_master_set.curve_dirty=1;
 
@@ -118,11 +120,12 @@ static void workfunc_m(float *data, int ch){
 
 /* called only by playback thread */
 time_linkage *eq_read_master(time_linkage *in){
-  int active[input_ch];
-  int visible[input_ch];
+  eq_state *eq=&master_state;
+  int active[eq->ch];
+  int visible[eq->ch];
   int i;
   
-  for(i=0;i<input_ch;i++){
+  for(i=0;i<eq->ch;i++){
     active[i]=eq_master_set.panel_active;
     visible[i]=eq_master_set.panel_visible;
   }
@@ -131,11 +134,12 @@ time_linkage *eq_read_master(time_linkage *in){
 }
 
 time_linkage *eq_read_channel(time_linkage *in){
-  int active[input_ch];
-  int visible[input_ch];
+  eq_state *eq=&channel_state;
+  int active[eq->ch];
+  int visible[eq->ch];
   int i;
   
-  for(i=0;i<input_ch;i++){
+  for(i=0;i<eq->ch;i++){
     active[i]=eq_channel_set[i].panel_active;
     visible[i]=eq_channel_set[i].panel_visible;
   }

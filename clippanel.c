@@ -116,7 +116,7 @@ void clippanel_create(postfish_mainpanel *mp,
 		      GtkWidget **windowbutton,
 		      GtkWidget **activebutton){
   int i;
-  char *labels[2]={"10%","100%"};
+  char *labels[3]={"","10%","100%"};
   float levels[3]={0.,10.,100.};
   int block_choices=0;
 
@@ -151,13 +151,13 @@ void clippanel_create(postfish_mainpanel *mp,
   for(i=64;i<=input_size*2;i*=2)block_choices++;
   {
     float levels[9]={0,1,2,3,4,5,6,7,8};
-    char *labels[8]={"128","256","512","1024","2048","4096","8192","16384"};
+    char *labels[9]={"","128","256","512","1024","2048","4096","8192","16384"};
 
     GtkWidget *table=gtk_table_new(4,2,0);
     GtkWidget *sliderbox=gtk_hbox_new(0,0);
     GtkWidget *fastlabel=gtk_label_new("fastest");
     GtkWidget *qualitylabel=gtk_label_new("best");
-    GtkWidget *slider=multibar_slider_new(block_choices-1,labels,levels,1);
+    GtkWidget *slider=multibar_slider_new(block_choices,labels,levels,1);
     GtkWidget *samplelabel=gtk_label_new("window sample width");
     GtkWidget *mslabel=gtk_label_new("window time width");
     GtkWidget *hzlabel=gtk_label_new("approximate lowest response");
@@ -193,12 +193,12 @@ void clippanel_create(postfish_mainpanel *mp,
   /* set up convergence config */
   {
     float levels[7]={20,40,60,80,100,120,140};
-    char *labels[6]={"40","60","80","100","120","140"};
+    char *labels[7]={"","40","60","80","100","120","140"};
     GtkWidget *table=gtk_table_new(2,2,0);
     GtkWidget *sliderbox=gtk_hbox_new(0,0);
     GtkWidget *fastlabel=gtk_label_new("fastest");
     GtkWidget *qualitylabel=gtk_label_new("best");
-    GtkWidget *slider=multibar_slider_new(6,labels,levels,1);
+    GtkWidget *slider=multibar_slider_new(7,labels,levels,1);
     GtkWidget *label=gtk_label_new("solution depth");
     depth_readout=readout_new("000dB");
 
@@ -223,12 +223,12 @@ void clippanel_create(postfish_mainpanel *mp,
   /* set up limit config */
   {
     float levels[7]={1,5,10,20,40,60,100};
-    char *labels[6]={"5","10","20","40","60","100"};
+    char *labels[7]={"","5","10","20","40","60","100"};
     GtkWidget *table=gtk_table_new(2,2,0);
     GtkWidget *sliderbox=gtk_hbox_new(0,0);
     GtkWidget *fastlabel=gtk_label_new("fastest");
     GtkWidget *qualitylabel=gtk_label_new("best");
-    GtkWidget *slider=multibar_slider_new(6,labels,levels,1);
+    GtkWidget *slider=multibar_slider_new(7,labels,levels,1);
     GtkWidget *label=gtk_label_new("hard iteration limit");
     limit_readout=readout_new("000%");
 
@@ -250,7 +250,7 @@ void clippanel_create(postfish_mainpanel *mp,
   }
 
   for(i=0;i<input_ch;i++){
-    char *slabels[8]={".05",".1",".2",".3",".4",
+    char *slabels[9]={"",".05",".1",".2",".3",".4",
 		      ".6",".8","1."};
     float slevels[9]={.01,.05,.1,.2,.3,.4,.6,
                        .8,1.};
@@ -258,11 +258,11 @@ void clippanel_create(postfish_mainpanel *mp,
     char buffer[80];
     clipslider *cs=calloc(1,sizeof(*cs));
     GtkWidget *label;
-    GtkWidget *slider=multibar_new(8,slabels,slevels,1,
+    GtkWidget *slider=multibar_new(9,slabels,slevels,1,
 				   HI_DECAY|ZERO_DAMP);
     GtkWidget *readout=readout_new("0.00");
     GtkWidget *readoutdB=readout_new("-40dB");
-    GtkWidget *bar=multibar_new(2,labels,levels,0,
+    GtkWidget *bar=multibar_new(3,labels,levels,0,
 				HI_DECAY|ZERO_DAMP);
 
     cs->slider=slider;

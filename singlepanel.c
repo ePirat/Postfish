@@ -186,19 +186,19 @@ static singlecomp_panel_state *singlepanel_create_helper (postfish_mainpanel *mp
 							  subpanel_generic *panel,
 							  singlecomp_settings *scset){
 
-  char *labels[14]={"130","120","110","100","90","80","70",
+  char *labels[15]={"","130","120","110","100","90","80","70",
 		    "60","50","40","30","20","10","0"};
   float levels[15]={-140,-130,-120,-110,-100,-90,-80,-70,-60,-50,-40,
 		     -30,-20,-10,0};
 
   float compand_levels[9]={.1,.25,.5,.6667,1,1.5,2,4,10};
-  char  *compand_labels[8]={"4:1","2:1","1:1.5","1:1","1:1.5","1:2","1:4","1:10"};
+  char  *compand_labels[9]={"","4:1","2:1","1:1.5","1:1","1:1.5","1:2","1:4","1:10"};
 
   float timing_levels[6]={.5,1,10,100,1000,10000};
-  char  *timing_labels[5]={"1ms","10ms","100ms","1s","10s"};
+  char  *timing_labels[6]={"","1ms","10ms","100ms","1s","10s"};
 
   float per_levels[9]={0,12.5,25,37.5,50,62.5,75,87.5,100};
-  char  *per_labels[8]={"","25%","","50%","","75%","","100%"};
+  char  *per_labels[9]={"0%","","25%","","50%","","75%","","100%"};
 
   singlecomp_panel_state *ps=calloc(1,sizeof(singlecomp_panel_state));
   ps->ms=scset;
@@ -300,7 +300,7 @@ static singlecomp_panel_state *singlepanel_create_helper (postfish_mainpanel *mp
 
     GtkWidget *label=gtk_label_new("compand ratio:");
     GtkWidget *readout=readout_new("1.55:1");
-    GtkWidget *slider=multibar_slider_new(8,compand_labels,compand_levels,1);
+    GtkWidget *slider=multibar_slider_new(9,compand_labels,compand_levels,1);
    
     ps->under_compand.r=READOUT(readout);
     ps->under_compand.v=&ps->ms->u_ratio;
@@ -323,7 +323,7 @@ static singlecomp_panel_state *singlepanel_create_helper (postfish_mainpanel *mp
     GtkWidget *label=gtk_label_new("attack/decay:");
     GtkWidget *readout0=readout_new(" 100ms");
     GtkWidget *readout1=readout_new(" 100ms");
-    GtkWidget *slider=multibar_slider_new(5,timing_labels,timing_levels,2);
+    GtkWidget *slider=multibar_slider_new(6,timing_labels,timing_levels,2);
 
     ps->under_timing.r0=READOUT(readout0);
     ps->under_timing.r1=READOUT(readout1);
@@ -349,7 +349,7 @@ static singlecomp_panel_state *singlepanel_create_helper (postfish_mainpanel *mp
 
     GtkWidget *label=gtk_label_new("lookahead:");
     GtkWidget *readout=readout_new("100%");
-    GtkWidget *slider=multibar_slider_new(8,per_labels,per_levels,1);
+    GtkWidget *slider=multibar_slider_new(9,per_labels,per_levels,1);
     
     ps->under_lookahead.r=READOUT(readout);
     ps->under_lookahead.v=&ps->ms->u_lookahead;
@@ -397,7 +397,7 @@ static singlecomp_panel_state *singlepanel_create_helper (postfish_mainpanel *mp
 
     GtkWidget *label=gtk_label_new("compand ratio:");
     GtkWidget *readout=readout_new("1.55:1");
-    GtkWidget *slider=multibar_slider_new(8,compand_labels,compand_levels,1);
+    GtkWidget *slider=multibar_slider_new(9,compand_labels,compand_levels,1);
 
     ps->over_compand.r=READOUT(readout);
     ps->over_compand.v=&ps->ms->o_ratio;
@@ -420,7 +420,7 @@ static singlecomp_panel_state *singlepanel_create_helper (postfish_mainpanel *mp
     GtkWidget *label=gtk_label_new("attack/decay:");
     GtkWidget *readout0=readout_new(" 100ms");
     GtkWidget *readout1=readout_new(" 100ms");
-    GtkWidget *slider=multibar_slider_new(5,timing_labels,timing_levels,2);
+    GtkWidget *slider=multibar_slider_new(6,timing_labels,timing_levels,2);
    
     ps->over_timing.r0=READOUT(readout0);
     ps->over_timing.r1=READOUT(readout1);
@@ -446,7 +446,7 @@ static singlecomp_panel_state *singlepanel_create_helper (postfish_mainpanel *mp
 
     GtkWidget *label=gtk_label_new("lookahead:");
     GtkWidget *readout=readout_new("100%");
-    GtkWidget *slider=multibar_slider_new(8,per_labels,per_levels,1);
+    GtkWidget *slider=multibar_slider_new(9,per_labels,per_levels,1);
    
     ps->over_lookahead.r=READOUT(readout);
     ps->over_lookahead.v=&ps->ms->o_lookahead;
@@ -490,7 +490,7 @@ static singlecomp_panel_state *singlepanel_create_helper (postfish_mainpanel *mp
 
     GtkWidget *label=gtk_label_new("compand ratio:");
     GtkWidget *readout=readout_new("1.55:1");
-    GtkWidget *slider=multibar_slider_new(8,compand_labels,compand_levels,1);
+    GtkWidget *slider=multibar_slider_new(9,compand_labels,compand_levels,1);
    
     ps->base_compand.r=READOUT(readout);
     ps->base_compand.v=&ps->ms->b_ratio;
@@ -513,7 +513,7 @@ static singlecomp_panel_state *singlepanel_create_helper (postfish_mainpanel *mp
     GtkWidget *label=gtk_label_new("attack/decay:");
     GtkWidget *readout0=readout_new(" 100ms");
     GtkWidget *readout1=readout_new(" 100ms");
-    GtkWidget *slider=multibar_slider_new(5,timing_labels,timing_levels,2);
+    GtkWidget *slider=multibar_slider_new(6,timing_labels,timing_levels,2);
 
     ps->base_timing.r0=READOUT(readout0);
     ps->base_timing.r1=READOUT(readout1);
@@ -539,7 +539,7 @@ static singlecomp_panel_state *singlepanel_create_helper (postfish_mainpanel *mp
   {
     ps->bar.readoutu=readout_new("  +0");
     ps->bar.readouto=readout_new("  +0");
-    ps->bar.slider=multibar_new(14,labels,levels,2,HI_DECAY|LO_DECAY|LO_ATTACK);
+    ps->bar.slider=multibar_new(15,labels,levels,2,HI_DECAY|LO_DECAY|LO_ATTACK);
     ps->bar.vu=&ps->ms->u_thresh;
     ps->bar.vo=&ps->ms->o_thresh;
 
@@ -569,13 +569,13 @@ static float *rmsfeed=0;
 void singlepanel_feedback(int displayit){
   int j;
   if(!peakfeed){
-    peakfeed=malloc(sizeof(*peakfeed)*input_ch);
-    rmsfeed=malloc(sizeof(*rmsfeed)*input_ch);
+    peakfeed=malloc(sizeof(*peakfeed)*max(input_ch,OUTPUT_CHANNELS));
+    rmsfeed=malloc(sizeof(*rmsfeed)*max(input_ch,OUTPUT_CHANNELS));
   }
   
   if(pull_singlecomp_feedback_master(peakfeed,rmsfeed)==1)
     multibar_set(MULTIBAR(master_panel->bar.slider),rmsfeed,peakfeed,
-		 input_ch,(displayit && singlecomp_master_set.panel_visible));
+		 OUTPUT_CHANNELS,(displayit && singlecomp_master_set.panel_visible));
   
   /* channel panels are a bit different; we want each in its native color */
   if(pull_singlecomp_feedback_channel(peakfeed,rmsfeed)==1){

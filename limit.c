@@ -28,7 +28,6 @@
 
 extern int input_size;
 extern int input_rate;
-extern int input_ch;
 
 sig_atomic_t limit_active;
 sig_atomic_t limit_visible;
@@ -67,24 +66,22 @@ int pull_limit_feedback(float *peak,float *att){
   if(!f)return 0;
   
   if(peak)
-    memcpy(peak,f->peak,sizeof(*peak)*input_ch);
+    memcpy(peak,f->peak,sizeof(*peak)*limitstate.out.channels);
   if(att)
-    memcpy(att,f->att,sizeof(*att)*input_ch);
+    memcpy(att,f->att,sizeof(*att)*limitstate.out.channels);
   feedback_old(&limitstate.feedpool,(feedback_generic *)f);
   return 1;
 }
 
 /* called only by initial setup */
-int limit_load(void){
+int limit_load(int ch){
   int i;
   memset(&limitstate,0,sizeof(limitstate));
 
-  limitstate.iir=calloc(input_ch,sizeof(*limitstate.iir));
-  limitstate.out.size=input_size;
-  limitstate.out.channels=input_ch;
-  limitstate.out.rate=input_rate;
-  limitstate.out.data=malloc(input_ch*sizeof(*limitstate.out.data));
-  for(i=0;i<input_ch;i++)
+  limitstate.iir=calloc(ch,sizeof(*limitstate.iir));
+  limitstate.out.channels=ch;
+  limitstate.out.data=malloc(ch*sizeof(*limitstate.out.data));
+  for(i=0;i<ch;i++)
     limitstate.out.data[i]=malloc(input_size*sizeof(**limitstate.out.data));
 
   window=malloc(input_size*sizeof(*window));
@@ -109,10 +106,10 @@ static void filter_set(float msec,
 }
 
 /* called only in playback thread */
-int limit_reset(void ){
+int limit_reset(void){
   /* reset cached pipe state */
   while(pull_limit_feedback(NULL,NULL));
-  memset(limitstate.iir,0,input_ch*sizeof(&limitstate.iir));
+  memset(limitstate.iir,0,limitstate.out.channels*sizeof(&limitstate.iir));
   limitstate.initted=0;
   return 0;
 }
@@ -123,8 +120,9 @@ static inline float limit_knee(float x,float d){
 
 
 time_linkage *limit_read(time_linkage *in){
-  float peakfeed[input_ch];
-  float attfeed[input_ch];
+  int ch=limitstate.out.channels;
+  float peakfeed[ch];
+  float attfeed[ch];
 
   int activeC=limit_active;
   int activeP=limitstate.prev_active;
@@ -154,7 +152,7 @@ time_linkage *limit_read(time_linkage *in){
   depth=depth*.2;
   depth*=depth;
 
-  for(i=0;i<input_ch;i++){
+  for(i=0;i<ch;i++){
     localpeak=0.;
     localatt=0.;
 
@@ -176,8 +174,7 @@ time_linkage *limit_read(time_linkage *in){
 	x[k]=att;
       }
 	
-      
-      compute_iir_freefall2(x,input_size,limitstate.iir+i,&limitstate.decay);
+      compute_iir_decayonly2(x,input_size,limitstate.iir+i,&limitstate.decay);
       
       
       for(k=0;k<in->samples;k++)
@@ -225,10 +222,10 @@ time_linkage *limit_read(time_linkage *in){
       (limit_feedback *)feedback_new(&limitstate.feedpool,new_limit_feedback);
     
     if(!ff->peak)
-      ff->peak=malloc(input_ch*sizeof(*ff->peak));
+      ff->peak=malloc(ch*sizeof(*ff->peak));
     
     if(!ff->att)
-      ff->att=malloc(input_ch*sizeof(*ff->att));
+      ff->att=malloc(ch*sizeof(*ff->att));
     
     memcpy(ff->peak,peakfeed,sizeof(peakfeed));
     memcpy(ff->att,attfeed,sizeof(attfeed));
@@ -237,7 +234,7 @@ time_linkage *limit_read(time_linkage *in){
   }
    
   {
-    int tozero=limitstate.out.size-limitstate.out.samples;
+    int tozero=input_size-limitstate.out.samples;
     if(tozero)
       for(i=0;i<limitstate.out.channels;i++)
         memset(limitstate.out.data[i]+limitstate.out.samples,0,sizeof(**limitstate.out.data)*tozero);

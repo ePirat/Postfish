@@ -22,32 +22,12 @@
  */
 
 #include "postfish.h"
-#include <gtk/gtk.h>
-#include <gdk/gdkkeysyms.h>
-#include "readout.h"
-#include "multibar.h"
-#include "mainpanel.h"
-#include "mutedummy.h"
 
-extern sig_atomic_t *mute_active;
-extern int input_ch;
-
-static int activebutton_action(GtkWidget *widget,gpointer in){
-  int num=(int)in;
-  int active=gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(widget));
-  mute_active[num]=active;
-  
-  return FALSE;
-}
-
-void mutedummy_create(postfish_mainpanel *mp,
-		      GtkWidget **windowbutton,
-		      GtkWidget **activebutton){
-  int i;
-
-  /* nothing to do here but slap an activation callback on each activebutton */
-  for(i=0;i<input_ch;i++)
-    g_signal_connect_after (G_OBJECT (activebutton[i]), "clicked",
-			    G_CALLBACK (activebutton_action), (gpointer)i);
-    
-}
+extern void mixpanel_create_channel(postfish_mainpanel *mp,
+				   GtkWidget **windowbutton,
+				   GtkWidget **activebutton);
+extern void attenpanel_create(postfish_mainpanel *mp,
+			      GtkWidget **windowbutton,
+			      GtkWidget **activebutton);
+extern void mixpanel_feedback(int displayit);
+extern void mixpanel_reset(void);

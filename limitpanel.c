@@ -34,7 +34,6 @@
 
 extern sig_atomic_t limit_active;
 extern sig_atomic_t limit_visible;
-extern int input_ch;
 extern int input_size;
 extern int input_rate;
 
@@ -93,17 +92,17 @@ void limitpanel_create(postfish_mainpanel *mp,
 		       GtkWidget *activebutton){
 
 
-  char *labels[8]={"-80","-60","-40","-20","-10","-6","-3","+0"};
+  char *labels[9]={"","-80","-60","-40","-20","-10","-6","-3","+0"};
   float levels[9]={-80,-60,-50,-40,-30,-10,-6,-3,0};
 
-  char *labels2[4]={"-20","-10","-3","0"};
+  char *labels2[5]={"","-20","-10","-3","0"};
   float levels2[5]={-30,-20,-10,-3,0};
   
-  char *rlabels[3]={"6","   20","40"};
+  char *rlabels[4]={"","6","   20","40"};
   float rlevels[4]={0,3,10,20};
 
   float timing_levels[6]={.1,1,10,100,1000,10000};
-  char  *timing_labels[5]={"1ms","10ms","100ms","1s","10s"};
+  char  *timing_labels[6]={"","1ms","10ms","100ms","1s","10s"};
 
   char *shortcut[]={" l "};
 
@@ -124,11 +123,11 @@ void limitpanel_create(postfish_mainpanel *mp,
   GtkWidget *readout2=readout_new("+XXXXdB");
   GtkWidget *readout3=readout_new("+XXXXms");
 
-  GtkWidget *slider2=multibar_slider_new(4,labels2,levels2,1);
-  GtkWidget *slider3=multibar_slider_new(5,timing_labels,timing_levels,1);
+  GtkWidget *slider2=multibar_slider_new(5,labels2,levels2,1);
+  GtkWidget *slider3=multibar_slider_new(6,timing_labels,timing_levels,1);
 
-  t_slider=multibar_new(8,labels,levels,1,HI_DECAY);
-  a_slider=multibar_new(3,rlabels,rlevels,0,0);
+  t_slider=multibar_new(9,labels,levels,1,HI_DECAY);
+  a_slider=multibar_new(4,rlabels,rlevels,0,0);
 
   gtk_misc_set_alignment(GTK_MISC(label1),1,.5);
   gtk_misc_set_alignment(GTK_MISC(label2),1,.5);
@@ -170,17 +169,17 @@ static float *zerofeed=0;
 void limitpanel_feedback(int displayit){
   if(!peakfeed){
     int i;
-    peakfeed=malloc(sizeof(*peakfeed)*input_ch);
-    attfeed=malloc(sizeof(*attfeed)*input_ch);
-    zerofeed=malloc(sizeof(*zerofeed)*input_ch);
-    for(i=0;i<input_ch;i++)zerofeed[i]=-150.;
+    peakfeed=malloc(sizeof(*peakfeed)*OUTPUT_CHANNELS);
+    attfeed=malloc(sizeof(*attfeed)*OUTPUT_CHANNELS);
+    zerofeed=malloc(sizeof(*zerofeed)*OUTPUT_CHANNELS);
+    for(i=0;i<OUTPUT_CHANNELS;i++)zerofeed[i]=-150.;
   }
   
   if(pull_limit_feedback(peakfeed,attfeed)==1){
     multibar_set(MULTIBAR(t_slider),zerofeed,peakfeed,
-		 input_ch,(displayit && limit_visible));
+		 OUTPUT_CHANNELS,(displayit && limit_visible));
     multibar_set(MULTIBAR(a_slider),zerofeed,attfeed,
-		 input_ch,(displayit && limit_visible));
+		 OUTPUT_CHANNELS,(displayit && limit_visible));
   }
 }
 

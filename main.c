@@ -28,6 +28,7 @@
 
 /* sound playback code is OSS-specific for now */
 #include "postfish.h"
+#include <fenv.h>  // Thank you C99!
 #include <fftw3.h>
 #include "input.h"
 #include "output.h"
@@ -38,25 +39,116 @@
 #include "singlecomp.h"
 #include "limit.h"
 #include "mute.h"
+#include "mix.h"
 
 pthread_mutex_t master_mutex=PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
 
 int outfileno=-1;
 int eventpipe[2];
 
+int look_for_wisdom(char *filename){
+  int ret;
+  FILE *f=fopen(filename,"r");
+  if(!f)return 0;
+  ret=fftwf_import_wisdom_from_file(f);
+  fclose(f);
+
+  if(ret)
+    fprintf(stderr,"Found valid postfish-wisdomrc file at %s\n",filename);
+  else
+    fprintf(stderr,"WARNING: corrupt, invalid or obsolete postfish-wisdomrc file at %s\n",filename);
+  return(ret);
+}
+
 int main(int argc, char **argv){
   int configfd=-1;
+  int wisdom=0;
+
+  /* We do not care about FPEs; rather, underflow is nominal case, and
+     its better to ignore other traps in production than to crash the
+     app.  Please inform the FPU of this. */
+  fedisableexcept(FE_INEXACT);
+  fedisableexcept(FE_UNDERFLOW);
+  fedisableexcept(FE_OVERFLOW);
+
+  /* Linux Altivec support has a very annoying problem; by default,
+     math on denormalized floats will simply crash the program.  FFTW3
+     uses Altivec, so boom.
+     
+     By the C99 spec, the above exception configuration is also
+     supposed to handle Altivec config, but doesn't.  So we use the
+     below ugliness. */
+
+#ifdef __PPC
+#include <altivec.h>
+#if (defined __GNUC__) && (__GNUC__ == 3) && ! (defined __APPLE_CC__)
+  __vector unsigned short noTrap = 
+    (__vector unsigned short){0,0,0,0,0,0,0x1,0};
+#else
+  vector unsigned short noTrap = 
+    (vector unsigned short)(0,0,0,0,0,0,0x1,0);
+#endif
+
+  vec_mtvscr(noTrap);
+#endif
+
+  /* check for fftw wisdom file in order:
+     ./postfish-wisdomrc
+     $(POSTFISHDIR)/postfish-wisdomrc
+     ~/.postfish/postfish-wisdomrc
+     ETCDIR/postfish-wisdomrc 
+     system wisdom */
+  
+
+  wisdom=look_for_wisdom("./postfish-wisdomrc");
+  if(!wisdom){
+    char *rcdir=getenv("POSTFISH_RCDIR");
+    if(rcdir){
+      char *rcfile="/postfish-wisdomrc";
+      char *homerc=calloc(1,strlen(rcdir)+strlen(rcfile)+1);
+      strcat(homerc,rcdir);
+      strcat(homerc,rcfile);
+      wisdom=look_for_wisdom(homerc);
+    }
+  }
+  if(!wisdom){
+    char *rcdir=getenv("HOME");
+    if(rcdir){
+      char *rcfile="/.postfish/postfish-wisdomrc";
+      char *homerc=calloc(1,strlen(rcdir)+strlen(rcfile)+1);
+      strcat(homerc,rcdir);
+      strcat(homerc,rcfile);
+      wisdom=look_for_wisdom(homerc);
+    }
+  }
+  if(!wisdom)wisdom=look_for_wisdom(ETCDIR"/postfish-wisdomrc");
+  if(!wisdom){
+    fftwf_import_system_wisdom(); 
+  
+    fprintf(stderr,"Postfish could not find the postfish-wisdom configuration file normally built\n"
+	    "or installed with Postfish and located in one of the following places:\n"
+
+	    "\t./postfish-wisdomrc\n"
+	    "\t$(POSTFISHDIR)/postfish-wisdomrc\n"
+	    "\t~/.postfish/postfish-wisdomrc\n\t"
+	    ETCDIR"/postfish-wisdomrc\n"
+	    "This configuration file is used to reduce the startup time Postfish uses to \n"
+	    "pre-calculate Fourier transform tables for the FFTW3 library. Postfish will start\n"
+	    "and operate normally, but it will take additional time before popping the main\n"
+	    "window because this information must be regenerated each time Postfish runs.\n");
+  }
 
   /* parse command line and open all the input files */
   if(input_load(argc-1,argv+1))exit(1);
   /* set up filter chains */
   if(declip_load())exit(1);
-  if(eq_load())exit(1);
+  if(eq_load(OUTPUT_CHANNELS))exit(1);
   if(suppress_load())exit(1);
-  if(multicompand_load())exit(1);
-  if(singlecomp_load())exit(1);
-  if(limit_load())exit(1);
+  if(multicompand_load(OUTPUT_CHANNELS))exit(1);
+  if(singlecomp_load(OUTPUT_CHANNELS))exit(1);
+  if(limit_load(OUTPUT_CHANNELS))exit(1);
   if(mute_load())exit(1);
+  if(mix_load(OUTPUT_CHANNELS))exit(1);
 
   /* look at stdout... do we have a file or device? */
   if(!isatty(STDOUT_FILENO)){

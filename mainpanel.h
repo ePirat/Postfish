@@ -32,6 +32,7 @@ typedef struct postfish_mainpanel postfish_mainpanel;
 #include "singlepanel.h"
 #include "suppresspanel.h"
 #include "limitpanel.h"
+#include "mixpanel.h"
 #include "mutedummy.h"
 
 struct postfish_mainpanel{

@@ -51,7 +51,7 @@ static char * const eq_freq_labels[eq_freqs]={
 
 extern int pull_eq_feedback_master(float **peak,float **rms);
 extern int pull_eq_feedback_channel(float **peak,float **rms);
-extern int eq_load(void);
+extern int eq_load(int ch);
 extern int eq_reset();
 extern void eq_set(eq_settings *eq,int freq, float value);
 extern time_linkage *eq_read_master(time_linkage *in);

@@ -80,7 +80,7 @@ typedef struct {
 
 
 
-extern int subband_load(subband_state *f,int bands, int qb);
+extern int subband_load(subband_state *f,int bands, int qb,int ch);
 extern int subband_load_freqs(subband_state *f,subband_window *w,
 			      const float *freq_list,int bands);
 

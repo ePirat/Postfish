@@ -52,7 +52,7 @@ typedef struct {
 
 extern int pull_singlecomp_feedback_master(float *peak,float *rms);
 extern int pull_singlecomp_feedback_channel(float *peak,float *rms);
-extern int singlecomp_load(void);
+extern int singlecomp_load(int ch);
 extern int singlecomp_reset(void);
 extern time_linkage *singlecomp_read_master(time_linkage *in);
 extern time_linkage *singlecomp_read_channel(time_linkage *in);

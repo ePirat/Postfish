@@ -33,6 +33,7 @@ typedef struct {
   float alpha; 
   float Hz; 
   float ms; 
+  int   samples;
 } iir_filter;
 
 static inline long impulse_ahead2(float alpha){
@@ -83,6 +84,8 @@ extern void compute_iir2(float *x, int n, iir_state *is,
 extern void compute_iir_freefall1(float *x, int n, iir_state *is, 
 				 iir_filter *decay);
 extern void compute_iir_freefall2(float *x, int n, iir_state *is, 
+				 iir_filter *decay);
+extern void compute_iir_decayonly2(float *x, int n, iir_state *is, 
 				 iir_filter *decay);
 extern void compute_iir_freefall3(float *x, int n, iir_state *is, 
 				 iir_filter *decay);

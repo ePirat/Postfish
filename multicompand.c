@@ -69,7 +69,7 @@ typedef struct {
   
   float **peak;
   float **rms;
-
+  int ch;
 } multicompand_state;
 
 multicompand_settings multi_master_set;
@@ -81,17 +81,7 @@ static multicompand_state channel_state;
 static subband_window sw[multicomp_banks];
 
 static feedback_generic *new_multicompand_feedback(void){
-  int i;
   multicompand_feedback *ret=calloc(1,sizeof(*ret));
-
-  ret->peak=malloc(multicomp_freqs_max*sizeof(*ret->peak));
-  for(i=0;i<multicomp_freqs_max;i++)
-    ret->peak[i]=malloc(input_ch*sizeof(**ret->peak));
-   
-  ret->rms=malloc(multicomp_freqs_max*sizeof(*ret->rms));
-  for(i=0;i<multicomp_freqs_max;i++)
-    ret->rms[i]=malloc(input_ch*sizeof(**ret->rms));
-  
   return (feedback_generic *)ret;
 }
 
@@ -109,10 +99,10 @@ static int pull_multicompand_feedback(multicompand_state *ms,float **peak,float 
   }else{
     if(peak)
       for(i=0;i<f->freq_bands;i++)
-	memcpy(peak[i],f->peak[i],sizeof(**peak)*input_ch);
+	memcpy(peak[i],f->peak[i],sizeof(**peak)*ms->ch);
     if(rms)
       for(i=0;i<f->freq_bands;i++)
-	memcpy(rms[i],f->rms[i],sizeof(**rms)*input_ch);
+	memcpy(rms[i],f->rms[i],sizeof(**rms)*ms->ch);
     if(b)*b=f->freq_bands;
     feedback_old(&ms->feedpool,(feedback_generic *)f);
     return 1;
@@ -130,7 +120,7 @@ int pull_multicompand_feedback_channel(float **peak,float **rms,int *b){
 static void reset_filters(multicompand_state *ms){
   int i,j;
   for(i=0;i<multicomp_freqs_max;i++)
-    for(j=0;j<input_ch;j++){
+    for(j=0;j<ms->ch;j++){
       memset(&ms->over_peak[i][j],0,sizeof(peak_state));
       memset(&ms->under_peak[i][j],0,sizeof(peak_state));
       memset(&ms->base_peak[i][j],0,sizeof(peak_state));
@@ -151,44 +141,45 @@ void multicompand_reset(){
 
 }
 
-static int multicompand_load_helper(multicompand_state *ms){
+static int multicompand_load_helper(multicompand_state *ms,int ch){
   int i;
   int qblocksize=input_size/8;
   memset(ms,0,sizeof(ms));
   
-  subband_load(&ms->ss,multicomp_freqs_max,qblocksize);
+  ms->ch=ch;
+  subband_load(&ms->ss,multicomp_freqs_max,qblocksize,ch);
 
-  ms->over_attack=calloc(input_ch,sizeof(*ms->over_attack));
-  ms->over_decay=calloc(input_ch,sizeof(*ms->over_decay));
+  ms->over_attack=calloc(ms->ch,sizeof(*ms->over_attack));
+  ms->over_decay=calloc(ms->ch,sizeof(*ms->over_decay));
 
-  ms->under_attack=calloc(input_ch,sizeof(*ms->under_attack));
-  ms->under_decay=calloc(input_ch,sizeof(*ms->under_decay));
+  ms->under_attack=calloc(ms->ch,sizeof(*ms->under_attack));
+  ms->under_decay=calloc(ms->ch,sizeof(*ms->under_decay));
 
-  ms->base_attack=calloc(input_ch,sizeof(*ms->base_attack));
-  ms->base_decay=calloc(input_ch,sizeof(*ms->base_decay));
+  ms->base_attack=calloc(ms->ch,sizeof(*ms->base_attack));
+  ms->base_decay=calloc(ms->ch,sizeof(*ms->base_decay));
 
   for(i=0;i<multicomp_freqs_max;i++){
-    ms->over_peak[i]=calloc(input_ch,sizeof(peak_state));
-    ms->under_peak[i]=calloc(input_ch,sizeof(peak_state));
-    ms->base_peak[i]=calloc(input_ch,sizeof(peak_state));
-    ms->over_iir[i]=calloc(input_ch,sizeof(iir_state));
-    ms->under_iir[i]=calloc(input_ch,sizeof(iir_state));
-    ms->base_iir[i]=calloc(input_ch,sizeof(iir_state));
+    ms->over_peak[i]=calloc(ms->ch,sizeof(peak_state));
+    ms->under_peak[i]=calloc(ms->ch,sizeof(peak_state));
+    ms->base_peak[i]=calloc(ms->ch,sizeof(peak_state));
+    ms->over_iir[i]=calloc(ms->ch,sizeof(iir_state));
+    ms->under_iir[i]=calloc(ms->ch,sizeof(iir_state));
+    ms->base_iir[i]=calloc(ms->ch,sizeof(iir_state));
   }
 
   ms->peak=calloc(multicomp_freqs_max,sizeof(*ms->peak));
   ms->rms=calloc(multicomp_freqs_max,sizeof(*ms->rms));
-  for(i=0;i<multicomp_freqs_max;i++)ms->peak[i]=malloc(input_ch*sizeof(**ms->peak));
-  for(i=0;i<multicomp_freqs_max;i++)ms->rms[i]=malloc(input_ch*sizeof(**ms->rms));
+  for(i=0;i<multicomp_freqs_max;i++)ms->peak[i]=malloc(ms->ch*sizeof(**ms->peak));
+  for(i=0;i<multicomp_freqs_max;i++)ms->rms[i]=malloc(ms->ch*sizeof(**ms->rms));
   
   return 0;
 }
 
-int multicompand_load(void){
+int multicompand_load(int outch){
   int i;
   multi_channel_set=calloc(input_ch,sizeof(*multi_channel_set));
-  multicompand_load_helper(&master_state);
-  multicompand_load_helper(&channel_state);
+  multicompand_load_helper(&master_state,outch);
+  multicompand_load_helper(&channel_state,input_ch);
 
   for(i=0;i<multicomp_banks;i++)
     subband_load_freqs(&master_state.ss,&sw[i],multicomp_freq_list[i],
@@ -221,7 +212,7 @@ static void filterbank_set(multicompand_state *ms,
 			   iir_filter *filter,
 			   int attackp){
   int i;
-  for(i=0;i<input_ch;i++)
+  for(i=0;i<ms->ch;i++)
     filter_set(ms,msec,filter+i,attackp);
 
 }
@@ -513,10 +504,20 @@ static void push_feedback(multicompand_state *ms,int bypass,int maxmaxbands){
     multicompand_feedback *ff=
       (multicompand_feedback *)
       feedback_new(&ms->feedpool,new_multicompand_feedback);
+
+    if(!ff->peak){
+      ff->peak=malloc(multicomp_freqs_max*sizeof(*ff->peak));
+      ff->rms=malloc(multicomp_freqs_max*sizeof(*ff->rms));
+  
+      for(i=0;i<multicomp_freqs_max;i++)
+	ff->rms[i]=malloc(ms->ch*sizeof(**ff->rms));
+      for(i=0;i<multicomp_freqs_max;i++)
+	ff->peak[i]=malloc(ms->ch*sizeof(**ff->peak));
+    }
     
     for(i=0;i<maxmaxbands;i++){
-      memcpy(ff->peak[i],ms->peak[i],input_ch*sizeof(**ms->peak));
-      memcpy(ff->rms[i],ms->rms[i],input_ch*sizeof(**ms->rms));
+      memcpy(ff->peak[i],ms->peak[i],ms->ch*sizeof(**ms->peak));
+      memcpy(ff->rms[i],ms->rms[i],ms->ch*sizeof(**ms->rms));
     } 
     ff->bypass=0;
     ff->freq_bands=maxmaxbands;
@@ -530,13 +531,13 @@ static void multicompand_work_master(void *vs){
   int maxmaxbands=0;
 
   for(i=0;i<multicomp_freqs_max;i++){
-    for(j=0;j<input_ch;j++){
+    for(j=0;j<ms->ch;j++){
       ms->peak[i][j]=-150.;
       ms->rms[i][j]=-150;
     }
   }
  
-  for(i=0;i<input_ch;i++){
+  for(i=0;i<ms->ch;i++){
     int maxbands=find_maxbands(&ms->ss,i);
     if(maxbands>maxmaxbands)maxmaxbands=maxbands;
     if(multicompand_work_perchannel(ms, ms->peak, ms->rms, maxbands, i, &multi_master_set))
@@ -552,13 +553,13 @@ static void multicompand_work_channel(void *vs){
   int maxmaxbands=0;
 
   for(i=0;i<multicomp_freqs_max;i++){
-    for(j=0;j<input_ch;j++){
+    for(j=0;j<ms->ch;j++){
       ms->peak[i][j]=-150.;
       ms->rms[i][j]=-150;
     }
   }
  
-  for(i=0;i<input_ch;i++){
+  for(i=0;i<ms->ch;i++){
     int maxbands=find_maxbands(&ms->ss,i);
     if(maxbands>maxmaxbands)maxmaxbands=maxbands;
     if(multicompand_work_perchannel(ms, ms->peak, ms->rms, maxbands, i, multi_channel_set+i))
@@ -569,12 +570,13 @@ static void multicompand_work_channel(void *vs){
 }
 
 time_linkage *multicompand_read_master(time_linkage *in){
-  int visible[input_ch];
-  int active[input_ch];
-  subband_window *w[input_ch];
+  multicompand_state *ms=&master_state;
+  int visible[ms->ch];
+  int active[ms->ch];
+  subband_window *w[ms->ch];
   int i,ab=multi_master_set.active_bank;
   
-  for(i=0;i<input_ch;i++){
+  for(i=0;i<ms->ch;i++){
     visible[i]=multi_master_set.panel_visible;
     active[i]=multi_master_set.panel_active;
     w[i]=&sw[ab];
@@ -609,12 +611,13 @@ time_linkage *multicompand_read_master(time_linkage *in){
 }
 
 time_linkage *multicompand_read_channel(time_linkage *in){
-  int visible[input_ch];
-  int active[input_ch];
-  subband_window *w[input_ch];
+  multicompand_state *ms=&channel_state;
+  int visible[ms->ch];
+  int active[ms->ch];
+  subband_window *w[ms->ch];
   int i;
   
-  for(i=0;i<input_ch;i++){
+  for(i=0;i<ms->ch;i++){
 
     /* do any filters need updated from UI changes? */
     float o_attackms=multi_channel_set[i].over_attack*.1;

@@ -495,19 +495,19 @@ static multi_panel_state *compandpanel_create(postfish_mainpanel *mp,
 					      subpanel_generic *panel,
 					      multicompand_settings *ms){
   int i;
-  char *labels[14]={"130","120","110","100","90","80","70",
+  char *labels[15]={"","130","120","110","100","90","80","70",
 		    "60","50","40","30","20","10","0"};
   float levels[15]={-140,-130,-120,-110,-100,-90,-80,-70,-60,-50,-40,
 		     -30,-20,-10,0};
 
   float compand_levels[9]={.1,.25,.5,.6667,1,1.5,2,4,10};
-  char  *compand_labels[8]={"4:1","2:1","1:1.5","1:1","1:1.5","1:2","1:4","1:10"};
+  char  *compand_labels[89]={"","4:1","2:1","1:1.5","1:1","1:1.5","1:2","1:4","1:10"};
 
   float timing_levels[6]={.5,1,10,100,1000,10000};
-  char  *timing_labels[5]={"1ms","10ms","100ms","1s","10s"};
+  char  *timing_labels[6]={"","1ms","10ms","100ms","1s","10s"};
 
   float per_levels[9]={0,12.5,25,37.5,50,62.5,75,87.5,100};
-  char  *per_labels[8]={"","25%","","50%","","75%","","100%"};
+  char  *per_labels[9]={"0%","","25%","","50%","","75%","","100%"};
 
   multi_panel_state *ps=calloc(1,sizeof(multi_panel_state));
   ps->inactive_updatep=1;
@@ -644,7 +644,7 @@ static multi_panel_state *compandpanel_create(postfish_mainpanel *mp,
 
     GtkWidget *label=gtk_label_new("compand ratio:");
     GtkWidget *readout=readout_new("1.55:1");
-    GtkWidget *slider=multibar_slider_new(8,compand_labels,compand_levels,1);
+    GtkWidget *slider=multibar_slider_new(9,compand_labels,compand_levels,1);
    
     ps->under_compand.r=READOUT(readout);
     ps->under_compand.v=&ps->ms->under_ratio;
@@ -667,7 +667,7 @@ static multi_panel_state *compandpanel_create(postfish_mainpanel *mp,
     GtkWidget *label=gtk_label_new("attack/decay:");
     GtkWidget *readout0=readout_new(" 100ms");
     GtkWidget *readout1=readout_new(" 100ms");
-    GtkWidget *slider=multibar_slider_new(5,timing_labels,timing_levels,2);
+    GtkWidget *slider=multibar_slider_new(6,timing_labels,timing_levels,2);
 
     ps->under_timing.r0=READOUT(readout0);
     ps->under_timing.r1=READOUT(readout1);
@@ -693,7 +693,7 @@ static multi_panel_state *compandpanel_create(postfish_mainpanel *mp,
 
     GtkWidget *label=gtk_label_new("lookahead:");
     GtkWidget *readout=readout_new("100%");
-    GtkWidget *slider=multibar_slider_new(8,per_labels,per_levels,1);
+    GtkWidget *slider=multibar_slider_new(9,per_labels,per_levels,1);
 
     ps->under_lookahead.r=READOUT(readout);
     ps->under_lookahead.v=&ps->ms->under_lookahead;
@@ -740,7 +740,7 @@ static multi_panel_state *compandpanel_create(postfish_mainpanel *mp,
 
     GtkWidget *label=gtk_label_new("compand ratio:");
     GtkWidget *readout=readout_new("1.55:1");
-    GtkWidget *slider=multibar_slider_new(8,compand_labels,compand_levels,1);
+    GtkWidget *slider=multibar_slider_new(9,compand_labels,compand_levels,1);
    
     ps->over_compand.r=READOUT(readout);
     ps->over_compand.v=&ps->ms->over_ratio;
@@ -763,7 +763,7 @@ static multi_panel_state *compandpanel_create(postfish_mainpanel *mp,
     GtkWidget *label=gtk_label_new("attack/decay:");
     GtkWidget *readout0=readout_new(" 100ms");
     GtkWidget *readout1=readout_new(" 100ms");
-    GtkWidget *slider=multibar_slider_new(5,timing_labels,timing_levels,2);
+    GtkWidget *slider=multibar_slider_new(6,timing_labels,timing_levels,2);
    
     ps->over_timing.r0=READOUT(readout0);
     ps->over_timing.r1=READOUT(readout1);
@@ -789,7 +789,7 @@ static multi_panel_state *compandpanel_create(postfish_mainpanel *mp,
 
     GtkWidget *label=gtk_label_new("lookahead:");
     GtkWidget *readout=readout_new("100%");
-    GtkWidget *slider=multibar_slider_new(8,per_labels,per_levels,1);
+    GtkWidget *slider=multibar_slider_new(9,per_labels,per_levels,1);
    
     ps->over_lookahead.r=READOUT(readout);
     ps->over_lookahead.v=&ps->ms->over_lookahead;
@@ -832,7 +832,7 @@ static multi_panel_state *compandpanel_create(postfish_mainpanel *mp,
 
     GtkWidget *label=gtk_label_new("compand ratio:");
     GtkWidget *readout=readout_new("1.55:1");
-    GtkWidget *slider=multibar_slider_new(8,compand_labels,compand_levels,1);
+    GtkWidget *slider=multibar_slider_new(9,compand_labels,compand_levels,1);
    
     ps->base_compand.r=READOUT(readout);
     ps->base_compand.v=&ps->ms->base_ratio;
@@ -855,7 +855,7 @@ static multi_panel_state *compandpanel_create(postfish_mainpanel *mp,
     GtkWidget *label=gtk_label_new("attack/decay:");
     GtkWidget *readout0=readout_new(" 100ms");
     GtkWidget *readout1=readout_new(" 100ms");
-    GtkWidget *slider=multibar_slider_new(5,timing_labels,timing_levels,2);
+    GtkWidget *slider=multibar_slider_new(6,timing_labels,timing_levels,2);
 
     ps->base_timing.r0=READOUT(readout0);
     ps->base_timing.r1=READOUT(readout1);
@@ -884,7 +884,7 @@ static multi_panel_state *compandpanel_create(postfish_mainpanel *mp,
     
     ps->bars[i].readoutu=readout_new("  +0");
     ps->bars[i].readouto=readout_new("  +0");
-    ps->bars[i].slider=multibar_new(14,labels,levels,2,HI_DECAY|LO_DECAY|LO_ATTACK);
+    ps->bars[i].slider=multibar_new(15,labels,levels,2,HI_DECAY|LO_DECAY|LO_ATTACK);
     ps->bars[i].number=i;
     ps->bars[i].mp=ps;
     ps->bars[i].label=label;
@@ -911,7 +911,7 @@ static multi_panel_state *compandpanel_create(postfish_mainpanel *mp,
   {
     GtkWidget *label=gtk_label_new("average");
     
-    ps->bars[multicomp_freqs_max].slider=multibar_slider_new(14,labels,levels,2);
+    ps->bars[multicomp_freqs_max].slider=multibar_slider_new(15,labels,levels,2);
 
     multibar_callback(MULTIBAR(ps->bars[multicomp_freqs_max].slider),average_change,ps);
 
@@ -982,15 +982,15 @@ void compandpanel_feedback(int displayit){
     rmsfeed=malloc(sizeof(*rmsfeed)*multicomp_freqs_max);
 
     for(i=0;i<multicomp_freqs_max;i++){
-      peakfeed[i]=malloc(sizeof(**peakfeed)*input_ch);
-      rmsfeed[i]=malloc(sizeof(**rmsfeed)*input_ch);
+      peakfeed[i]=malloc(sizeof(**peakfeed)*max(input_ch,OUTPUT_CHANNELS));
+      rmsfeed[i]=malloc(sizeof(**rmsfeed)*max(input_ch,OUTPUT_CHANNELS));
     }
   }
 
   if(pull_multicompand_feedback_master(peakfeed,rmsfeed,&bands)==1)
     for(i=0;i<bands;i++)
       multibar_set(MULTIBAR(master_panel->bars[i].slider),rmsfeed[i],peakfeed[i],
-		   input_ch,(displayit && multi_master_set.panel_visible));
+		   OUTPUT_CHANNELS,(displayit && multi_master_set.panel_visible));
 
   /* channel panels are a bit different; we want each in its native color */
   if(pull_multicompand_feedback_channel(peakfeed,rmsfeed,&bands)==1){

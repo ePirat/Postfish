@@ -132,10 +132,10 @@ static suppress_panel_state *suppresspanel_create_helper(postfish_mainpanel *mp,
 							 suppress_settings *sset){
   int i;
   float compand_levels[5]={1,1.5,2,3,5};
-  char  *compand_labels[4]={"1.5","2","3","5"};
+  char  *compand_labels[5]={"","1.5","2","3","5"};
 
   float timing_levels[5]={1, 10, 100, 1000, 10000};
-  char  *timing_labels[4]={"10ms","     100ms","1s","10s"};
+  char  *timing_labels[5]={"","10ms","     100ms","1s","10s"};
 
   GtkWidget *table=gtk_table_new(suppress_freqs+4,5,0);
   GtkWidget *timinglabel=gtk_label_new("suppressor filter timing");
@@ -197,7 +197,7 @@ static suppress_panel_state *suppresspanel_create_helper(postfish_mainpanel *mp,
 
   /* timing controls */
   {
-    GtkWidget *slider=multibar_slider_new(4,timing_labels,timing_levels,3);
+    GtkWidget *slider=multibar_slider_new(5,timing_labels,timing_levels,3);
 
     ps->timing.r0=READOUT(readout_new("10.0ms"));
     ps->timing.r1=READOUT(readout_new("10.0ms"));
@@ -230,7 +230,7 @@ static suppress_panel_state *suppresspanel_create_helper(postfish_mainpanel *mp,
     gtk_widget_set_name(label,"scalemarker");
     
     ps->bars[i].readoutc=READOUT(readout_new("1.55:1"));
-    ps->bars[i].cslider=multibar_slider_new(4,compand_labels,compand_levels,1);
+    ps->bars[i].cslider=multibar_slider_new(5,compand_labels,compand_levels,1);
     ps->bars[i].sp=ps;
     ps->bars[i].v=sset->ratio+i;
     ps->bars[i].number=i;

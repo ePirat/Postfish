@@ -156,9 +156,7 @@ int declip_load(void){
   for(i=0;i<input_ch;i++)
     chtrigger[i]=1.;
   
-  out.size=input_size;
   out.channels=input_ch;
-  out.rate=input_rate;
   out.data=malloc(input_ch*sizeof(*out.data));
   for(i=0;i<input_ch;i++)
     out.data[i]=malloc(input_size*sizeof(**out.data));
@@ -363,7 +361,7 @@ time_linkage *declip_read(time_linkage *in){
 	memcpy(lap[i],work+blocksize,sizeof(*work)*blocksize/2);
 
 	/* now iterate the pieces purely within in */
-	for(j=0;j+blocksize<=in->size;j+=blocksize/2){
+	for(j=0;j+blocksize<=input_size;j+=blocksize/2){
 	  memset(work,0,sizeof(*work)*blocksize);
 	  memcpy(work+blocksize/2,in->data[i]+j,sizeof(*work)*blocksize);
 	  memset(work+blocksize+blocksize/2,0,sizeof(*work)*blocksize/2);
@@ -394,10 +392,10 @@ time_linkage *declip_read(time_linkage *in){
     cache_active=in->active;
     fillstate=1;
     out.samples=0;
-    if(in->samples==in->size)break;
+    if(in->samples==input_size)break;
     
     for(i=0;i<input_ch;i++)
-      memset(in->data[i],0,sizeof(**in->data)*in->size);
+      memset(in->data[i],0,sizeof(**in->data)*input_size);
     in->samples=0;
     /* fall through */
 
@@ -589,7 +587,7 @@ time_linkage *declip_read(time_linkage *in){
 	/* declip */
 	if(declip_prev_active[i]){
 	  
-	  for(j=0;j+blocksize<=in->size;j+=blocksize/2){
+	  for(j=0;j+blocksize<=input_size;j+=blocksize/2){
 	    memset(work,0,sizeof(*work)*blocksize);
 	    memcpy(work+blocksize/2,cache[i]+j,sizeof(*work)*blocksize);
 	    memset(work+blocksize+blocksize/2,0,sizeof(*work)*blocksize/2);
@@ -607,7 +605,7 @@ time_linkage *declip_read(time_linkage *in){
 	}
       }
     }
-    if(out.samples<out.size)fillstate=2;
+    if(out.samples<input_size)fillstate=2;
     break;
   case 2: /* we've pushed out EOF already */
     out.samples=0;
@@ -622,7 +620,7 @@ time_linkage *declip_read(time_linkage *in){
                                              comes in */
 
   {
-    int tozero=out.size-out.samples;
+    int tozero=input_size-out.samples;
     if(tozero)
       for(i=0;i<out.channels;i++)
 	memset(out.data[i]+out.samples,0,sizeof(**out.data)*tozero);

@@ -28,6 +28,6 @@ typedef struct{
 } limit_settings;
 
 extern int pull_limit_feedback(float *peak,float *att);
-extern int limit_load(void);
+extern int limit_load(int ch);
 extern int limit_reset(void);
 extern time_linkage *limit_read(time_linkage *in);

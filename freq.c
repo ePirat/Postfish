@@ -29,7 +29,6 @@
 #include "lpc.h"
 
 extern int input_rate;
-extern int input_ch;
 extern int input_size;
 
 /* feedback! */
@@ -49,7 +48,7 @@ static feedback_generic *new_freq_feedback(void){
 
 int pull_freq_feedback(freq_state *ff,float **peak,float **rms){
   freq_feedback *f=(freq_feedback *)feedback_pull(&ff->feedpool);
-  int i;
+  int i,ch=ff->out.channels;
   
   if(!f)return 0;
   
@@ -59,10 +58,10 @@ int pull_freq_feedback(freq_state *ff,float **peak,float **rms){
   }else{
     if(peak)
       for(i=0;i<ff->fc->bands;i++)
-	memcpy(peak[i],f->peak[i],sizeof(**peak)*input_ch);
+	memcpy(peak[i],f->peak[i],sizeof(**peak)*ch);
     if(rms)
       for(i=0;i<ff->fc->bands;i++)
-	memcpy(rms[i],f->rms[i],sizeof(**rms)*input_ch);
+	memcpy(rms[i],f->rms[i],sizeof(**rms)*ch);
     feedback_old(&ff->feedpool,(feedback_generic *)f);
     return 1;
   }
@@ -101,91 +100,101 @@ int freq_class_load(freq_class_setup *f,const float *frequencies, int bands){
   /* I'm too lazy to figure out the integral symbolically, use this
      fancy CPU thingy for something */
   
-  f->ho_window=malloc(bands*sizeof(*f->ho_window));
   f->ho_area=calloc(bands,sizeof(*f->ho_area));
-  {
-    float working[f->qblocksize*4+2];
-    
+  f->ho_window=malloc(bands*sizeof(*f->ho_window));
+  for(i=0;i<bands;i++)
+    f->ho_window[i]=calloc((f->qblocksize*2+1),sizeof(**f->ho_window));
+
+  /* first, build the first-pass desired, supersampled response */
+  for(j=0;j<(((f->qblocksize*2+1)/10)<<5);j++){
+    float localf= .5*j*input_rate/(f->qblocksize<<6);
+    int localbin= j>>5;
+
     for(i=0;i<bands;i++){
       float lastf=(i>0?frequencies[i-1]:0);
       float thisf=frequencies[i];
       float nextf=frequencies[i+1];
-      memset(working,0,sizeof(working));
 
-      for(j=0;j<((f->qblocksize*2+1)<<5);j++){
-        float localf= .5*j*input_rate/(f->qblocksize<<6);
-        int localbin= j>>5;
-        float localwin;
+      if(localf>=lastf && localf<nextf){
+	float localwin=1.;
+	if(localf<thisf){
+	  if(i!=0)localwin= sin((localf-lastf)/(thisf-lastf)*M_PIl*.5);
+	}else{
+	  if(i+1!=bands)localwin= sin((nextf-localf)/(nextf-thisf)*M_PIl*.5);
+	}
 
-        if(localf>=lastf && localf<thisf){
-          if(i==0)
-            localwin=1.;
-          else
-            localwin= sin((localf-lastf)/(thisf-lastf)*M_PIl*.5);
-          localwin*=localwin;
-	  working[localbin]+=localwin*(1./32);
-
-        }else if(localf>=thisf && localf<nextf){
-          if(i+1==bands)
-            localwin=1.;
-          else
-            localwin= sin((nextf-localf)/(nextf-thisf)*M_PIl*.5);
-          
-          localwin*=localwin;
-          working[localbin]+=localwin*(1./32);
-          
-        }
+	localwin*=localwin;
+	f->ho_window[i][localbin]+=localwin*(1./32);
       }
+    }
+  }
+  j>>=5;
+  for(;j<f->qblocksize*2+1;j++){
+    float localf= .5*j*input_rate/(f->qblocksize<<1);
 
-      /* window this desired response in the time domain so that our
-         convolution is properly padded against being circular */
-      memset(f->fftwf_buffer,0,sizeof(*f->fftwf_buffer)*
-	     (f->qblocksize*4+2));
-      for(j=0;j<f->qblocksize*2;j++)
-	f->fftwf_buffer[j*2]=working[j];
-      
-      fftwf_execute(f->fftwf_backward);
+    for(i=0;i<bands;i++){
+      float lastf=(i>0?frequencies[i-1]:0);
+      float thisf=frequencies[i];
+      float nextf=frequencies[i+1];
 
-      /* window response in time */
-      for(j=0;j<f->qblocksize;j++){
-	float val=cos(j*M_PI/(f->qblocksize*2));
-	val=sin(val*val*M_PIl*.5);
-	f->fftwf_buffer[j]*= sin(val*val*M_PIl*.5);
+      if(localf>=lastf && localf<nextf){
+	float localwin=1.;
+	if(localf<thisf){
+	  if(i!=0)localwin= sin((localf-lastf)/(thisf-lastf)*M_PIl*.5);
+	}else{
+	  if(i+1!=bands)localwin= sin((nextf-localf)/(nextf-thisf)*M_PIl*.5);
+	}
+
+	f->ho_window[i][j]+=localwin*localwin;
       }
-
-      for(;j<f->qblocksize*3;j++)
-	f->fftwf_buffer[j]=0.;
-      
-      for(;j<f->qblocksize*4;j++){
-	float val=sin((j-f->qblocksize*3)*M_PI/(f->qblocksize*2));
-	val=sin(val*val*M_PIl*.5);
-	f->fftwf_buffer[j]*=sin(val*val*M_PIl*.5);
-      }
-
-      /* back to frequency; this is all-real data still */
-      fftwf_execute(f->fftwf_forward);
-      for(j=0;j<f->qblocksize*4+2;j++)
-	f->fftwf_buffer[j]/=f->qblocksize*4;
-      
-      /* now take what we learned and distill it a bit */
-      f->ho_window[i]=calloc((f->qblocksize*2+1),sizeof(**f->ho_window));
-      for(j=0;j<f->qblocksize*2+1;j++){
-	f->ho_window[i][j]=f->fftwf_buffer[j*2];
-	f->ho_area[i]+=fabs(f->ho_window[i][j]);
-      }
-      f->ho_area[i]=1./f->ho_area[i];
-
-      lastf=thisf;
-      
     }
   }
 
+  for(i=0;i<bands;i++){
+    
+    /* window each desired response in the time domain so that our
+       convolution is properly padded against being circular */
+    memset(f->fftwf_buffer,0,sizeof(*f->fftwf_buffer)*
+	   (f->qblocksize*4+2));
+    for(j=0;j<f->qblocksize*2;j++)
+      f->fftwf_buffer[j*2]=f->ho_window[i][j];
+    
+    fftwf_execute(f->fftwf_backward);
+    
+    /* window response in time */
+    for(j=0;j<f->qblocksize;j++){
+      float val=cos(j*M_PI/(f->qblocksize*2));
+      val=sin(val*val*M_PIl*.5);
+      f->fftwf_buffer[j]*= sin(val*val*M_PIl*.5);
+    }
+    
+    for(;j<f->qblocksize*3;j++)
+      f->fftwf_buffer[j]=0.;
+    
+    for(;j<f->qblocksize*4;j++){
+      float val=sin((j-f->qblocksize*3)*M_PI/(f->qblocksize*2));
+      val=sin(val*val*M_PIl*.5);
+      f->fftwf_buffer[j]*=sin(val*val*M_PIl*.5);
+    }
+    
+    /* back to frequency; this is all-real data still */
+    fftwf_execute(f->fftwf_forward);
+    for(j=0;j<f->qblocksize*4+2;j++)
+      f->fftwf_buffer[j]/=f->qblocksize*4;
+    
+    /* now take what we learned and distill it a bit */
+    for(j=0;j<f->qblocksize*2+1;j++){
+      f->ho_window[i][j]=f->fftwf_buffer[j*2];
+      f->ho_area[i]+=fabs(f->ho_window[i][j]);
+    }
+    f->ho_area[i]=1./f->ho_area[i];
+  }
+  
   return 0;
-
 }
 
 /* called only by initial setup */
-int freq_load(freq_state *f,freq_class_setup *fc){
+int freq_load(freq_state *f,freq_class_setup *fc,int ch){
   int i;
   memset(f,0,sizeof(*f));
 
@@ -193,22 +202,22 @@ int freq_load(freq_state *f,freq_class_setup *fc){
 
   f->fillstate=0;
   f->cache_samples=0;
-  f->cache1=malloc(input_ch*sizeof(*f->cache1));
-  f->cache0=malloc(input_ch*sizeof(*f->cache0));
-  for(i=0;i<input_ch;i++){
+  f->cache1=malloc(ch*sizeof(*f->cache1));
+  f->cache0=malloc(ch*sizeof(*f->cache0));
+  for(i=0;i<ch;i++){
     f->cache1[i]=calloc(input_size,sizeof(**f->cache1));
     f->cache0[i]=calloc(input_size,sizeof(**f->cache0));
   }
 
-  f->activeP=malloc(input_ch*sizeof(*f->activeP));
-  f->active1=malloc(input_ch*sizeof(*f->active1));
-  f->active0=malloc(input_ch*sizeof(*f->active0));
+  f->activeP=malloc(ch*sizeof(*f->activeP));
+  f->active1=malloc(ch*sizeof(*f->active1));
+  f->active0=malloc(ch*sizeof(*f->active0));
 
 
-  f->lap1=malloc(input_ch*sizeof(*f->lap1));
-  f->lap0=malloc(input_ch*sizeof(*f->lap0));
-  f->lapC=malloc(input_ch*sizeof(*f->lapC));
-  for(i=0;i<input_ch;i++){
+  f->lap1=malloc(ch*sizeof(*f->lap1));
+  f->lap0=malloc(ch*sizeof(*f->lap0));
+  f->lapC=malloc(ch*sizeof(*f->lapC));
+  for(i=0;i<ch;i++){
     f->lap1[i]=calloc(fc->qblocksize,sizeof(**f->lap1));
     f->lap0[i]=calloc(fc->qblocksize,sizeof(**f->lap0));
     f->lapC[i]=calloc(fc->qblocksize,sizeof(**f->lapC));
@@ -217,15 +226,13 @@ int freq_load(freq_state *f,freq_class_setup *fc){
   f->peak=malloc(fc->bands*sizeof(*f->peak));
   f->rms=malloc(fc->bands*sizeof(*f->rms));
   for(i=0;i<fc->bands;i++){
-    f->peak[i]=malloc(input_ch*sizeof(**f->peak));
-    f->rms[i]=malloc(input_ch*sizeof(**f->rms));
+    f->peak[i]=malloc(ch*sizeof(**f->peak));
+    f->rms[i]=malloc(ch*sizeof(**f->rms));
   }
 
-  f->out.size=input_size;
-  f->out.channels=input_ch;
-  f->out.rate=input_rate;
-  f->out.data=malloc(input_ch*sizeof(*f->out.data));
-  for(i=0;i<input_ch;i++)
+  f->out.channels=ch;
+  f->out.data=malloc(ch*sizeof(*f->out.data));
+  for(i=0;i<ch;i++)
     f->out.data[i]=malloc(input_size*sizeof(**f->out.data));
   
   return(0);
@@ -298,12 +305,12 @@ static void freq_work(freq_class_setup *fc,
 		      int      *active,
 		      void (*func)(float *,int)){
   
-  int i,j;
+  int i,j,ch=f->out.channels;
   int have_feedback=0;
   
   f->cache_samples+=in->samples;
 
-  for(i=0;i<input_ch;i++){
+  for(i=0;i<ch;i++){
     int mutedC=mute_channel_muted(in->active,i);
     int muted0=mute_channel_muted(f->mutemask0,i);
 
@@ -333,14 +340,14 @@ static void freq_work(freq_class_setup *fc,
 			      f->cache0[i],input_size);
       }
     
-      if(in->samples<in->size){
+      if(in->samples<input_size){
 	if(mutedC)memset(in->data[i],0,sizeof(**in->data)*input_size);
 	if(muted0)memset(f->cache0[i],0,sizeof(**f->cache0)*input_size);
 
 	postextrapolate_helper(f->cache0[i],input_size,
 			       in->data[i],in->samples,
 			       in->data[i]+in->samples,
-			       in->size-in->samples);
+			       input_size-in->samples);
       }
 
       fill_freq_buffer_helper(fc->fftwf_buffer,
@@ -448,17 +455,17 @@ static void freq_work(freq_class_setup *fc,
     if(!ff->peak){
       ff->peak=calloc(fc->bands,sizeof(*ff->peak));
       for(i=0;i<fc->bands;i++)
-	ff->peak[i]=malloc(input_ch*sizeof(**ff->peak));
+	ff->peak[i]=malloc(ch*sizeof(**ff->peak));
     }
     if(!ff->rms){
       ff->rms=calloc(fc->bands,sizeof(*ff->rms));
       for(i=0;i<fc->bands;i++)
-	ff->rms[i]=malloc(input_ch*sizeof(**ff->rms));
+	ff->rms[i]=malloc(ch*sizeof(**ff->rms));
     }
 
     for(i=0;i<fc->bands;i++){
-      memcpy(ff->peak[i],f->peak[i],input_ch*sizeof(**f->peak));
-      memcpy(ff->rms[i],f->rms[i],input_ch*sizeof(**f->rms));
+      memcpy(ff->peak[i],f->peak[i],ch*sizeof(**f->peak));
+      memcpy(ff->rms[i],f->rms[i],ch*sizeof(**f->rms));
     } 
     ff->bypass=0;
     feedback_push(&f->feedpool,(feedback_generic *)ff);
@@ -485,7 +492,7 @@ static void freq_work(freq_class_setup *fc,
 time_linkage *freq_read(time_linkage *in, freq_state *f,
 			int *visible, int *active,
 			void (*func)(float *,int i)){
-  int i;
+  int i,ch=f->out.channels;
   freq_class_setup *fc=f->fc;
 
   switch(f->fillstate){
@@ -496,7 +503,7 @@ time_linkage *freq_read(time_linkage *in, freq_state *f,
     }
 
     /* zero out lapping and cache state */
-    for(i=0;i<input_ch;i++){
+    for(i=0;i<ch;i++){
       memset(f->lap1[i],0,sizeof(**f->lap1)*fc->qblocksize);
       memset(f->lap0[i],0,sizeof(**f->lap0)*fc->qblocksize);
       memset(f->cache0[i],0,sizeof(**f->cache0)*input_size);
@@ -513,10 +520,10 @@ time_linkage *freq_read(time_linkage *in, freq_state *f,
 
     f->fillstate=1;
     f->out.samples=0;
-    if(in->samples==in->size)goto tidy_up;
+    if(in->samples==input_size)goto tidy_up;
     
-    for(i=0;i<input_ch;i++)
-      memset(in->data[i],0,sizeof(**in->data)*in->size);
+    for(i=0;i<ch;i++)
+      memset(in->data[i],0,sizeof(**in->data)*input_size);
     in->samples=0;
     /* fall through */
     
@@ -526,10 +533,10 @@ time_linkage *freq_read(time_linkage *in, freq_state *f,
     
     f->fillstate=2;
     f->out.samples=0;
-    if(in->samples==in->size)goto tidy_up;
+    if(in->samples==input_size)goto tidy_up;
     
-    for(i=0;i<input_ch;i++)
-      memset(in->data[i],0,sizeof(**in->data)*in->size);
+    for(i=0;i<ch;i++)
+      memset(in->data[i],0,sizeof(**in->data)*input_size);
     in->samples=0;
     /* fall through */
     
@@ -537,7 +544,7 @@ time_linkage *freq_read(time_linkage *in, freq_state *f,
 
     freq_work(fc,f,in,&f->out,visible,active,func);
 
-    if(f->out.samples<f->out.size)f->fillstate=3;
+    if(f->out.samples<input_size)f->fillstate=3;
     break;
   case 3: /* we've pushed out EOF already */
     f->out.samples=0;
@@ -545,7 +552,7 @@ time_linkage *freq_read(time_linkage *in, freq_state *f,
   
  tidy_up:
   {
-    int tozero=f->out.size-f->out.samples;
+    int tozero=input_size-f->out.samples;
     if(tozero)
       for(i=0;i<f->out.channels;i++)
 	memset(f->out.data[i]+f->out.samples,0,sizeof(**f->out.data)*tozero);
