@@ -66,7 +66,7 @@ static inline float impulse_freq4(long ahead){
 
 typedef struct {
   double x[MAXORDER];
-  double y[MAXORDER+1];
+  double y[MAXORDER];
 } iir_state;
 
 extern double mkbessel(double raw_alpha,int order,double *ycoeff);
@@ -85,7 +85,42 @@ extern void compute_iir_freefall_limited(float *x, int n, iir_state *is,
 extern void compute_iir_freefallonly1(float *x, int n, iir_state *is, 
 				       iir_filter *decay);
 
-extern void compute_iir_freefall1_then_symmetric2(float *x, int n, 
-						  iir_state *is, 
-						  iir_filter *attack, 
-						  iir_filter *decay);
+
+extern void compute_iir_over_soft(float *x, int n, iir_state *is, 
+				   iir_filter *attack, iir_filter *limit,
+				   float knee, float mult, float *adj);
+
+extern void compute_iir_under_soft(float *x, int n, iir_state *is, 
+				   iir_filter *attack, iir_filter *limit,
+				   float knee, float mult, float *adj);
+
+extern void compute_iir_over_hard(float *x, int n, iir_state *is, 
+				  iir_filter *attack, iir_filter *limit,
+				  float knee, float mult, float *adj);
+
+extern void compute_iir_under_hard(float *x, int n, iir_state *is, 
+				   iir_filter *attack, iir_filter *limit,
+				   float knee, float mult, float *adj);
+
+extern void compute_iir_over_soft_del(float *x, int n, iir_state *is, 
+					  iir_filter *attack, iir_filter *limit,
+					  float knee, float mult, float mult2, 
+					  float *adj);
+
+extern void compute_iir_under_soft_del(float *x, int n, iir_state *is, 
+					   iir_filter *attack, iir_filter *limit,
+					   float knee, float mult, float mult2,
+					   float *adj);
+
+extern void compute_iir_over_hard_del(float *x, int n, iir_state *is, 
+					  iir_filter *attack, iir_filter *limit,
+					  float knee, float mult, float mult2,
+					  float *adj);
+
+extern void compute_iir_under_hard_del(float *x, int n, iir_state *is, 
+					   iir_filter *attack, iir_filter *limit,
+					   float knee, float mult, float mult2,
+					   float *adj);
+
+extern void reset_iir(iir_state *is,float value);
+

@@ -201,7 +201,7 @@ void compute_iir_symmetric_limited(float *x, int n, iir_state *is,
   while(i<n){
     double ya= (x[i]+x0*2.+x1)*a_g + y0*a_c0+y1*a_c1;
     double yl= y0*l_c0;
-    if(ya<y0 && ya<yl)ya=yl;
+    if(ya<yl)ya=yl;
    
     x1=x0;x0=x[i];
     y1=y0;x[i]=y0=ya;
@@ -269,7 +269,7 @@ void compute_iir_freefall_limited(float *x, int n, iir_state *is,
       x1=x0;x0=x[i];
     }
 
-    if(ya<y0 && ya<yl)ya=yl;
+    if(ya<yl)ya=yl;
    
     y1=y0;x[i]=y0=ya;
     i++;
@@ -313,40 +313,225 @@ void compute_iir_freefallonly1(float *x, int n, iir_state *is,
   
 }
 
-/* applies a 1st order freefall filter, followed by a 2nd order attack
-   filter */
-void compute_iir_freefall1_then_symmetric2(float *x, int n, iir_state *is, 
-					   iir_filter *attack, 
-					   iir_filter *decay){
-  double a_c0=attack->c[0],d_c0=decay->c[0];
-  double a_c1=attack->c[1];
-  double a_g=1./attack->g;
-  
-  double x0=is->x[0],x1=is->x[1];
-  double y0=is->y[0],y1=is->y[1];
-  double yd=is->y[2];
-  
-  int i=0;
+/* a new experiment; bessel followers constructed specifically for
+   compand functions.  Hard and soft knee are implemented as part of
+   the follower. */
 
-  if(zerome(y0) && zerome(y1)) y0=y1=0.;
-  if(zerome(yd)) yd=0.;
+#define prologue   double a_c0=attack->c[0],l_c0=limit->c[0]; \
+                   double a_c1=attack->c[1]; \
+                   double a_g=1./(knee * attack->g);\
+                   double x0=is->x[0],x1=is->x[1]; \
+                   double y0=is->y[0],y1=is->y[1]; \
+                   int i=0; \
+                   if(zerome(y0) && zerome(y1)) y0=y1=0.; \
+                   while(i<n)
 
-  while(i<n){
-    
-    yd*=d_c0;
-    if(yd<x[i])yd=x[i];
-    
-    {
-      double ya= (yd+x0*2.+x1)*a_g + y0*a_c0+y1*a_c1;
-      
-      x1=x0;x0=yd;
-      y1=y0;x[i]=y0=ya;
-    }
-    i++;
-  }
+/* Three delicious filters in one: The 'attack' filter is a fast
+   second-order Bessel used two ways; as a direct RMS follower and as
+   a filter pegged to free-fall to the knee value.  The 'limit' filter
+   is a first-order free-fall (to 0) Bessel used to limit the 'attack'
+   filter to a linear-dB decay. Output is normalized to place the knee
+   at 1.0 (0dB) */
+
+void compute_iir_over_soft(float *x, int n, iir_state *is, 
+			   iir_filter *attack, iir_filter *limit,
+			   float knee, float mult, float *adj){
+  double xag=4./attack->g;
+  prologue {
+
+    double ya = (x[i]+x0*2.+x1)*a_g;
+    if(ya<xag)ya=xag;
+    ya += y0*a_c0;
+    ya += y1*a_c1;
+    double yl = y0*l_c0; 
+    if(ya<yl)ya=yl;
+
+    x1=x0;x0=x[i]; 
+    y1=y0;y0=ya;
+    adj[i++]-= todB_a((float)ya)*mult;
+
+  } 
 
   is->x[0]=x0;is->x[1]=x1;
   is->y[0]=y0;is->y[1]=y1;
-  is->y[2]=yd;
+}
+
+void compute_iir_under_soft(float *x, int n, iir_state *is, 
+			    iir_filter *attack, iir_filter *limit,
+			    float knee, float mult, float *adj){
+  double xag=4./attack->g;
+  prologue {
+
+    double ya = (x[i]+x0*2.+x1)*a_g;
+    if(ya>xag)ya=xag;
+    ya += y0*a_c0;
+    ya += y1*a_c1;
+    double yl = y0*l_c0; 
+    if(ya<yl)ya=yl;
+
+    x1=x0;x0=x[i]; 
+    y1=y0;y0=ya;
+    adj[i++]-= todB_a((float)ya)*mult;
+
+  } 
+
+  is->x[0]=x0;is->x[1]=x1;
+  is->y[0]=y0;is->y[1]=y1;
+}
+
+void compute_iir_over_hard(float *x, int n, iir_state *is, 
+			   iir_filter *attack, iir_filter *limit,
+			   float knee, float mult, float *adj){
+  prologue {
+
+    double ya = (x[i]+x0*2.+x1)*a_g;
+    ya += y0*a_c0;
+    ya += y1*a_c1;
+    double yl = y0*l_c0; 
+    if(ya<yl)ya=yl;
+
+    x1=x0;x0=x[i]; 
+    y1=y0;y0=ya;
+    if(ya>1.)adj[i]-= todB_a((float)ya)*mult;
+    i++;
+  } 
+
+  is->x[0]=x0;is->x[1]=x1;
+  is->y[0]=y0;is->y[1]=y1;
+}
+
+void compute_iir_under_hard(float *x, int n, iir_state *is, 
+			    iir_filter *attack, iir_filter *limit,
+			    float knee, float mult, float *adj){
+  prologue {
+
+    double ya = (x[i]+x0*2.+x1)*a_g;
+    ya += y0*a_c0;
+    ya += y1*a_c1;
+    double yl = y0*l_c0; 
+    if(ya<yl)ya=yl;
+
+    x1=x0;x0=x[i]; 
+    y1=y0;y0=ya;
+    if(ya<1.)adj[i]-= todB_a((float)ya)*mult;
+    i++;
+  } 
+
+  is->x[0]=x0;is->x[1]=x1;
+  is->y[0]=y0;is->y[1]=y1;
+}
+
+/* One more take on the above; we need to be able to gently slew
+   multiplier changes from one block to the next.  Although it seems
+   absurd to make eight total compander follower variants, doing this
+   inline avoids a copy later on, and these are enough of a CPU sink
+   that the silliness is actually worth it. */
+
+void compute_iir_over_soft_del(float *x, int n, iir_state *is, 
+			       iir_filter *attack, iir_filter *limit,
+			       float knee, float mult, float mult2, 
+			       float *adj){
+  float multadd=(mult2-mult)/n;
+  double xag=4./attack->g;
+  prologue {
+
+    double ya = (x[i]+x0*2.+x1)*a_g;
+    if(ya<xag)ya=xag;
+    ya += y0*a_c0;
+    ya += y1*a_c1;
+    double yl = y0*l_c0; 
+    if(ya<yl)ya=yl;
+
+    x1=x0;x0=x[i]; 
+    y1=y0;y0=ya;
+    adj[i++]-= todB_a((float)ya)*mult;
+    mult+=multadd;
+
+  } 
+
+  is->x[0]=x0;is->x[1]=x1;
+  is->y[0]=y0;is->y[1]=y1;
+}
+
+void compute_iir_under_soft_del(float *x, int n, iir_state *is, 
+				iir_filter *attack, iir_filter *limit,
+				float knee, float mult, float mult2,
+				float *adj){
+  float multadd=(mult2-mult)/n;
+  double xag=4./attack->g;
+  prologue {
+
+    double ya = (x[i]+x0*2.+x1)*a_g;
+    if(ya>xag)ya=xag;
+    ya += y0*a_c0;
+    ya += y1*a_c1;
+    double yl = y0*l_c0; 
+    if(ya<yl)ya=yl;
+
+    x1=x0;x0=x[i]; 
+    y1=y0;y0=ya;
+    adj[i++]-= todB_a((float)ya)*mult;
+    mult+=multadd;
+
+  } 
+
+  is->x[0]=x0;is->x[1]=x1;
+  is->y[0]=y0;is->y[1]=y1;
+}
+
+void compute_iir_over_hard_del(float *x, int n, iir_state *is, 
+			       iir_filter *attack, iir_filter *limit,
+			       float knee, float mult, float mult2,
+			       float *adj){
+  float multadd=(mult2-mult)/n;
+  prologue {
+
+    double ya = (x[i]+x0*2.+x1)*a_g;
+    ya += y0*a_c0;
+    ya += y1*a_c1;
+    double yl = y0*l_c0; 
+    if(ya<yl)ya=yl;
+
+    x1=x0;x0=x[i]; 
+    y1=y0;y0=ya;
+    if(ya>1.)adj[i]-= todB_a((float)ya)*mult;
+    mult+=multadd;
+    i++;
+  } 
+
+  is->x[0]=x0;is->x[1]=x1;
+  is->y[0]=y0;is->y[1]=y1;
+}
+
+void compute_iir_under_hard_del(float *x, int n, iir_state *is, 
+				iir_filter *attack, iir_filter *limit,
+				float knee, float mult, float mult2,
+				float *adj){
+  float multadd=(mult2-mult)/n;
+  prologue {
+
+    double ya = (x[i]+x0*2.+x1)*a_g;
+    ya += y0*a_c0;
+    ya += y1*a_c1;
+    double yl = y0*l_c0; 
+    if(ya<yl)ya=yl;
+
+    x1=x0;x0=x[i]; 
+    y1=y0;y0=ya;
+    if(ya<1.)adj[i]-= todB_a((float)ya)*mult;
+    mult+=multadd;
+    i++;
+  } 
+
+  is->x[0]=x0;is->x[1]=x1;
+  is->y[0]=y0;is->y[1]=y1;
+}
+
+void reset_iir(iir_state *is,float value){
+  int i;
+  for(i=0;i<MAXORDER;i++){
+    is->x[i]=(double)value;
+    is->y[i]=(double)value;
+  }
 }
 

@@ -30,13 +30,13 @@ SRC = main.c mainpanel.c multibar.c readout.c input.c output.c clippanel.c \
 	feedback.c freq.c eq.c eqpanel.c compandpanel.c subband.c lpc.c \
 	bessel.c deverbpanel.c deverb.c singlecomp.c singlepanel.c \
 	limit.c limitpanel.c mute.c mixpanel.c mix.c reverb.c reverbpanel.c \
-	outpanel.c config.c window.c
+	outpanel.c config.c window.c follower.c
 OBJ = main.o mainpanel.o multibar.o readout.o input.o output.o clippanel.o \
 	declip.o reconstruct.o multicompand.o windowbutton.o subpanel.o \
 	feedback.o freq.o eq.o eqpanel.o compandpanel.o subband.o lpc.o \
 	bessel.o deverbpanel.o deverb.o singlecomp.o singlepanel.o \
 	limit.o limitpanel.o mute.o mixpanel.o mix.o reverb.o reverbpanel.o \
-	outpanel.o config.o window.o
+	outpanel.o config.o window.o follower.o
 GCF = -DETCDIR=\\\"$(ETCDIR)\\\" `pkg-config --cflags gtk+-2.0` -DG_DISABLE_DEPRECATED -DGDK_DISABLE_DEPRECATED -DGTK_DISABLE_DEPRECATED -DGDK_PIXBUF_DISABLE_DEPRECATED
 
 all:	

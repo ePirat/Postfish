@@ -85,8 +85,13 @@ static inline int zerome(double x){
 
 #ifdef UGLY_IEEE754_FLOAT32_HACK
 
-static inline float todB_a(const float *x){
-  return (float)((*(int32_t *)x)&0x7fffffff) * 7.17711438e-7f -764.6161886f;
+static inline float todB_a(float x){
+  return (float)((*((int32_t *)&x))&0x7fffffff) * 7.17711438e-7f -764.6161886f;
+}
+
+// eliminate a *.5 in ops on sq magnitudes
+static inline float todB_a2(float x){
+  return (float)((*((int32_t *)&x))&0x7fffffff) * 3.58855719e-7f -382.3080943f;
 }
 
 static inline float fromdB_a(float x){

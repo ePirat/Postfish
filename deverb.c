@@ -213,14 +213,14 @@ static void deverb_work_helper(void *vs, deverb_settings *sset){
 	    if(multiplier==sss->prevratio[i]){
 	      
 	      for(k=0;k<input_size;k++)
-		fast[k]=fromdB_a((todB_a(slow+k)-todB_a(fast+k))*.5*multiplier);
+		fast[k]=fromdB_a((todB_a(slow[k])-todB_a(fast[k]))*.5*multiplier);
 	      
 	    }else{
 	      float multiplier_add=(multiplier-sss->prevratio[i])/input_size;
 	      multiplier=sss->prevratio[i];
 	      
 	      for(k=0;k<input_size;k++){
-		fast[k]=fromdB_a((todB_a(slow+k)-todB_a(fast+k))*.5*multiplier);
+		fast[k]=fromdB_a((todB_a(slow[k])-todB_a(fast[k]))*.5*multiplier);
 		multiplier+=multiplier_add;
 	      }
 	      

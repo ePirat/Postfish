@@ -317,8 +317,6 @@ static int determine_average(multi_panel_state *mp,int x){
 static void average_change(GtkWidget *w,gpointer in){
   multi_panel_state *mp=(multi_panel_state *)in;
   if(!mp->updating_av_slider){
-    multicompand_settings *ms=mp->ms;
-    banked_multicompand_settings *bc=ms->bc;
     cbar *b=mp->bars+multicomp_freqs_max;
     cbar *bars=mp->bars;
     int bank_active=mp->bank_active;
@@ -370,8 +368,6 @@ static void slider_change(GtkWidget *w,gpointer in){
   int bank_active=mp->bank_active;
 
   int o,u;
-  int i;
-  int adj;
 
   u=multibar_get_value(MULTIBAR(b->slider),0);
   sprintf(buffer,"%+4ddB",u);
