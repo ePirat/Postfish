@@ -977,7 +977,7 @@ void mainpanel_create(postfish_mainpanel *panel,char **chlabels){
   }
 
   mainpanel_masterentry(panel,mastertable,"_Crossmix "," c ",GDK_c,0,0);
-  mainpanel_masterentry(panel,mastertable,"_Multicomp "," m ",GDK_m,1,compandpanel_create);
+  mainpanel_masterentry(panel,mastertable,"_Multicomp "," m ",GDK_m,1,compandpanel_create_master);
   mainpanel_masterentry(panel,mastertable,"_Onecomp "," o ",GDK_o,2,singlepanel_create);
   mainpanel_masterentry(panel,mastertable,"De_verb "," v ",GDK_v,3,suppresspanel_create);
   mainpanel_masterentry(panel,mastertable,"_Reverb "," r ",GDK_r,4,0);
