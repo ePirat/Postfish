@@ -476,7 +476,6 @@ time_linkage *freq_read(time_linkage *in, freq_state *f,
     break;
   case 3: /* we've pushed out EOF already */
     f->out.samples=0;
-    return &f->out;
   }
   
   /* finish up the state feedabck */

@@ -505,6 +505,7 @@ time_linkage *subband_read(time_linkage *in, subband_state *f,
       memset(f->cache1[i],0,sizeof(**f->cache1)*input_size);
       memset(f->cache0[i],0,sizeof(**f->cache0)*input_size);
     }
+    f->lap_samples=0;
 
     /* and set up state variables */
     /* set the vars to 'active' so that if the first frame is an

@@ -233,20 +233,11 @@ void *playback_thread(void *dummy){
     /* get data */
     link=input_read();
     result=link->samples;
-
     link=mute_read(link);
     result|=link->samples;
 
     link=declip_read(link);
     result|=link->samples;
-
-    /* XXXX Temporary! Until later plugins can handle mute, we zero out
-       muted channels here */
-    for(i=0;i<input_ch;i++)
-      if((link->active & (1<<i))==0)
-	memset(link->data[i],0,sizeof(*link->data[i])*input_size);
-
-
     link=multicompand_read(link);
     result|=link->samples;
     link=singlecomp_read(link);
@@ -275,6 +266,7 @@ void *playback_thread(void *dummy){
     /************/
 
     if(link->samples>0){
+
       memset(rms,0,sizeof(*rms)*(input_ch+2));
       memset(peak,0,sizeof(*peak)*(input_ch+2));
       ch=link->channels;
@@ -373,9 +365,11 @@ void *playback_thread(void *dummy){
       
       /* inform Lord Vader his shuttle is ready */
       push_output_feedback(peak,rms);
+
       write(eventpipe[1],"",1);
       
     }
+
   }
 
   if(playback_fd){
@@ -407,4 +401,5 @@ void output_halt_playback(void){
     }
   }
 }
+
 

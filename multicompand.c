@@ -302,7 +302,7 @@ static void over_compand(float *lx,float zerocorner,
   run_filter(overdB,lx,input_size,lookahead,mode,iir,attack,decay,ps);
   
   if(adj){
-    float corner_multiplier=(1.-1./(c.over_ratio*.001));
+    float corner_multiplier=(1.-1./(c.over_ratio/1000.));
     if(c.over_softknee){
       for(k=0;k<input_size;k++)
 	adj[k]+=soft_knee(overdB[k]-zerocorner)*corner_multiplier;
@@ -325,7 +325,7 @@ static void base_compand(float *x,
 	     iir,attack,decay,ps);
   
   if(adj){
-    float base_multiplier=(1.-1./(c.base_ratio*.001));
+    float base_multiplier=(1.-1./(c.base_ratio/1000.));
     for(k=0;k<input_size;k++)
       adj[k]-=(basedB[k]+adj[k])*base_multiplier;
   }
@@ -344,7 +344,7 @@ static void under_compand(float *x,float zerocorner,
 	     iir,attack,decay,ps);
   
   if(adj){
-    float corner_multiplier=(1./(c.under_ratio*.001)-1.);
+    float corner_multiplier=(1./(c.under_ratio/1000.)-1.);
     if(c.under_softknee){
       for(k=0;k<input_size;k++)
 	adj[k]=soft_knee(zerocorner-underdB[k])*corner_multiplier;
@@ -356,7 +356,7 @@ static void under_compand(float *x,float zerocorner,
 }
 
 static void multicompand_work(void *vs){
-
+  return;
   multicompand_state *ms=(multicompand_state *)vs;
   subband_state *ss=&ms->ss;
   int i,j,k,bypass_visible=1;
