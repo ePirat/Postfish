@@ -219,7 +219,7 @@ static deverb_panel_state *deverbpanel_create_helper(postfish_mainpanel *mp,
 
     multibar_callback(MULTIBAR(slider),timing_change,&ps->timing);
     
-    multibar_thumb_set(MULTIBAR(slider),100,0);
+    multibar_thumb_set(MULTIBAR(slider),40,0);
     multibar_thumb_set(MULTIBAR(slider),400,1);
 
     gtk_table_attach(GTK_TABLE(table),slider,1,2,1,2,
