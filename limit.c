@@ -40,33 +40,13 @@ typedef struct{
   iir_state *iir;
   iir_filter decay;
 
+  int prev_active;
+  int initted;
 } limit_state;
 
 limit_settings limitset;
 limit_state limitstate;
-
-static void _analysis(char *base,int i,float *v,int n,int dB,int offset){
-  int j;
-  FILE *of;
-  char buffer[80];
-
-  sprintf(buffer,"%s_%d.m",base,i);
-  of=fopen(buffer,"a");
-  
-  if(!of)perror("failed to open data dump file");
-  
-  for(j=0;j<n;j++){
-    fprintf(of,"%f ",(float)j+offset);
-    if(dB)
-      fprintf(of,"%f\n",todB(v[j]));
-    else
-      fprintf(of,"%f\n",(v[j]));
-  }
-  fprintf(of,"\n");
-  fclose(of);
-}
-
-static int offset=0;
+float *window;
 
 /* feedback! */
 typedef struct limit_feedback{
@@ -107,6 +87,12 @@ int limit_load(void){
   for(i=0;i<input_ch;i++)
     limitstate.out.data[i]=malloc(input_size*sizeof(**limitstate.out.data));
 
+  window=malloc(input_size*sizeof(*window));
+  for(i=0;i<input_size;i++){
+    window[i]=sin((i+.5)/input_size*M_PI*.5);
+    window[i]*=window[i];
+  }
+
   return(0);
 }
 
@@ -127,6 +113,7 @@ int limit_reset(void ){
   /* reset cached pipe state */
   while(pull_limit_feedback(NULL,NULL));
   memset(limitstate.iir,0,input_ch*sizeof(&limitstate.iir));
+  limitstate.initted=0;
   return 0;
 }
 
@@ -139,9 +126,11 @@ time_linkage *limit_read(time_linkage *in){
   float peakfeed[input_ch];
   float attfeed[input_ch];
 
-  int active=limit_active;
+  int activeC=limit_active;
+  int activeP=limitstate.prev_active;
+
   int visible=limit_visible;
-  int bypass=!(active || visible);
+  int bypass;
   int i,k;
 
   float thresh=limitset.thresh/10.-.01;
@@ -157,42 +146,59 @@ time_linkage *limit_read(time_linkage *in){
     return &limitstate.out;
   }
 
+  if(!limitstate.initted){
+    limitstate.initted=1;
+    limitstate.prev_active=activeC;
+  }
+
   depth=depth*.2;
   depth*=depth;
 
   for(i=0;i<input_ch;i++){
     localpeak=0.;
     localatt=0.;
+
+    bypass=!(activeC || activeP || visible) || mute_channel_muted(in->active,i);
     
-    if(!bypass){
+    if((activeC || activeP) && !mute_channel_muted(in->active,i)){
+      
       float *inx=in->data[i];
       float *x=limitstate.out.data[i];
       
-      if(active){
-
-	/* 'knee' the actual samples, compute attenuation depth */
-	for(k=0;k<in->samples;k++){
-	  float dB=todB(inx[k]);
-	  float knee=limit_knee(dB-thresh,depth)+thresh;
-	  float att=dB-knee;
-
-	  if(att>localatt)localatt=att;
-
-	  x[k]=att;
-	}
+      /* 'knee' the actual samples, compute attenuation depth */
+      for(k=0;k<in->samples;k++){
+	float dB=todB(inx[k]);
+	float knee=limit_knee(dB-thresh,depth)+thresh;
+	float att=dB-knee;
 	
-
-	compute_iir_freefall2(x,input_size,limitstate.iir+i,&limitstate.decay);
-
+	if(att>localatt)localatt=att;
 	
-	for(k=0;k<in->samples;k++)
-	  x[k]=inx[k]*fromdB(-x[k]);
-     
-	
+	x[k]=att;
       }
-    }
-    
-    if(!active){
+	
+      
+      compute_iir_freefall2(x,input_size,limitstate.iir+i,&limitstate.decay);
+      
+      
+      for(k=0;k<in->samples;k++)
+	x[k]=inx[k]*fromdB(-x[k]);
+      
+      if(activeP && !activeC){
+	/* transition to inactive */
+	for(k=0;k<input_size;k++){
+	  float w2=1.-window[k];
+	  x[k]= x[k]*w2 + in->data[i][k]*window[k];
+	}
+      }
+      if(!activeP && activeC){
+	/* transition to active */
+	for(k=0;k<input_size;k++){
+	  float w2=1.-window[k];
+	  x[k]= x[k]*window[k] + in->data[i][k]*w2;
+	}
+      }
+      
+    }else{
       float *temp=in->data[i];
       in->data[i]=limitstate.out.data[i];
       limitstate.out.data[i]=temp;
@@ -237,8 +243,8 @@ time_linkage *limit_read(time_linkage *in){
         memset(limitstate.out.data[i]+limitstate.out.samples,0,sizeof(**limitstate.out.data)*tozero);
   }
 
-  offset+=input_size;
-
+  limitstate.out.active=in->active;
+  limitstate.prev_active=activeC;
   return &limitstate.out;
 }
 
