@@ -356,7 +356,6 @@ static void under_compand(float *x,float zerocorner,
 }
 
 static void multicompand_work(void *vs){
-  return;
   multicompand_state *ms=(multicompand_state *)vs;
   subband_state *ss=&ms->ss;
   int i,j,k,bypass_visible=1;
@@ -406,12 +405,12 @@ static void multicompand_work(void *vs){
 		      (i>=w->freq_bands?0:adj));
 	
 	over_compand(x,  
-		     bc[bank].static_o[i],
-		     &ms->over_attack,
-		     &ms->over_decay,
-		     &ms->over_iir[i][j],
-		     &ms->over_peak[i][j],
-		     (i>=w->freq_bands?0:adj));
+	     bc[bank].static_o[i],
+	     &ms->over_attack,
+	     &ms->over_decay,
+	     &ms->over_iir[i][j],
+	     &ms->over_peak[i][j],
+	     (i>=w->freq_bands?0:adj));
 
       }
 
@@ -448,11 +447,11 @@ static void multicompand_work(void *vs){
       
       if(active){
 	base_compand(x,  
-		     &ms->base_attack,
-		     &ms->base_decay,
-		     &ms->base_iir[i][j],
-		     &ms->base_peak[i][j],
-		     (i>=w->freq_bands?0:adj));
+	     &ms->base_attack,
+	     &ms->base_decay,
+	     &ms->base_iir[i][j],
+	     &ms->base_peak[i][j],
+	     (i>=w->freq_bands?0:adj));
 	
 	if(ss->effect_activeC[j]){
 	  for(k=0;k<input_size;k++)

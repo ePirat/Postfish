@@ -61,11 +61,11 @@ static inline float fromdB(float x){
 #ifdef UGLY_IEEE754_FLOAT32_HACK
 
 static inline float todB_a(const float *x){
-  return (float)((*(int32_t *)x)&0x7fffffff) * 7.1771144e-7f -764.27118f;
+  return (float)((*(int32_t *)x)&0x7fffffff) * 7.17711438e-7f -764.6161886f;
 }
 
 static inline float fromdB_a(float x){
-  int y=1.3933e+06f*(x+764.27118f);
+  int y=1.39331762961e+06f*(x+764.6161886f);
   return *(float *)&y;
 }
 
