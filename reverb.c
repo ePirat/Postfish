@@ -48,6 +48,7 @@
 
 #include "postfish.h"
 #include "reverb.h"
+#include "window.h"
 
 typedef struct {
   int size;
@@ -84,7 +85,7 @@ typedef struct {
 extern int input_size;
 extern int input_ch;
 
-extern float *frame_window;
+float *window;
 plate_set *plate_channel_set;
 plate_set plate_master_set;
 
@@ -177,16 +178,16 @@ static void waveguide_nl_process_trans(waveguide_nl *wg, float in0, float in1,
 				       float *out0, float *out1, int i){
   float tmp;
 
-  *out0 = wg->buffer[0][wg->dptr]*(1.-frame_window[i]) +
-    wg->buffer[0][wg->dptr_pending]*frame_window[i];
+  *out0 = wg->buffer[0][wg->dptr]*(1.-window[i]) +
+    wg->buffer[0][wg->dptr_pending]*window[i];
   *out0 = wg->lp[0] * (wg->fc - 1.0f) + wg->fc * *out0;
   wg->lp[0] = *out0;
   tmp = *out0 * -(wg->a1a) + wg->zm1[0];
   wg->zm1[0] = tmp * wg->a1a + *out0;
   *out0 = tmp;
   
-  *out1 = wg->buffer[1][wg->dptr]*(1.-frame_window[i]) +
-    wg->buffer[1][wg->dptr_pending]*frame_window[i];
+  *out1 = wg->buffer[1][wg->dptr]*(1.-window[i]) +
+    wg->buffer[1][wg->dptr_pending]*window[i];
   *out1 = wg->lp[1] * (wg->fc - 1.0f) + wg->fc * *out1;
   wg->lp[1] = *out1;
   tmp = *out1 * -(wg->a1a) + wg->zm1[1];
@@ -271,6 +272,8 @@ int plate_load(int outch){
 
   channel.prevactive=calloc(input_ch,sizeof(*channel.prevactive));
   master.prevactive=calloc(1,sizeof(*master.prevactive));
+
+  window=window_get(1,input_size);
   return 0;
 }
  
@@ -407,12 +410,12 @@ time_linkage *plate_read_channel(time_linkage *in,
 	  if(!active[i]){
 	    /* transition to inactive */
 	    for(j=0;j<input_size;j++)
-	      x[j] *= (1.f - frame_window[j]);
+	      x[j] *= (1.f - window[j]);
 	    
 	  }else if (!ps->prevactive[i] || !ps->fillstate){
 	    /* transition to active */
 	    for(j=0;j<input_size;j++)
-	      x[j]*= frame_window[j];
+	      x[j]*= window[j];
 	  }
 	}else{
 	  ps->out.data[i]=x;
@@ -428,8 +431,8 @@ time_linkage *plate_read_channel(time_linkage *in,
       if(!active[i]){
 	/* transition to inactive */
 	for(j=0;j<input_size;j++){
-	  yA[j] *= (1.f - frame_window[j]);
-	  yB[j] *= (1.f - frame_window[j]);
+	  yA[j] *= (1.f - window[j]);
+	  yB[j] *= (1.f - window[j]);
 	}
       }
 	
@@ -493,12 +496,12 @@ time_linkage *plate_read_master(time_linkage *in){
 	if(!active){
 	  /* transition to inactive */
 	  for(j=0;j<input_size;j++)
-	    y[j] *= (1.f - frame_window[j]);
+	    y[j] *= (1.f - window[j]);
 	  
 	}else if (!ps->prevactive[0] || !ps->fillstate){
 	  /* transition to active */
 	  for(j=0;j<input_size;j++)
-	    y[j]*= frame_window[j];
+	    y[j]*= window[j];
 	}
 	
 	plate_compute(&plate_master_set, &ps->plates[i], 
@@ -508,7 +511,7 @@ time_linkage *plate_read_master(time_linkage *in){
       if(!active){
 	/* transition to inactive */
 	for(j=0;j<input_size;j++)
-	  y[j]*= 1.f - frame_window[j];
+	  y[j]*= 1.f - window[j];
 
       }
       if(!mute_channel_muted(in->active,i))

@@ -183,138 +183,104 @@ double mkbessel(double raw_alpha,int order,double *ycoeff){
   return hypot(dc_gain.re,dc_gain.im);
 }
 
-/* assymetrical attack/decay filter computation */
-/* this one is designed for fast attack, slow decay */
-void compute_iir_fast_attack2(float *x, int n, iir_state *is, 
-			     iir_filter *attack, iir_filter *decay){
-  double a_c0=attack->c[0],d_c0=decay->c[0];
-  double a_c1=attack->c[1],d_c1=decay->c[1];
-  double a_g=attack->g, d_g=decay->g;
+/* applies a 2nd order filter (attack) that is decay-limited by a
+   first-order freefall filter (decay) */
+void compute_iir_symmetric_limited(float *x, int n, iir_state *is, 
+				   iir_filter *attack, iir_filter *limit){
+  double a_c0=attack->c[0],l_c0=limit->c[0];
+  double a_c1=attack->c[1];
+  double a_g=1./attack->g;
   
   double x0=is->x[0],x1=is->x[1];
   double y0=is->y[0],y1=is->y[1];
-  int state=is->state;
+  
   int i=0;
 
-  if(zerome(y0) && zerome(y1)){
-    y0=y1=0.;
-  }
+  if(zerome(y0) && zerome(y1)) y0=y1=0.;
 
-  if(x[0]>y0)state=0; 
-      
   while(i<n){
-    
-    if(state==0){
-      /* attack case */
-      while(i<n){
-	double ya= (x[i]+x0*2.+x1)/a_g + y0*a_c0+y1*a_c1;
-    
-	if(x[i]<y0 && ya<y0){
-	  state=1; 
-	  break;
-	}
-	x1=x0;x0=x[i];
-	y1=y0;x[i]=y0=ya;
-	i++;
-      }
-    }
-
-    if(state==1){
-      /* decay case */
-      if(y1<y0){
-	/* decay fixup needed because we're in discontinuous time */
-	  y1=y0;
-      }
-
-      while(1){
-	double yd = (x[i]+x0*2.+x1)/d_g + y0*d_c0+y1*d_c1;
-
-	x1=x0;x0=x[i];
-	y1=y0;x[i]=y0=yd;
-	i++;
-
-	if(i>=n)break;
-	if(x[i]>y0){
-	  state=0;
-	  break;
-	}
-      }
-    }
+    double ya= (x[i]+x0*2.+x1)*a_g + y0*a_c0+y1*a_c1;
+    double yl= y0*l_c0;
+    if(ya<y0 && ya<yl)ya=yl;
+   
+    x1=x0;x0=x[i];
+    y1=y0;x[i]=y0=ya;
+    i++;
   }
   
   is->x[0]=x0;is->x[1]=x1;
   is->y[0]=y0;is->y[1]=y1;
-  is->state=state;
-  
 }
 
-/* this one is designed for fast decay, slow attack */
-void compute_iir_fast_decay2(float *x, int n, iir_state *is, 
-			     iir_filter *attack, iir_filter *decay){
-  double a_c0=attack->c[0],d_c0=decay->c[0];
-  double a_c1=attack->c[1],d_c1=decay->c[1];
-  double a_g=attack->g, d_g=decay->g;
+/* applies a 2nd order filter (decay) to decay from peak value only,
+   decay limited by a first-order freefall filter (limit) with the
+   same alpha as decay */
+void compute_iir_decay_limited(float *x, int n, iir_state *is, 
+			       iir_filter *decay, iir_filter *limit){
+  double d_c0=decay->c[0],l_c0=limit->c[0];
+  double d_c1=decay->c[1];
+  double d_g=1./decay->g;
   
   double x0=is->x[0],x1=is->x[1];
   double y0=is->y[0],y1=is->y[1];
-  int state=is->state;
+
   int i=0;
 
-  if(zerome(y0) && zerome(y1)){
-    y0=y1=0.;
-  }
+  if(zerome(y0) && zerome(y1)) y0=y1=0.;
 
-  if(x[0]<y0)state=1; 
-      
   while(i<n){
+    double yd= (x[i]+x0*2.+x1)*d_g + y0*d_c0+y1*d_c1;
+    double yl= y0*l_c0;
+    if(yd<yl)yd=yl;
+    if(yd<x[i])y1=y0=yd=x[i];
     
-    if(state==1){
-      /* decay case */
-      while(i<n){
-	double yd= (x[i]+x0*2.+x1)/d_g + y0*d_c0+y1*d_c1;
-    
-	if(x[i]>y0 && yd>y0){
-	  state=0; 
-	  break;
-	}
-	x1=x0;x0=x[i];
-	y1=y0;x[i]=y0=yd;
-	i++;
-      }
-    }
-
-    if(state==0){
-      /* attack case */
-      if(y1>y0){
-	/* attack fixup needed because we're in discontinuous time */
-	  y1=y0;
-      }
-
-      while(1){
-	double ya = (x[i]+x0*2.+x1)/a_g + y0*a_c0+y1*a_c1;
-
-	x1=x0;x0=x[i];
-	y1=y0;x[i]=y0=ya;
-	i++;
-
-	if(i>=n)break;
-	if(x[i]<y0){
-	  state=1;
-	  break;
-	}
-      }
-    }
+    x1=x0;x0=x[i];
+    y1=y0;x[i]=y0=yd;
+    i++;
   }
   
   is->x[0]=x0;is->x[1]=x1;
   is->y[0]=y0;is->y[1]=y1;
-  is->state=state;
-  
 }
 
-/* allow decay to proceed in freefall */
-void compute_iir_only_freefall1(float *x, int n, iir_state *is, 
-			   iir_filter *decay){
+/* applies a 2nd order filter (attack) that is decay-limited by a
+   first-order filter (decay) */
+void compute_iir_freefall_limited(float *x, int n, iir_state *is, 
+				  iir_filter *attack, iir_filter *limit){
+  double a_c0=attack->c[0],l_c0=limit->c[0];
+  double a_c1=attack->c[1];
+  double a_g=1./attack->g;
+  
+  double x0=is->x[0],x1=is->x[1];
+  double y0=is->y[0],y1=is->y[1];
+  
+  int i=0;
+
+  if(zerome(y0) && zerome(y1)) y0=y1=0.;
+
+  while(i<n){
+    double ya= (x0*2.+x1)*a_g + y0*a_c0+y1*a_c1;
+    double yl= y0*l_c0;
+
+    if(x[i]<ya){
+      x1=x0;x0=0;
+    }else{
+      ya+= x[i]*a_g;
+      x1=x0;x0=x[i];
+    }
+
+    if(ya<y0 && ya<yl)ya=yl;
+   
+    y1=y0;x[i]=y0=ya;
+    i++;
+  }
+  
+  is->x[0]=x0;is->x[1]=x1;
+  is->y[0]=y0;is->y[1]=y1;
+}
+
+void compute_iir_freefallonly1(float *x, int n, iir_state *is, 
+                           iir_filter *decay){
   double d_c0=decay->c[0];
   
   double x0=is->x[0];
@@ -347,123 +313,40 @@ void compute_iir_only_freefall1(float *x, int n, iir_state *is,
   
 }
 
-void compute_iir_decayonly2(float *x, int n, iir_state *is, 
-			    iir_filter *decay){
-  double d_c0=decay->c[0];
-  double d_c1=decay->c[1];
-  double d_g=decay->g;
+/* applies a 1st order freefall filter, followed by a 2nd order attack
+   filter */
+void compute_iir_freefall1_then_symmetric2(float *x, int n, iir_state *is, 
+					   iir_filter *attack, 
+					   iir_filter *decay){
+  double a_c0=attack->c[0],d_c0=decay->c[0];
+  double a_c1=attack->c[1];
+  double a_g=1./attack->g;
   
-  double x0=is->x[0];
-  double x1=is->x[1];
-  double y0=is->y[0];
-  double y1=is->y[1];
+  double x0=is->x[0],x1=is->x[1];
+  double y0=is->y[0],y1=is->y[1];
+  double yd=is->y[2];
+  
   int i=0;
 
-  if(zerome(y0) && zerome(y1)){
-    y0=y1=0.;
-  }
+  if(zerome(y0) && zerome(y1)) y0=y1=0.;
+  if(zerome(yd)) yd=0.;
 
   while(i<n){
-    double yd;
-
-    if(y1<y0)y1=y0; // slope fixup
-
-    yd = (x[i]+x0*2.+x1)/d_g + y0*d_c0+y1*d_c1;
     
-    if(x[i]>yd)yd=x[i];
+    yd*=d_c0;
+    if(yd<x[i])yd=x[i];
     
-    x1=x0;x0=x[i];
-    y1=y0;x[i]=y0=yd;
-    i++;
-  }
-  
-  is->x[0]=x0;
-  is->x[1]=x1;
-  is->y[0]=y0;
-  is->y[1]=y1;
-  
-}
-
-/* symmetric filter computation */
-
-void compute_iir_symmetric2(float *x, int n, iir_state *is, 
-			   iir_filter *filter){
-  double c0=filter->c[0];
-  double c1=filter->c[1];
-  double g=filter->g;
-  
-  double x0=is->x[0];
-  double x1=is->x[1];
-  double y0=is->y[0];
-  double y1=is->y[1];
-    
-  int i=0;
+    {
+      double ya= (yd+x0*2.+x1)*a_g + y0*a_c0+y1*a_c1;
       
-  if(zerome(y0) && zerome(y1)){
-    y0=y1=0.;
-  }
-
-  while(i<n){
-    double yd= (x[i]+x0*2.+x1)/g + y0*c0+y1*c1;
-    x1=x0;x0=x[i];
-    y1=y0;x[i]=y0=yd;
-    i++;
-  }
-  
-  is->x[0]=x0;
-  is->x[1]=x1;
-  is->y[0]=y0;
-  is->y[1]=y1;
-  
-}
-
-void compute_iir_symmetric_freefall2(float *x, int n, iir_state *is, 
-				     iir_filter *filter){
-  double c0=filter->c[0];
-  double c1=filter->c[1];
-  double g=filter->g;
-  
-  double x0=is->x[0];
-  double x1=is->x[1];
-  double y0=is->y[0];
-  double y1=is->y[1];
-    
-  int i=0;
-      
-  if(zerome(y0) && zerome(y1)){
-    y0=y1=0.;
-  }
-
-  while(i<n){
-    double yd= (x0*2.+x1)/g + y0*c0+y1*c1;
-
-    if(x[i]<yd){
-      x1=x0;x0=0;
-    }else{
-      yd+= x[i]/g;
-      x1=x0;x0=x[i];
+      x1=x0;x0=yd;
+      y1=y0;x[i]=y0=ya;
     }
-    y1=y0;x[i]=y0=yd;
     i++;
   }
-  
-  is->x[0]=x0;
-  is->x[1]=x1;
-  is->y[0]=y0;
-  is->y[1]=y1;
-  
+
+  is->x[0]=x0;is->x[1]=x1;
+  is->y[0]=y0;is->y[1]=y1;
+  is->y[2]=yd;
 }
-
-/* filter decision wrapper */
-void compute_iir2(float *x, int n, iir_state *is, 
-		 iir_filter *attack, iir_filter *decay){
-
-  if (attack->alpha > decay->alpha){
-    /* fast attack, slow decay */
-    compute_iir_fast_attack2(x, n, is, attack, decay);
-  }else{
-    compute_iir_symmetric2(x, n, is, attack);
-  }
-}
-
 

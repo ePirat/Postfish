@@ -27,6 +27,7 @@
 #include "feedback.h"
 #include "freq.h"
 #include "lpc.h"
+#include "window.h"
 
 extern int input_rate;
 extern int input_size;
@@ -76,11 +77,7 @@ int freq_class_load(freq_class_setup *f,const float *frequencies, int bands){
   f->bands=bands;
 
   /* fill in time window */
-  f->window=malloc(blocksize*sizeof(*f->window)); 
-  for(i=0;i<blocksize;i++)f->window[i]=sin(M_PIl*i/blocksize);
-  for(i=0;i<blocksize;i++)f->window[i]*=f->window[i];
-  for(i=0;i<blocksize;i++)f->window[i]=sin(f->window[i]*M_PIl*.5);
-  for(i=0;i<blocksize;i++)f->window[i]*=f->window[i];
+  f->window=window_get(3,f->qblocksize);
 
   f->fftwf_buffer = fftwf_malloc(sizeof(*f->fftwf_buffer) * 
 				 (f->qblocksize*4+2));
@@ -290,11 +287,9 @@ static void fill_freq_buffer_helper(float *buffer,float *window,
   memset(buffer+qblocksize*3,0,sizeof(*buffer)*qblocksize);
 
   /* window (if nonzero) */
-  if(!muted0 || !mutedC){
-    buffer+=qblocksize;
-    for(i=0;i<qblocksize*2;i++)
-      buffer[i] *= window[i]*scale;
-  }
+  if(!muted0 || !mutedC)
+    window_apply(buffer+qblocksize,window,scale,qblocksize);
+
 }
 
 static void freq_work(freq_class_setup *fc,
@@ -307,12 +302,14 @@ static void freq_work(freq_class_setup *fc,
   
   int i,j,ch=f->out.channels;
   int have_feedback=0;
-  
+  u_int32_t outactive=0;
+
   f->cache_samples+=in->samples;
 
   for(i=0;i<ch;i++){
     int mutedC=mute_channel_muted(in->active,i);
     int muted0=mute_channel_muted(f->mutemask0,i);
+    int muted1=mute_channel_muted(f->mutemask1,i);
 
     int activeC=active[i] && !(muted0 && mutedC);
     int active0=f->active0[i];
@@ -386,9 +383,11 @@ static void freq_work(freq_class_setup *fc,
 	float *temp=out->data[i];
 	out->data[i]=f->cache1[i];
 	f->cache1[i]=temp;
+
+	outactive|= (f->mutemask1 & (1<<i));
       }
     }else{
-      float *w2=fc->window+input_size;
+      float *w2=fc->window;
       float *l0=f->lap0[i];
       float *l1=f->lap1[i];
       float *lC=f->lapC[i];
@@ -400,8 +399,10 @@ static void freq_work(freq_class_setup *fc,
       float *tC=t0+input_size;
       float *tN=tC+input_size;
 
+      outactive|= (1<<i);
+	
       if(!trans_active){
-	/* lap the cache into the trasform vector */
+	/* lap the cache into the transform vector */
 	fill_freq_buffer_helper(fc->fftwf_buffer,
 				fc->window,
 				f->cache0[i],in->data[i],
@@ -411,10 +412,15 @@ static void freq_work(freq_class_setup *fc,
       if(!activeP && !active1 && !active0){
 	/* previously in a bypassed/inactive state; the lapping cache
            will need to be re-prepared */
-	
-	memcpy(l1,c1,sizeof(*l1)*input_size);
-	for(j=0;j<input_size;j++)
-	  l0[j]= c0[j]*w2[j];
+	if(muted1)
+	  memset(l1,0,sizeof(*l1)*input_size);
+	else
+	  memcpy(l1,c1,sizeof(*l1)*input_size);
+	if(muted0)
+	  memset(l0,0,sizeof(*l0)*input_size);
+	else
+	  for(j=0;j<input_size;j++)
+	    l0[j]= c0[j]*w2[input_size-j];
 	memset(lC,0,sizeof(*lC)*input_size);
 	
       }
@@ -478,7 +484,7 @@ static void freq_work(freq_class_setup *fc,
 
   /* complete output linkage */
   if(out){
-    out->active=f->mutemask1;
+    out->active=outactive;
     f->out.samples=(f->cache_samples>input_size?input_size:f->cache_samples);
     f->cache_samples-=f->out.samples;
   }

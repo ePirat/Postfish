@@ -181,18 +181,19 @@ int singlecomp_load(int outch){
 }
 
 static void filter_set(float msec,
-                       iir_filter *filter,
-                       int attackp){
+		       int order,
+		       int attackp,
+                       iir_filter *filter){
   float alpha;
   float corner_freq= 500./msec;
   
   /* make sure the chosen frequency doesn't require a lookahead
      greater than what's available */
-  if(step_freq(input_size)*1.01>corner_freq && attackp)
+  if(step_freq(input_size)*1.01>corner_freq && attackp && order==2)
     corner_freq=step_freq(input_size);
   
   alpha=corner_freq/input_rate;
-  filter->g=mkbessel(alpha,2,filter->c);
+  filter->g=mkbessel(alpha,order,filter->c);
   filter->alpha=alpha;
   filter->Hz=alpha*input_rate;
   filter->ms=msec;
@@ -229,7 +230,7 @@ int singlecomp_reset(void ){
   return 0;
 }
 
-static void prepare_peak(float *peak, float *x, int n, int ahead,int hold,
+static void prepare_peak(float *peak, float *x, int n, int ahead,
                          peak_state *ps){
   int ii,jj;
   int loc=ps->loc;
@@ -243,16 +244,16 @@ static void prepare_peak(float *peak, float *x, int n, int ahead,int hold,
     for(ii=0;ii<ahead;ii++) 
       if((x[ii]*x[ii])>val){
         val=(x[ii]*x[ii]);
-        loc=ii+hold;
+        loc=ii;
       }
   }
   
   if(val>peak[0])peak[0]=val;
-  
+
   for(ii=1;ii<n;ii++){
     if((x[ii+ahead]*x[ii+ahead])>val){
       val=(x[ii+ahead]*x[ii+ahead]);
-      loc=ii+ahead+hold;
+      loc=ii+ahead;
     }     
     if(ii>=loc){
       /* backfill */
@@ -261,8 +262,8 @@ static void prepare_peak(float *peak, float *x, int n, int ahead,int hold,
         if((x[jj]*x[jj])>val)val=(x[jj]*x[jj]);
         if(jj<n && val>peak[jj])peak[jj]=val;
       }
-      val=(x[ii+ahead-1]*x[ii+ahead-1]);
-      loc=ii+ahead+hold;
+      val=(x[ii+ahead]*x[ii+ahead]);
+      loc=ii+ahead;
     }
     if(val>peak[ii])peak[ii]=val; 
   }
@@ -271,20 +272,50 @@ static void prepare_peak(float *peak, float *x, int n, int ahead,int hold,
   ps->val=val;
 }
 
+#if 0
+static void _analysis(char *base,int seq, float *data, int n,int dB, 
+		      off_t offset){
+
+  FILE *f;
+  char buf[80];
+  sprintf(buf,"%s_%d.m",base,seq);
+
+  f=fopen(buf,"a");
+  if(f){
+    int i;
+    for(i=0;i<n;i++)
+      if(dB)
+	fprintf(f,"%d %f\n",(int)(i+offset),todB(data[i]));
+      else
+	fprintf(f,"%d %f\n",(int)(i+offset),(data[i]));
+
+  }
+  fclose(f);
+}
+
+static int seq=0;
+static int offch;
+#endif
+
 static void run_filter(float *cache, float *in, float *work,
-                       int ahead,int hold,int mode,
-                       iir_state *iir,iir_filter *attack,iir_filter *decay,
+                       int ahead,int mode,
+                       iir_state *iir,
+		       iir_filter *attack,
+		       iir_filter *decay,
                        peak_state *ps){
   int k;
-  float *work2=work+input_size;
 
   if(mode){
     /* peak mode */
-    memcpy(work,cache,sizeof(*work)*input_size);
-    memcpy(work2,in,sizeof(*work)*input_size);
-
-    prepare_peak(work, work, input_size, ahead, hold, ps);
-
+    float bigcache[input_size*2];
+    memcpy(bigcache,cache,sizeof(*work)*input_size);
+    memcpy(bigcache+input_size,in,sizeof(*work)*input_size);
+    
+    memset(work,0,sizeof(*work)*input_size);
+    prepare_peak(work, bigcache, input_size, ahead, ps);
+    
+    compute_iir_freefall1_then_symmetric2(work, input_size, iir, attack, decay);
+    
   }else{
     /* rms mode */
     float *cachea=cache+ahead;
@@ -295,10 +326,11 @@ static void run_filter(float *cache, float *in, float *work,
     
     for(k=0;k<ahead;k++)
       worka[k]=in[k]*in[k];    
+
+    compute_iir_symmetric_limited(work, input_size, iir, attack, decay);
+    
   }
-  
-  compute_iir2(work, input_size, iir, attack, decay);
-  
+
   for(k=0;k<input_size;k++)
     work[k]=todB_a(work+k)*.5f;
 }
@@ -323,11 +355,10 @@ static void over_compand(float *A,float *B,float *adj,
   
   int k;
   float work[input_size*2];
-  int ahead=(mode?step_ahead(attack->alpha):impulse_ahead2(attack->alpha));
-  int hold=(1.-lookahead)*ahead;
-  ahead-=hold;
+  int ahead=(mode?step_ahead(attack->alpha):impulse_ahead2(attack->alpha))*lookahead;
+  if(ahead>input_size)ahead=input_size;
 
-  run_filter(A,B,work,ahead,hold,mode,iir,attack,decay,ps);
+  run_filter(A,B,work,ahead,mode,iir,attack,decay,ps);
   
   if(active){
     if(multiplier!=currmultiplier || zerocorner!=currcorner){
@@ -369,11 +400,10 @@ static void under_compand(float *A,float *B,float *adj,
 			  int active){
   int k;
   float work[input_size*2];
-  int ahead=(mode?step_ahead(attack->alpha):impulse_ahead2(attack->alpha));
-  int hold=(1.-lookahead)*ahead;
-  ahead-=hold;
+  int ahead=(mode?step_ahead(attack->alpha):impulse_ahead2(attack->alpha))*lookahead;
+  if(ahead>input_size)ahead=input_size;
   
-  run_filter(A,B,work,ahead,hold,mode,iir,attack,decay,ps);
+  run_filter(A,B,work,ahead,mode,iir,attack,decay,ps);
 
   if(active){
     if(multiplier!=currmultiplier || zerocorner!=currcorner){
@@ -417,11 +447,10 @@ static void base_compand(float *A,float *B,float *adj,
   
   int k;
   float work[input_size*2];
-
   int ahead=(mode?step_ahead(attack->alpha):impulse_ahead2(attack->alpha));
 
-  run_filter(A,B,work,ahead,0,mode,iir,attack,decay,ps);
-  
+  run_filter(A,B,work,ahead,mode,iir,attack,decay,ps);
+
   if(active){
     if(multiplier!=currmultiplier){
       float multiplier_add=(currmultiplier-multiplier)/input_size;
@@ -470,12 +499,12 @@ static void work_and_lapping(singlecomp_state *scs,
     float b_attackms=scset[i]->b_attack*.1;
     float b_decayms=scset[i]->b_decay*.1;
 
-    if(o_attackms!=scs->o_attack[i].ms)filter_set(o_attackms,&scs->o_attack[i],1);
-    if(o_decayms!=scs->o_decay[i].ms)filter_set(o_decayms,&scs->o_decay[i],0);
-    if(u_attackms!=scs->u_attack[i].ms)filter_set(u_attackms,&scs->u_attack[i],1);
-    if(u_decayms!=scs->u_decay[i].ms)filter_set(u_decayms,&scs->u_decay[i],0);
-    if(b_attackms!=scs->b_attack[i].ms)filter_set(b_attackms,&scs->b_attack[i],1);
-    if(b_decayms!=scs->b_decay[i].ms)filter_set(b_decayms,&scs->b_decay[i],0);
+    if(o_attackms!=scs->o_attack[i].ms)filter_set(o_attackms,2,1,&scs->o_attack[i]);
+    if(o_decayms!=scs->o_decay[i].ms)filter_set(o_decayms,1,0,&scs->o_decay[i]);
+    if(u_attackms!=scs->u_attack[i].ms)filter_set(u_attackms,2,1,&scs->u_attack[i]);
+    if(u_decayms!=scs->u_decay[i].ms)filter_set(u_decayms,1,0,&scs->u_decay[i]);
+    if(b_attackms!=scs->b_attack[i].ms)filter_set(b_attackms,2,1,&scs->b_attack[i]);
+    if(b_decayms!=scs->b_decay[i].ms)filter_set(b_decayms,1,0,&scs->b_decay[i]);
     
     if(!active0 && !activeC){
       
@@ -548,7 +577,7 @@ static void work_and_lapping(singlecomp_state *scs,
 		   scs->o_attack+i,scs->o_decay+i,
 		   scs->o_iir+i,scs->o_peak+i,
 		   active0);
-      
+
       /* feedback before base */
       if(scset[i]->panel_visible){
 	int k;
@@ -572,7 +601,7 @@ static void work_and_lapping(singlecomp_state *scs,
 	rms/=input_size;
 	rmsfeed[i]=todB_a(&rms)*.5;
       }
-      
+
       base_compand(scs->cache[i],in->data[i],adj,
 		   1.-1000./scs->prevset[i].b_ratio,
 		   1.-1000./scs->currset[i].b_ratio,
@@ -627,6 +656,7 @@ static void work_and_lapping(singlecomp_state *scs,
 
   }
 
+
   if(out){
     /* feedback is also triggered off of output */
     singlecomp_feedback *ff=
@@ -652,7 +682,7 @@ static void work_and_lapping(singlecomp_state *scs,
     scs->prevset=scs->currset;
     scs->currset=temp;
   }
-   
+
   scs->cache_samples=in->samples;
   scs->mutemaskP=mutemask0;
   scs->mutemask0=mutemaskC;
@@ -730,6 +760,6 @@ time_linkage *singlecomp_read_channel(time_linkage *in){
   /* local copy required to avoid concurrency problems */
   for(i=0;i<channel_state.ch;i++)
     active[i]=singlecomp_channel_set[i].panel_active;
-  
+     
   return singlecomp_read_helper(in, &channel_state, channel_set_bundle,active);
 }

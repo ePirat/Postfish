@@ -24,6 +24,7 @@
 #include "postfish.h"
 #include "feedback.h"
 #include "mix.h"
+#include "window.h"
 
 extern int input_ch;
 extern int input_size;
@@ -58,7 +59,7 @@ typedef struct{
 mix_state ms;
 
 /* this should be moved somewhere obvious/generic */
-float *frame_window;
+static float *window;
 
 /* feedback! */
 typedef struct limit_feedback{
@@ -131,11 +132,7 @@ int mix_load(int outch){
   for(i=0;i<outch;i++)
     ms.out.data[i]=malloc(input_size*sizeof(**ms.out.data));
 
-  frame_window=malloc(input_size*sizeof(*frame_window));
-  for(i=0;i<input_size;i++){
-    frame_window[i]= sin( (i+.5)/input_size*M_PI*.5 );
-    frame_window[i]*=frame_window[i];
-  }
+  window=window_get(1,input_size);
 
   return 0;
 }
@@ -182,20 +179,20 @@ static void mixwork(float *data,float *cacheP,float *cachePP,
     /* current settings */
     i=input_size*2+del;
     while(i<input_size && offset<input_size){
-      out[offset]+=cachePP[i++]*att*frame_window[offset];
+      out[offset]+=cachePP[i++]*att*window[offset];
       offset++;
     }
 
     i=input_size+del;
     if(i<0)i=0;
     while(i<input_size && offset<input_size){
-      out[offset]+=cacheP[i++]*att*frame_window[offset];
+      out[offset]+=cacheP[i++]*att*window[offset];
       offset++;
     }
 
     i=0;
     while(offset<input_size){
-      out[offset]+=data[i++]*att*frame_window[offset];
+      out[offset]+=data[i++]*att*window[offset];
       offset++;
     }
 
@@ -203,20 +200,20 @@ static void mixwork(float *data,float *cacheP,float *cachePP,
     offset=0;
     i=input_size*2+delP;
     while(i<input_size && offset<input_size){
-      out[offset]+=cachePP[i++]*attP*frame_window[input_size-offset-1];
+      out[offset]+=cachePP[i++]*attP*window[input_size-offset-1];
       offset++;
     }
 
     i=input_size+delP;
     if(i<0)i=0;
     while(i<input_size && offset<input_size){
-      out[offset]+=cacheP[i++]*attP*frame_window[input_size-offset-1];
+      out[offset]+=cacheP[i++]*attP*window[input_size-offset-1];
       offset++;
     }
 
     i=0;
     while(offset<input_size){
-      out[offset]+=data[i++]*attP*frame_window[input_size-offset-1];
+      out[offset]+=data[i++]*attP*window[input_size-offset-1];
       offset++;
     }
   }
@@ -231,15 +228,7 @@ static void mixadd(float *in,float *out,int active,int activeP){
       out[i]+=in[i];
     return;
   }
-  if(active){
-    /* transitioning to active */
-    for(i=0;i<input_size;i++)
-      out[i]+=in[i]*frame_window[i];
-    return;
-  }
-  /* transitioning to inactive */
-  for(i=0;i<input_size;i++)
-    out[i]+=in[i]*frame_window[input_size-i-1];
+  /* mutes no longer need be transitioned */
 }
 
 /* called only by playback thread */

@@ -25,6 +25,7 @@
 #include "feedback.h"
 #include "bessel.h"
 #include "limit.h"
+#include "window.h"
 
 extern int input_size;
 extern int input_rate;
@@ -38,6 +39,7 @@ typedef struct{
 
   iir_state *iir;
   iir_filter decay;
+  iir_filter limit;
 
   int prev_active;
   int initted;
@@ -48,7 +50,7 @@ typedef struct{
 
 limit_settings limitset;
 limit_state limitstate;
-float *window;
+static float *window;
 
 /* feedback! */
 typedef struct limit_feedback{
@@ -87,22 +89,19 @@ int limit_load(int ch){
   for(i=0;i<ch;i++)
     limitstate.out.data[i]=malloc(input_size*sizeof(**limitstate.out.data));
 
-  window=malloc(input_size*sizeof(*window));
-  for(i=0;i<input_size;i++){
-    window[i]=sin((i+.5)/input_size*M_PI*.5);
-    window[i]*=window[i];
-  }
+  window=window_get(1,input_size);
 
   return(0);
 }
 
 static void filter_set(float msec,
+		       int order,
                        iir_filter *filter){
   float alpha;
   float corner_freq= 500./msec;
   
   alpha=corner_freq/input_rate;
-  filter->g=mkbessel(alpha,2,filter->c);
+  filter->g=mkbessel(alpha,order,filter->c);
   filter->alpha=alpha;
   filter->Hz=alpha*input_rate;
   filter->ms=msec;
@@ -141,7 +140,10 @@ time_linkage *limit_read(time_linkage *in){
   float localatt;
 
   float decayms=limitset.decay*.1;
-  if(decayms!=limitstate.decay.ms)filter_set(decayms,&limitstate.decay);
+  if(decayms!=limitstate.decay.ms){
+    filter_set(decayms,2,&limitstate.decay);
+    filter_set(decayms,1,&limitstate.limit);
+  }
 
   if(in->samples==0){
     limitstate.out.samples=0;
@@ -191,8 +193,8 @@ time_linkage *limit_read(time_linkage *in){
 	prev_thresh+=thresh_add;
       }
 	
-      compute_iir_decayonly2(x,input_size,limitstate.iir+i,&limitstate.decay);
-      
+      compute_iir_decay_limited(x,input_size,limitstate.iir+i,
+				&limitstate.decay,&limitstate.limit);
       
       for(k=0;k<in->samples;k++)
 	x[k]=inx[k]*fromdB(-x[k]);

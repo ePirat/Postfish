@@ -79,3 +79,16 @@ float *window_get(int type,int n){
   pthread_mutex_unlock(&window_mutex);
   return window_func[type][bits];
 }
+
+void window_apply(float *data, float *window, float scale, int halfn){
+  float *data2=data+halfn*2;
+  int i;
+
+  *(data++) *= window[0]*scale;
+  for(i=1;i<halfn;i++){      
+    float val=window[i]*scale;
+    *(data++) *= val;
+    *(--data2)*= val;
+  }
+  *(data++) *= window[i]*scale;
+}

@@ -293,21 +293,9 @@ static void subband_work(subband_state *f,
 	  break;
 	}
 	
-
 	/* window; assume the edges are already zeroed */
-	{
-	  float scale=.25/f->qblocksize;
-	  float *workoff2=workoff+f->qblocksize*2;
-	  /* odd-symmetry window */
-	  workoff[0]*=f->window[0]*scale;
-	  for(k=1;k<f->qblocksize;k++){
-	    float w=f->window[k]*scale;
-	    workoff[k]*=w;
-	    *(--workoff2)*=w;
-	  }
-	  workoff[k]*=f->window[k]*scale;
-	}
-	
+	window_apply(workoff,f->window,.25/f->qblocksize,f->qblocksize);
+
 	fftwf_execute(f->fftwf_forward);
 	
 	/* repeatedly filter and transform back */

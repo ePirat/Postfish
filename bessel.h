@@ -24,7 +24,7 @@
 #include "postfish.h"
 extern int input_rate;
 
-#define MAXORDER    4
+#define MAXORDER    2
 
 typedef struct {
   double c[MAXORDER];
@@ -66,25 +66,26 @@ static inline float impulse_freq4(long ahead){
 
 typedef struct {
   double x[MAXORDER];
-  double y[MAXORDER];
-  int state;
+  double y[MAXORDER+1];
 } iir_state;
 
 extern double mkbessel(double raw_alpha,int order,double *ycoeff);
-extern void compute_iir_fast_attack2(float *x, int n, iir_state *is, 
-				     iir_filter *attack, iir_filter *decay);
-extern void compute_iir_fast_decay2(float *x, int n, iir_state *is, 
-				     iir_filter *attack, iir_filter *decay);
-extern void compute_iir_symmetric2(float *x, int n, iir_state *is, 
-				  iir_filter *filter);
-extern void compute_iir2(float *x, int n, iir_state *is, 
-			iir_filter *attack, iir_filter *decay);
-extern void compute_iir_only_freefall1(float *x, int n, iir_state *is, 
-				 iir_filter *decay);
-extern void compute_iir_decayonly2(float *x, int n, iir_state *is, 
-				 iir_filter *decay);
-
-extern void compute_iir_symmetric_freefall2(float *x, int n, iir_state *is, 
-					    iir_filter *filter);
 
 
+extern void compute_iir_symmetric_limited(float *x, int n, iir_state *is, 
+					  iir_filter *attack, iir_filter *limit);
+
+extern void compute_iir_decay_limited(float *x, int n, iir_state *is, 
+				      iir_filter *decay, iir_filter *limit);
+
+
+extern void compute_iir_freefall_limited(float *x, int n, iir_state *is, 
+					 iir_filter *attack, iir_filter *limit);
+
+extern void compute_iir_freefallonly1(float *x, int n, iir_state *is, 
+				       iir_filter *decay);
+
+extern void compute_iir_freefall1_then_symmetric2(float *x, int n, 
+						  iir_state *is, 
+						  iir_filter *attack, 
+						  iir_filter *decay);

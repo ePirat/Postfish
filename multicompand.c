@@ -203,18 +203,30 @@ int multicompand_load(int outch){
   return 0;
 }
 
-static void filter_set(multicompand_state *ms,
+static void filter_set1(multicompand_state *ms,
 		       float msec,
-		       iir_filter *filter,
-		       int attackp){
+		       iir_filter *filter){
+  float alpha;
+  float corner_freq= 500./msec;
+
+  alpha=corner_freq/input_rate;
+  filter->g=mkbessel(alpha,1,filter->c);
+  filter->alpha=alpha;
+  filter->Hz=alpha*input_rate;
+
+}
+
+static void filter_set2(multicompand_state *ms,
+		       float msec,
+		       iir_filter *filter){
   float alpha;
   float corner_freq= 500./msec;
 
   /* make sure the chosen frequency doesn't require a lookahead
      greater than what's available */
-  if(step_freq(input_size*2-ms->ss.qblocksize*3)*1.01>corner_freq && attackp)
+  if(step_freq(input_size*2-ms->ss.qblocksize*3)*1.01>corner_freq)
     corner_freq=step_freq(input_size*2-ms->ss.qblocksize*3);
-
+  
   alpha=corner_freq/input_rate;
   filter->g=mkbessel(alpha,2,filter->c);
   filter->alpha=alpha;
@@ -222,13 +234,21 @@ static void filter_set(multicompand_state *ms,
 
 }
 
-static void filterbank_set(multicompand_state *ms,
+static void filterbank_set1(multicompand_state *ms,
 			   float msec,
-			   iir_filter *filter,
-			   int attackp){
+			   iir_filter *filter){
   int i;
   for(i=0;i<ms->ch;i++)
-    filter_set(ms,msec,filter+i,attackp);
+    filter_set1(ms,msec,filter+i);
+
+}
+
+static void filterbank_set2(multicompand_state *ms,
+			   float msec,
+			   iir_filter *filter){
+  int i;
+  for(i=0;i<ms->ch;i++)
+    filter_set2(ms,msec,filter+i);
 
 }
 
@@ -239,8 +259,8 @@ static void prepare_rms(float *rms, float *xx, int n, int ahead){
     rms[i]+=x[i]*x[i];
 }
 
-static void prepare_peak(float *peak, float *x, int n, int ahead,int hold,
-			 peak_state *ps){
+static void prepare_peak(float *peak, float *x, int n, int ahead,
+                         peak_state *ps){
   int ii,jj;
   int loc=ps->loc;
   float val=ps->val;
@@ -248,37 +268,37 @@ static void prepare_peak(float *peak, float *x, int n, int ahead,int hold,
   /* Although we have two input_size blocks of zeroes after a
      reset, we may still need to look ahead explicitly after a
      reset if the lookahead is exceptionally long */
+
   if(loc==0 && val==0){
     for(ii=0;ii<ahead;ii++) 
       if((x[ii]*x[ii])>val){
-	val=(x[ii]*x[ii]);
-	loc=ii+hold;
+        val=(x[ii]*x[ii]);
+        loc=ii;
       }
   }
   
   if(val>peak[0])peak[0]=val;
-  
+
   for(ii=1;ii<n;ii++){
     if((x[ii+ahead]*x[ii+ahead])>val){
       val=(x[ii+ahead]*x[ii+ahead]);
-      loc=ii+ahead+hold;
-    }	  
+      loc=ii+ahead;
+    }     
     if(ii>=loc){
       /* backfill */
       val=0;
       for(jj=ii+ahead-1;jj>=ii;jj--){
-	if((x[jj]*x[jj])>val)val=(x[jj]*x[jj]);
-	if(jj<n && val>peak[jj])peak[jj]=val;
+        if((x[jj]*x[jj])>val)val=(x[jj]*x[jj]);
+        if(jj<n && val>peak[jj])peak[jj]=val;
       }
-      val=(x[ii+ahead-1]*x[ii+ahead-1]);
-      loc=ii+ahead+hold;
+      val=(x[ii+ahead]*x[ii+ahead]);
+      loc=ii+ahead;
     }
     if(val>peak[ii])peak[ii]=val; 
   }
 
   ps->loc=loc-input_size;
   ps->val=val;
-  
 }
 
 static void run_filter(float *dB,float *x,int n,
@@ -288,16 +308,21 @@ static void run_filter(float *dB,float *x,int n,
   int i;
   memset(dB,0,sizeof(*dB)*n);
   
-  if(mode)
-    prepare_peak(dB, x, n,
-		 step_ahead(attack->alpha)*lookahead, 
-		 step_ahead(attack->alpha)*(1.-lookahead),
-		 ps);
-  else
-    prepare_rms(dB, x, n, impulse_ahead2(attack->alpha)*lookahead);
+  if(mode){
+    int ahead=step_ahead(attack->alpha)*lookahead;
+    if(ahead>input_size*2)ahead=input_size*2;
+    
+    prepare_peak(dB, x, n, ahead, ps);
+    compute_iir_freefall1_then_symmetric2(dB, n, iir, attack, decay);
 
-  compute_iir2(dB, n, iir, attack, decay);
-  
+  }else{
+    int ahead=impulse_ahead2(attack->alpha)*lookahead;
+    if(ahead>input_size*2)ahead=input_size*2;
+    prepare_rms(dB, x, n, ahead);
+    compute_iir_symmetric_limited(dB, n, iir, attack, decay);
+
+  }
+
   for(i=0;i<n;i++)
     dB[i]=todB_a(dB+i)*.5f;
 
@@ -709,17 +734,17 @@ time_linkage *multicompand_read_master(time_linkage *in){
     float b_decayms=multi_master_set.base_decay*.1;
 
     if(o_attackms!=ms->over_attack[0].ms) 
-      filterbank_set(ms,o_attackms,ms->over_attack,1);
+      filterbank_set2(ms,o_attackms,ms->over_attack);
     if(o_decayms !=ms->over_decay[0].ms)  
-      filterbank_set(ms,o_decayms,ms->over_decay,0);
+      filterbank_set1(ms,o_decayms,ms->over_decay);
     if(u_attackms!=ms->under_attack[0].ms)
-      filterbank_set(ms,u_attackms,ms->under_attack,1);
+      filterbank_set2(ms,u_attackms,ms->under_attack);
     if(u_decayms !=ms->under_decay[0].ms) 
-      filterbank_set(ms,u_decayms,ms->under_decay,0);
+      filterbank_set1(ms,u_decayms,ms->under_decay);
     if(b_attackms!=ms->base_attack[0].ms) 
-      filterbank_set(ms,b_attackms,ms->base_attack,1);
+      filterbank_set2(ms,b_attackms,ms->base_attack);
     if(b_decayms !=ms->base_decay[0].ms)  
-      filterbank_set(ms,b_decayms,ms->base_decay,0);
+      filterbank_set1(ms,b_decayms,ms->base_decay);
   }
 
   return subband_read(in, &master_state.ss, w, visible,active,
@@ -744,17 +769,17 @@ time_linkage *multicompand_read_channel(time_linkage *in){
     float b_decayms=multi_channel_set[i].base_decay*.1;
 
     if(o_attackms!=ms->over_attack[i].ms) 
-      filter_set(ms,o_attackms,ms->over_attack+i,1);
+      filter_set2(ms,o_attackms,ms->over_attack+i);
     if(o_decayms !=ms->over_decay[i].ms)  
-      filter_set(ms,o_decayms,ms->over_decay+i,0);
+      filter_set1(ms,o_decayms,ms->over_decay+i);
     if(u_attackms!=ms->under_attack[i].ms)
-      filter_set(ms,u_attackms,ms->under_attack+i,1);
+      filter_set2(ms,u_attackms,ms->under_attack+i);
     if(u_decayms !=ms->under_decay[i].ms) 
-      filter_set(ms,u_decayms,ms->under_decay+i,0);
+      filter_set1(ms,u_decayms,ms->under_decay+i);
     if(b_attackms!=ms->base_attack[i].ms) 
-      filter_set(ms,b_attackms,ms->base_attack+i,1);
+      filter_set2(ms,b_attackms,ms->base_attack+i);
     if(b_decayms !=ms->base_decay[i].ms)  
-      filter_set(ms,b_decayms,ms->base_decay+i,0);
+      filter_set1(ms,b_decayms,ms->base_decay+i);
 
     w[i]=&sw[multi_channel_set[i].active_bank];
     visible[i]=multi_channel_set[i].panel_visible;

@@ -22,3 +22,4 @@
  */
 
 extern float *window_get(int type,int n);
+extern void window_apply(float *data, float *window, float scale, int halfn);

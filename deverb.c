@@ -49,6 +49,7 @@ typedef struct {
   subband_state ss;
   
   iir_filter smooth;
+  iir_filter smoothlimit;
   iir_filter release;
   
   iir_state *iirS[deverb_freqs];
@@ -113,28 +114,6 @@ int deverb_load(void){
   return 0;
 }
 
-#if 0
-static void _analysis(char *base,int seq, float *data, int n,int dB, 
-		      off_t offset){
-
-  FILE *f;
-  char buf[80];
-  sprintf(buf,"%s_%d.m",base,seq);
-
-  f=fopen(buf,"a");
-  if(f){
-    int i;
-    for(i=0;i<n;i++)
-      if(dB)
-	fprintf(f,"%d %f\n",(int)(i+offset),todB(data[i]));
-      else
-	fprintf(f,"%d %f\n",(int)(i+offset),(data[i]));
-
-  }
-  fclose(f);
-}
-#endif
-
 static void deverb_work_helper(void *vs, deverb_settings *sset){
   deverb_state *sss=(deverb_state *)vs;
   subband_state *ss=&sss->ss;
@@ -142,10 +121,14 @@ static void deverb_work_helper(void *vs, deverb_settings *sset){
   float smoothms=sset->smooth*.1;
   float releasems=sset->release*.1;
   iir_filter *smooth=&sss->smooth;
+  iir_filter *smoothlimit=&sss->smoothlimit;
   iir_filter *release=&sss->release;
   int ahead;
 
-  if(smoothms!=smooth->ms)filter_set(ss,smoothms,smooth,1,2);
+  if(smoothms!=smooth->ms){
+    filter_set(ss,smoothms,smooth,1,2);
+    filter_set(ss,smoothms,smoothlimit,0,1);
+  }
   if(releasems!=release->ms)filter_set(ss,releasems,release,0,1);
 
   ahead=impulse_ahead2(smooth->alpha);
@@ -186,17 +169,14 @@ static void deverb_work_helper(void *vs, deverb_settings *sset){
 	
 	if(sset->linkp==0 || firstlink==1){
 	  
-	  //memcpy(slow,fast,sizeof(slow));
-
+	  compute_iir_freefall_limited(fast, input_size, &sss->iirS[i][j],
+					smooth,smoothlimit);
 	  
-	  compute_iir_symmetric_freefall2(fast, input_size, &sss->iirS[i][j],
-				smooth);
 	  memcpy(slow,fast,sizeof(slow));
-	  compute_iir_only_freefall1(slow, input_size, &sss->iirR[i][j],
-				release);
+	  compute_iir_freefallonly1(slow, input_size, &sss->iirR[i][j],
+				    release);
 	  
-	  //_analysis("fast",i,fast,input_size,1,offset);
-	  //_analysis("slow",i,slow,input_size,1,offset);
+	  //_analysis("fast3",i,fast,input_size,1,offset);
 
 	  if(multiplier==sss->prevratio[i]){
 
@@ -214,7 +194,7 @@ static void deverb_work_helper(void *vs, deverb_settings *sset){
 
 	  }
 
-	  //_analysis("adj",i,fast,input_size,1,offset);
+	  //_analysis("adj3",i,fast,input_size,1,offset);
 
 	  if(sset->linkp && firstlink==1){
 
@@ -245,6 +225,7 @@ static void deverb_work_helper(void *vs, deverb_settings *sset){
 
     sss->prevratio[i]=multiplier;
   }
+  //offset+=input_size;
 }
 
 static void deverb_work_channel(void *vs){
