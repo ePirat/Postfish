@@ -28,10 +28,6 @@
 #include "subband.h"
 #include "bessel.h"
 
-extern int input_size;
-extern int input_rate;
-extern int input_ch;
-
 /* feedback! */
 typedef struct multicompand_feedback{
   feedback_generic parent_class;
@@ -45,6 +41,16 @@ typedef struct {
   int loc;
   float val;
 } peak_state;
+
+typedef struct {
+  sig_atomic_t static_u[multicomp_freqs_max];
+  sig_atomic_t under_ratio;
+
+  sig_atomic_t static_o[multicomp_freqs_max];
+  sig_atomic_t over_ratio;
+  
+  sig_atomic_t base_ratio;
+} atten_cache;
 
 typedef struct {
   feedback_generic_pool feedpool;
@@ -66,10 +72,14 @@ typedef struct {
   peak_state *over_peak[multicomp_freqs_max];
   peak_state *under_peak[multicomp_freqs_max];
   peak_state *base_peak[multicomp_freqs_max];
+
+  atten_cache *prevset;
+  atten_cache *currset;
   
   float **peak;
   float **rms;
   int ch;
+  int initstate;
 } multicompand_state;
 
 multicompand_settings multi_master_set;
@@ -139,12 +149,14 @@ void multicompand_reset(){
   reset_filters(&master_state);
   reset_filters(&channel_state);
 
+  master_state.initstate=0;
+  channel_state.initstate=0;
 }
 
 static int multicompand_load_helper(multicompand_state *ms,int ch){
   int i;
   int qblocksize=input_size/8;
-  memset(ms,0,sizeof(ms));
+  memset(ms,0,sizeof(*ms));
   
   ms->ch=ch;
   subband_load(&ms->ss,multicomp_freqs_max,qblocksize,ch);
@@ -171,6 +183,9 @@ static int multicompand_load_helper(multicompand_state *ms,int ch){
   ms->rms=calloc(multicomp_freqs_max,sizeof(*ms->rms));
   for(i=0;i<multicomp_freqs_max;i++)ms->peak[i]=malloc(ms->ch*sizeof(**ms->peak));
   for(i=0;i<multicomp_freqs_max;i++)ms->rms[i]=malloc(ms->ch*sizeof(**ms->rms));
+
+  ms->prevset=malloc(ch*sizeof(*ms->prevset));
+  ms->currset=malloc(ch*sizeof(*ms->currset));
   
   return 0;
 }
@@ -296,11 +311,14 @@ static float hard_knee(float x){
   return (x>0.f?-x:0.f);
 }
 
-static void over_compand(float *lx,float zerocorner,
+static void over_compand(float *lx,
+			 float zerocorner,
+			 float currcorner,
 			 iir_filter *attack, iir_filter *decay,
 			 iir_state *iir, peak_state *ps,
 			 float lookahead,int mode,int knee,
-			 int ratio,
+			 float prevratio,
+			 float currratio,
 			 float *adj){
   int k;
   float overdB[input_size];
@@ -308,13 +326,34 @@ static void over_compand(float *lx,float zerocorner,
   run_filter(overdB,lx,input_size,lookahead,mode,iir,attack,decay,ps);
   
   if(adj){
-    float corner_multiplier= 1.- 1000./ratio;
-    if(knee){
-      for(k=0;k<input_size;k++)
-	adj[k]+=soft_knee(overdB[k]-zerocorner)*corner_multiplier;
+    float ratio_multiplier= 1.- 1000./prevratio;
+    
+    if(zerocorner!=currcorner || prevratio!=currratio){
+      /* slew limit these attenuators */
+      float ratio_add= ((1.- 1000./currratio)-ratio_multiplier)/input_size;
+      float corner_add= (currcorner-zerocorner)/input_size;
+      
+      if(knee){
+	for(k=0;k<input_size;k++){
+	  adj[k]+=soft_knee(overdB[k]-zerocorner)*ratio_multiplier;
+	  ratio_multiplier+=ratio_add;
+	  zerocorner+=corner_add;
+	}
+      }else{
+	for(k=0;k<input_size;k++){
+	  adj[k]+=hard_knee(overdB[k]-zerocorner)*ratio_multiplier;
+	  ratio_multiplier+=ratio_add;
+	  zerocorner+=corner_add;
+	}
+      }
     }else{
-      for(k=0;k<input_size;k++)
-	adj[k]+=hard_knee(overdB[k]-zerocorner)*corner_multiplier;
+      if(knee){
+	for(k=0;k<input_size;k++)
+	  adj[k]+=soft_knee(overdB[k]-zerocorner)*ratio_multiplier;
+      }else{
+	for(k=0;k<input_size;k++)
+	  adj[k]+=hard_knee(overdB[k]-zerocorner)*ratio_multiplier;
+      }
     }
   }
 }
@@ -323,7 +362,8 @@ static void base_compand(float *x,
 			 iir_filter *attack, iir_filter *decay,
 			 iir_state *iir, peak_state *ps,
 			 int mode,
-			 int ratio,
+			 float prevratio,
+			 float currratio,
 			 float *adj){
   int k;
   float basedB[input_size];
@@ -332,17 +372,32 @@ static void base_compand(float *x,
 	     iir,attack,decay,ps);
   
   if(adj){
-    float base_multiplier=1.-1000./ratio;
-    for(k=0;k<input_size;k++)
-      adj[k]-=(basedB[k]+adj[k])*base_multiplier;
+    float ratio_multiplier=1.-1000./prevratio;
+
+    if(prevratio!=currratio){
+      /* slew limit the attenuators */
+      float ratio_add= ((1.- 1000./currratio)-ratio_multiplier)/input_size;
+
+      for(k=0;k<input_size;k++){
+	adj[k]-=(basedB[k]+adj[k])*ratio_multiplier;
+	ratio_multiplier+=ratio_add;
+      }
+
+    }else{
+      for(k=0;k<input_size;k++)
+	adj[k]-=(basedB[k]+adj[k])*ratio_multiplier;
+    }
   }
 }
 
-static void under_compand(float *x,float zerocorner,
+static void under_compand(float *x,
+			 float zerocorner,
+			 float currcorner,
 			 iir_filter *attack, iir_filter *decay,
 			 iir_state *iir, peak_state *ps,
 			 float lookahead,int mode,int knee,
-			 int ratio,
+			 float prevratio,
+			 float currratio,
 			 float *adj){
   int k;
   float underdB[input_size];
@@ -351,13 +406,35 @@ static void under_compand(float *x,float zerocorner,
 	     iir,attack,decay,ps);
   
   if(adj){
-    float corner_multiplier=1000./ratio -1.;
-    if(knee){
-      for(k=0;k<input_size;k++)
-	adj[k]=soft_knee(zerocorner-underdB[k])*corner_multiplier;
+    float ratio_multiplier=1000./prevratio - 1.;
+    
+    if(zerocorner!=currcorner || prevratio!=currratio){
+      /* slew limit these attenuators */
+      float ratio_add= ((1000./currratio - 1.)-ratio_multiplier)/input_size;
+      float corner_add= (currcorner-zerocorner)/input_size;
+      
+      if(knee){
+	for(k=0;k<input_size;k++){
+	  adj[k]=soft_knee(zerocorner-underdB[k])*ratio_multiplier;
+	  ratio_multiplier+=ratio_add;
+	  zerocorner+=corner_add;
+	}
+      }else{
+	for(k=0;k<input_size;k++){
+	  adj[k]=hard_knee(zerocorner-underdB[k])*ratio_multiplier;
+	  ratio_multiplier+=ratio_add;
+	  zerocorner+=corner_add;
+	}
+      }
+
     }else{
-      for(k=0;k<input_size;k++)
-	adj[k]=hard_knee(zerocorner-underdB[k])*corner_multiplier;
+      if(knee){
+	for(k=0;k<input_size;k++)
+	  adj[k]=soft_knee(zerocorner-underdB[k])*ratio_multiplier;
+      }else{
+	for(k=0;k<input_size;k++)
+	  adj[k]=hard_knee(zerocorner-underdB[k])*ratio_multiplier;
+      }
     }
   }
 }
@@ -370,11 +447,13 @@ static int find_maxbands(subband_state *ss,int channel){
 }
 
 static int multicompand_work_perchannel(multicompand_state *ms, 
-				     float **peakfeed,
-				     float **rmsfeed,
-				     int maxbands,
-				     int channel,
-				     multicompand_settings *c){
+					float **peakfeed,
+					float **rmsfeed,
+					int maxbands,
+					int channel,
+					atten_cache *prevset,
+					atten_cache *currset,
+					multicompand_settings *c){
   subband_state *ss=&ms->ss;
   int active=(ss->effect_active1[channel] || 
 	      ss->effect_active0[channel] || 
@@ -391,7 +470,22 @@ static int multicompand_work_perchannel(multicompand_state *ms,
   }else if(w==&sw[1]){
     bank=1;
   }else bank=2;
-  
+
+  if(active){
+    for(i=0;i<multicomp_freqs_max;i++){
+      currset->static_u[i]=c->bc[bank].static_u[i];
+      currset->static_o[i]=c->bc[bank].static_o[i];
+    }
+    
+    currset->under_ratio=c->under_ratio;
+    currset->over_ratio=c->over_ratio;
+    currset->base_ratio=c->base_ratio;
+    
+    /* don't slew from an unknown value */
+    if(!ss->effect_activeP[channel] || !ms->initstate) 
+      memcpy(prevset,currset,sizeof(*currset));
+  }
+
   for(i=0;i<maxbands;i++){
     
     float *x=ss->lap[i][channel];
@@ -405,7 +499,8 @@ static int multicompand_work_perchannel(multicompand_state *ms,
 	 settings.  There are allocated, but unset; if overrange,
 	 they're ignored in the compand worker */
       under_compand(x,  
-		    c->bc[bank].static_u[i], 
+		    prevset->static_u[i],
+		    currset->static_u[i],
 		    &ms->under_attack[channel],
 		    &ms->under_decay[channel],
 		    &ms->under_iir[i][channel],
@@ -413,11 +508,13 @@ static int multicompand_work_perchannel(multicompand_state *ms,
 		    c->under_lookahead/1000.,
 		    c->under_mode,
 		    c->under_softknee,
-		    c->under_ratio,
+		    prevset->under_ratio,
+		    currset->under_ratio,
 		    (i>=w->freq_bands?0:adj));
       
       over_compand(x,  
-		   c->bc[bank].static_o[i],
+		   prevset->static_o[i],
+		   currset->static_o[i],
 		   &ms->over_attack[channel],
 		   &ms->over_decay[channel],
 		   &ms->over_iir[i][channel],
@@ -425,33 +522,37 @@ static int multicompand_work_perchannel(multicompand_state *ms,
 		   c->over_lookahead/1000.,
 		   c->over_mode,
 		   c->over_softknee,
-		   c->over_ratio,
+		   prevset->over_ratio,
+		   currset->over_ratio,
 		   (i>=w->freq_bands?0:adj));
       
     }
     
-    if(ss->visible1[channel] && !mute_channel_muted(ss->mutemask1,channel)){
-      /* determine rms and peak for feedback */
-      float max=-1.;
-      int maxpos=-1;
-      float rms=0.;
+    if(ss->visible1[channel]){
 
       feedback_p=1;
-      
-      for(k=0;k<input_size;k++){
-	float val=x[k]*x[k];
-	if(val>max){
-	  max=val;
-	  maxpos=k;
+	
+      if(!mute_channel_muted(ss->mutemask1,channel)){
+	/* determine rms and peak for feedback */
+	float max=-1.;
+	int maxpos=-1;
+	float rms=0.;
+	
+	for(k=0;k<input_size;k++){
+	  float val=x[k]*x[k];
+	  if(val>max){
+	    max=val;
+	    maxpos=k;
+	  }
+	  rms+=val;
 	}
-	rms+=val;
-      }
-      if(active){
-	peakfeed[i][channel]=todB(max)*.5+adj[maxpos];
-	rmsfeed[i][channel]=todB(rms/input_size)*.5+adj[maxpos];
-      }else{
-	peakfeed[i][channel]=todB(max)*.5;
-	rmsfeed[i][channel]=todB(rms/input_size)*.5;
+	if(active){
+	  peakfeed[i][channel]=todB(max)*.5+adj[maxpos];
+	  rmsfeed[i][channel]=todB(rms/input_size)*.5+adj[maxpos];
+	}else{
+	  peakfeed[i][channel]=todB(max)*.5;
+	  rmsfeed[i][channel]=todB(rms/input_size)*.5;
+	}
       }
     }
     
@@ -462,7 +563,8 @@ static int multicompand_work_perchannel(multicompand_state *ms,
 		   &ms->base_iir[i][channel],
 		   &ms->base_peak[i][channel],
 		   c->base_mode,
-		   c->base_ratio,
+		   prevset->base_ratio,
+		   currset->base_ratio,
 		   (i>=w->freq_bands?0:adj));
       
       if(ss->effect_activeC[channel]){
@@ -540,8 +642,15 @@ static void multicompand_work_master(void *vs){
   for(i=0;i<ms->ch;i++){
     int maxbands=find_maxbands(&ms->ss,i);
     if(maxbands>maxmaxbands)maxmaxbands=maxbands;
-    if(multicompand_work_perchannel(ms, ms->peak, ms->rms, maxbands, i, &multi_master_set))
+    if(multicompand_work_perchannel(ms, ms->peak, ms->rms, maxbands, i, 
+				    &ms->prevset[i], &ms->currset[i], &multi_master_set))
       bypass_visible=0;
+  }
+  {
+    atten_cache *temp=ms->prevset;
+    ms->prevset=ms->currset;
+    ms->currset=temp;
+    ms->initstate=1;
   }
 
   push_feedback(ms,bypass_visible,maxmaxbands);
@@ -562,8 +671,15 @@ static void multicompand_work_channel(void *vs){
   for(i=0;i<ms->ch;i++){
     int maxbands=find_maxbands(&ms->ss,i);
     if(maxbands>maxmaxbands)maxmaxbands=maxbands;
-    if(multicompand_work_perchannel(ms, ms->peak, ms->rms, maxbands, i, multi_channel_set+i))
+    if(multicompand_work_perchannel(ms, ms->peak, ms->rms, maxbands, i, 
+				    &ms->prevset[i], &ms->currset[i], multi_channel_set+i))
       bypass_visible=0;
+  }
+  {
+    atten_cache *temp=ms->prevset;
+    ms->prevset=ms->currset;
+    ms->currset=temp;
+    ms->initstate=1;
   }
 
   push_feedback(ms,bypass_visible,maxmaxbands);
@@ -607,7 +723,6 @@ time_linkage *multicompand_read_master(time_linkage *in){
 
   return subband_read(in, &master_state.ss, w, visible,active,
 		      multicompand_work_master,&master_state);
-  
 }
 
 time_linkage *multicompand_read_channel(time_linkage *in){

@@ -28,3 +28,5 @@ extern void limitpanel_feedback(int displayit);
 extern void limitpanel_reset(void);
 
 
+extern void limitpanel_state_to_config(int bank);
+extern void limitpanel_state_from_config(int bank);

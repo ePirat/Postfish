@@ -29,24 +29,24 @@
 #include "mainpanel.h"
 #include "subpanel.h"
 #include "declip.h"
+#include "config.h"
 
-extern sig_atomic_t *declip_active;
-extern sig_atomic_t declip_visible;
-extern int input_ch;
-extern int input_size;
-extern int input_rate;
-extern sig_atomic_t declip_converge;
+static GtkWidget **feedback_bars;
+static GtkWidget **trigger_bars;
 
-GtkWidget **feedback_bars;
-GtkWidget **trigger_bars;
+static GtkWidget *width_bar;
+static GtkWidget *samplereadout;
+static GtkWidget *msreadout;
+static GtkWidget *hzreadout;
 
-GtkWidget *samplereadout;
-GtkWidget *msreadout;
-GtkWidget *hzreadout;
-GtkWidget *depth_readout;
-GtkWidget *limit_readout;
+static GtkWidget *depth_bar;
+static GtkWidget *depth_readout;
+static GtkWidget *limit_bar;
+static GtkWidget *limit_readout;
 
-GtkWidget *mainpanel_inbar;
+static GtkWidget *mainpanel_inbar;
+
+static subpanel_generic *panel;
 
 typedef struct {
   GtkWidget *slider;
@@ -54,6 +54,37 @@ typedef struct {
   GtkWidget *readoutdB;
   int number;
 } clipslider;
+
+void clippanel_state_to_config(int bank){
+  config_set_vector("clippanel_active",bank,0,0,0,input_ch,declip_active);
+  config_set_integer("clippanel_width",bank,0,0,0,0,declip_pending_blocksize);
+  config_set_integer("clippanel_convergence",bank,0,0,0,0,declip_convergence);
+  config_set_integer("clippanel_throttle",bank,0,0,0,0,declip_iterations);
+  config_set_vector("clippanel_trigger",bank,0,0,0,input_ch,declip_chtrigger);
+}
+
+void clippanel_state_from_config(int bank){
+  int i;
+  config_get_vector("clippanel_active",bank,0,0,0,input_ch,declip_active);
+  config_get_sigat("clippanel_width",bank,0,0,0,0,&declip_pending_blocksize);
+  config_get_sigat("clippanel_convergence",bank,0,0,0,0,&declip_convergence);
+  config_get_sigat("clippanel_throttle",bank,0,0,0,0,&declip_iterations);
+  config_get_vector("clippanel_trigger",bank,0,0,0,input_ch,declip_chtrigger);
+
+  {
+    int i=0,j=declip_pending_blocksize;
+    while(j>64){j>>=1;i++;}
+    multibar_thumb_set(MULTIBAR(width_bar),i,0);
+  }
+  multibar_thumb_set(MULTIBAR(depth_bar),declip_convergence*-.1,0);
+  multibar_thumb_set(MULTIBAR(limit_bar),declip_iterations*.1,0);
+
+  for(i=0;i<input_ch;i++){
+    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(panel->subpanel_activebutton[i]),
+				 declip_active[i]);
+    multibar_thumb_set(MULTIBAR(trigger_bars[i]),declip_chtrigger[i]*.0001,0);
+  }
+}
 
 static void trigger_slider_change(GtkWidget *w,gpointer in){
   char buffer[80];
@@ -66,8 +97,7 @@ static void trigger_slider_change(GtkWidget *w,gpointer in){
   sprintf(buffer,"%3.0fdB",todB(linear));
   readout_set(READOUT(p->readoutdB),buffer);
 
-  declip_settrigger(linear,p->number);
-
+  declip_chtrigger[p->number]=rint(linear*10000.);
 }
 
 static void blocksize_slider_change(GtkWidget *w,gpointer in){
@@ -83,8 +113,8 @@ static void blocksize_slider_change(GtkWidget *w,gpointer in){
 
   sprintf(buffer,"%5dHz",(int)rint(input_rate*2./blocksize));
   readout_set(READOUT(hzreadout),buffer);
-  
-  declip_setblock(blocksize);
+
+  declip_pending_blocksize=blocksize;
 }
 
 static void depth_slider_change(GtkWidget *w,gpointer in){
@@ -94,7 +124,7 @@ static void depth_slider_change(GtkWidget *w,gpointer in){
   sprintf(buffer,"%3ddB",(int)dB);
   readout_set(READOUT(depth_readout),buffer);
 
-  declip_setconvergence(fromdB(-dB));
+  declip_convergence=rint(-dB*10.);
 }
 
 static void limit_slider_change(GtkWidget *w,gpointer in){
@@ -104,7 +134,7 @@ static void limit_slider_change(GtkWidget *w,gpointer in){
   sprintf(buffer,"%3d%%",(int)percent);
   readout_set(READOUT(limit_readout),buffer);
 
-  declip_setiterations(percent*.01);
+  declip_iterations=rint(percent*10.);
 }
 
 static void active_callback(gpointer in,int activenum){
@@ -120,11 +150,6 @@ void clippanel_create(postfish_mainpanel *mp,
   float levels[3]={0.,10.,100.};
   int block_choices=0;
 
-  subpanel_generic *panel=subpanel_create(mp,windowbutton[0],activebutton,
-					  declip_active,&declip_visible,
-					  "_Declipping filter setup",NULL,
-					  0,input_ch);
-  
   GtkWidget *framebox=gtk_hbox_new(1,0);
   GtkWidget *framebox_right=gtk_vbox_new(0,0);
   GtkWidget *blocksize_box=gtk_vbox_new(0,0);
@@ -135,6 +160,11 @@ void clippanel_create(postfish_mainpanel *mp,
   GtkWidget *limit_box=gtk_vbox_new(0,0);
   GtkWidget *channel_table=gtk_table_new(input_ch,5,0);
 
+  panel=subpanel_create(mp,windowbutton[0],activebutton,
+			declip_active,&declip_visible,
+			"_Declipping filter setup",NULL,
+			0,input_ch);
+  
   subpanel_set_active_callback(panel,0,active_callback);
 
   gtk_widget_set_name(blocksize_box,"choiceframe");
@@ -182,10 +212,11 @@ void clippanel_create(postfish_mainpanel *mp,
     gtk_table_attach(GTK_TABLE(table),hzreadout,1,2,3,4,GTK_FILL,0,5,0);
     gtk_container_add(GTK_CONTAINER(blocksize_box),table);
 
+    width_bar=slider;
     multibar_thumb_increment(MULTIBAR(slider),1.,1.);
     multibar_callback(MULTIBAR(slider),blocksize_slider_change,0);
 
-    multibar_thumb_set(MULTIBAR(slider),2.,0);
+    multibar_thumb_set(MULTIBAR(slider),4.,0);
     
   }
   gtk_container_add(GTK_CONTAINER(blocksize_frame),blocksize_box);
@@ -214,6 +245,7 @@ void clippanel_create(postfish_mainpanel *mp,
 
     gtk_container_add(GTK_CONTAINER(converge_box),table);
 
+    depth_bar=slider;
     multibar_thumb_increment(MULTIBAR(slider),1.,10.);
     multibar_callback(MULTIBAR(slider),depth_slider_change,0);
     multibar_thumb_set(MULTIBAR(slider),60.,0);
@@ -244,6 +276,7 @@ void clippanel_create(postfish_mainpanel *mp,
 
     gtk_container_add(GTK_CONTAINER(limit_box),table);
 
+    limit_bar=slider;
     multibar_thumb_increment(MULTIBAR(slider),1.,10.);
     multibar_callback(MULTIBAR(slider),limit_slider_change,0);
     multibar_thumb_set(MULTIBAR(slider),100.,0);

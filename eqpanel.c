@@ -31,13 +31,7 @@
 #include "feedback.h"
 #include "freq.h"
 #include "eq.h"
-
-extern int input_ch;
-extern int input_size;
-extern int input_rate;
-
-extern eq_settings eq_master_set;
-extern eq_settings *eq_channel_set;
+#include "config.h"
 
 typedef struct {
   GtkWidget *slider;
@@ -46,8 +40,45 @@ typedef struct {
   int number;
 } bar;
 
-static bar *m_bars;
-static bar **c_bars;
+typedef struct {
+  subpanel_generic *panel;
+  bar *bars;
+} eq_panel_state;
+
+static eq_panel_state *master_panel;
+static eq_panel_state **channel_panel;
+
+static void eqpanel_state_to_config_helper(int bank,eq_settings *s,int A){
+  config_set_integer("eq_active",bank,A,0,0,0,s->panel_active);
+  config_set_vector("eq_settings",bank,A,0,0,eq_freqs,s->settings);
+}
+
+void eqpanel_state_to_config(int bank){
+  int i;
+  eqpanel_state_to_config_helper(bank,&eq_master_set,0);
+  for(i=0;i<input_ch;i++)
+    eqpanel_state_to_config_helper(bank,eq_channel_set+i,i+1);
+}
+
+static void eqpanel_state_from_config_helper(int bank,eq_settings *s,
+						 eq_panel_state *p,int A){
+
+  int i;
+  config_get_sigat("eq_active",bank,A,0,0,0,&s->panel_active);
+  gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->panel->subpanel_activebutton[0]),s->panel_active);
+
+  config_get_vector("eq_settings",bank,A,0,0,eq_freqs,s->settings);
+  for(i=0;i<eq_freqs;i++)
+    multibar_thumb_set(MULTIBAR(p->bars[i].slider),s->settings[i]*.1,0);
+
+}
+
+void eqpanel_state_from_config(int bank){
+  int i;
+  eqpanel_state_from_config_helper(bank,&eq_master_set,master_panel,0);
+  for(i=0;i<input_ch;i++)
+    eqpanel_state_from_config_helper(bank,eq_channel_set+i,channel_panel[i],i+1);
+}
 
 static void slider_change(GtkWidget *w,gpointer in){
   char buffer[80];
@@ -61,7 +92,7 @@ static void slider_change(GtkWidget *w,gpointer in){
 
 }
 
-static bar *eqpanel_create_helper(postfish_mainpanel *mp,
+static eq_panel_state *eqpanel_create_helper(postfish_mainpanel *mp,
 			   subpanel_generic *panel,
 			   eq_settings *es){
 
@@ -73,7 +104,11 @@ static bar *eqpanel_create_helper(postfish_mainpanel *mp,
 
   GtkWidget *slidertable=gtk_table_new(eq_freqs,3,0);
   bar *bars=calloc(eq_freqs,sizeof(*bars));
-  
+  eq_panel_state *p=calloc(1,sizeof(*p));
+
+  p->bars=bars;
+  p->panel=panel;
+
   for(i=0;i<eq_freqs;i++){
     const char *labeltext=eq_freq_labels[i];
     
@@ -104,7 +139,7 @@ static bar *eqpanel_create_helper(postfish_mainpanel *mp,
   gtk_box_pack_start(GTK_BOX(panel->subpanel_box),slidertable,1,1,4);
   subpanel_show_all_but_toplevel(panel);
 
-  return bars;
+  return p;
 }
 
 void eqpanel_create_master(postfish_mainpanel *mp,
@@ -118,14 +153,14 @@ void eqpanel_create_master(postfish_mainpanel *mp,
 					  "_Equalizer (master)",shortcut,
 					  0,1);
   
-  m_bars=eqpanel_create_helper(mp,panel,&eq_master_set);
+  master_panel=eqpanel_create_helper(mp,panel,&eq_master_set);
 }
 
 void eqpanel_create_channel(postfish_mainpanel *mp,
 				 GtkWidget **windowbutton,
 				 GtkWidget **activebutton){
   int i;
-  c_bars=malloc(input_ch*sizeof(*c_bars));
+  channel_panel=malloc(input_ch*sizeof(*channel_panel));
 
   /* a panel for each channel */
   for(i=0;i<input_ch;i++){
@@ -139,7 +174,7 @@ void eqpanel_create_channel(postfish_mainpanel *mp,
 			  &eq_channel_set[i].panel_visible,
 			  buffer,0,i,1);
   
-    c_bars[i]=eqpanel_create_helper(mp,panel,eq_channel_set+i);
+    channel_panel[i]=eqpanel_create_helper(mp,panel,eq_channel_set+i);
   }
 }
 
@@ -161,7 +196,7 @@ void eqpanel_feedback(int displayit){
   
   if(pull_eq_feedback_master(peakfeed,rmsfeed)==1)
     for(i=0;i<eq_freqs;i++)
-      multibar_set(MULTIBAR(m_bars[i].slider),rmsfeed[i],peakfeed[i],
+      multibar_set(MULTIBAR(master_panel->bars[i].slider),rmsfeed[i],peakfeed[i],
 		   OUTPUT_CHANNELS,(displayit && eq_master_set.panel_visible));
   
 
@@ -176,7 +211,7 @@ void eqpanel_feedback(int displayit){
         rms[j]=rmsfeed[i][j];
         peak[j]=peakfeed[i][j];
 	
-	multibar_set(MULTIBAR(c_bars[j][i].slider),rms,peak,
+	multibar_set(MULTIBAR(channel_panel[j]->bars[i].slider),rms,peak,
 		     input_ch,(displayit && eq_channel_set[j].panel_visible));
       }
     }
@@ -186,10 +221,10 @@ void eqpanel_feedback(int displayit){
 void eqpanel_reset(void){
   int i,j;
   for(i=0;i<eq_freqs;i++)
-    multibar_reset(MULTIBAR(m_bars[i].slider));
+    multibar_reset(MULTIBAR(master_panel->bars[i].slider));
   
   for(i=0;i<eq_freqs;i++)
     for(j=0;j<input_ch;j++)
-      multibar_reset(MULTIBAR(c_bars[j][i].slider));
+      multibar_reset(MULTIBAR(channel_panel[j]->bars[i].slider));
 }
 

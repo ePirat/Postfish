@@ -36,3 +36,7 @@ extern time_linkage *plate_read_channel(time_linkage *in,
 					time_linkage **revA,
 					time_linkage **revB);
 extern time_linkage *plate_read_master(time_linkage *in);
+
+extern plate_set *plate_channel_set;
+extern plate_set plate_master_set;
+

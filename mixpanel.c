@@ -30,15 +30,7 @@
 #include "subpanel.h"
 #include "feedback.h"
 #include "mix.h"
-
-extern int input_ch;
-extern int input_size;
-extern int input_rate;
-
-extern mix_settings *mix_set;
-extern sig_atomic_t atten_visible;
-extern sig_atomic_t *mixpanel_active;
-extern sig_atomic_t *mixpanel_visible;
+#include "config.h"
 
 typedef struct {
   GtkWidget *s;
@@ -48,16 +40,124 @@ typedef struct {
 
 /* only the sliders we need to save for feedback */
 typedef struct {
+  subpanel_generic *panel;
+  slider_readout_pair **att;
+  slider_readout_pair **del;
+
   GtkWidget **master;
 } atten_panelsave;
 
 typedef struct {
+  GtkWidget *insert_source[MIX_BLOCKS][3];
+  GtkWidget *insert_invert[MIX_BLOCKS];
+  slider_readout_pair *insert_att[MIX_BLOCKS];
+  slider_readout_pair *insert_del[MIX_BLOCKS];
+  GtkWidget *insert_dest[MIX_BLOCKS][OUTPUT_CHANNELS];
+  
+  GtkWidget *destA[OUTPUT_CHANNELS];
+  GtkWidget *destB[OUTPUT_CHANNELS];
+  slider_readout_pair *place_AB;
+  slider_readout_pair *place_atten;
+  slider_readout_pair *place_delay;
+
   GtkWidget *place[2];
   GtkWidget *sub[MIX_BLOCKS];
 } mix_panelsave;
 
 static atten_panelsave atten_panel;
 static mix_panelsave **mix_panels;
+
+static void mixblock_state_to_config(int bank, mix_settings *s,int A,int B){
+  config_set_vector("mixblock_source",bank,A,B,0,3,s->insert_source[B]);
+  config_set_integer("mixblock_set",bank,A,B,0,0,s->insert_invert[B]);
+  config_set_integer("mixblock_set",bank,A,B,0,1,s->insert_att[B]);
+  config_set_integer("mixblock_set",bank,A,B,0,2,s->insert_delay[B]);
+  config_set_vector("mixblock_dest",bank,A,B,0,OUTPUT_CHANNELS,s->insert_dest[B]);
+}
+
+static void mixdown_state_to_config(int bank, mix_settings *s,int A){
+  int i;
+  config_set_vector("mixplace_dest",bank,A,0,0,OUTPUT_CHANNELS,s->placer_destA);
+  config_set_vector("mixplace_dest",bank,A,1,0,OUTPUT_CHANNELS,s->placer_destB);
+  config_set_integer("mixplace_set",bank,A,0,0,0,s->placer_place);
+  config_set_integer("mixplace_set",bank,A,0,0,1,s->placer_att);
+  config_set_integer("mixplace_set",bank,A,0,0,2,s->placer_delay);
+  for(i=0;i<MIX_BLOCKS;i++)
+    mixblock_state_to_config(bank,s,A,i);
+}
+
+void mixpanel_state_to_config(int bank){
+  int i;
+  config_set_vector("mixdown_active",bank,0,0,0,input_ch,mixpanel_active);
+
+  for(i=0;i<input_ch;i++){
+    config_set_integer("mixdown_master_attenuate",bank,0,0,0,i,mix_set[i].master_att);
+    config_set_integer("mixdown_master_delay",bank,0,0,0,i,mix_set[i].master_delay);
+
+    mixdown_state_to_config(bank,mix_set+i,i);
+  }
+}
+
+static void mixblock_state_from_config(int bank, mix_settings *s,mix_panelsave *p,int A,int B){
+  int i;
+  config_get_vector("mixblock_source",bank,A,B,0,3,s->insert_source[B]);
+  for(i=0;i<3;i++)
+    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->insert_source[B][i]),
+				 s->insert_source[B][i]);
+
+  config_get_sigat("mixblock_set",bank,A,B,0,0,&s->insert_invert[B]);
+  gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->insert_invert[B]),
+			       s->insert_invert[B]);
+  
+  config_get_sigat("mixblock_set",bank,A,B,0,1,&s->insert_att[B]);
+  multibar_thumb_set(MULTIBAR(p->insert_att[B]->s),s->insert_att[B]*.1,0);
+  
+  config_get_sigat("mixblock_set",bank,A,B,0,2,&s->insert_delay[B]);
+  multibar_thumb_set(MULTIBAR(p->insert_del[B]->s),s->insert_delay[B]*.01,0);
+  
+  config_get_vector("mixblock_dest",bank,A,B,0,OUTPUT_CHANNELS,s->insert_dest[B]);
+  for(i=0;i<OUTPUT_CHANNELS;i++)
+    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->insert_dest[B][i]),
+				 s->insert_dest[B][i]);
+}
+
+static void mixdown_state_from_config(int bank, mix_settings *s, mix_panelsave *p, int A){
+  int i;
+  config_get_vector("mixplace_dest",bank,A,0,0,OUTPUT_CHANNELS,s->placer_destA);
+  config_get_vector("mixplace_dest",bank,A,1,0,OUTPUT_CHANNELS,s->placer_destB);
+  config_get_sigat("mixplace_set",bank,A,0,0,0,&s->placer_place);
+  config_get_sigat("mixplace_set",bank,A,0,0,1,&s->placer_att);
+  config_get_sigat("mixplace_set",bank,A,0,0,2,&s->placer_delay);
+
+  for(i=0;i<OUTPUT_CHANNELS;i++){
+    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->destA[i]),s->placer_destA[i]);
+    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->destB[i]),s->placer_destB[i]);
+  }
+  multibar_thumb_set(MULTIBAR(p->place_AB->s),s->placer_place,0);
+  multibar_thumb_set(MULTIBAR(p->place_atten->s),s->placer_att*.1,0);
+  multibar_thumb_set(MULTIBAR(p->place_delay->s),s->placer_delay*.01,0);
+
+  for(i=0;i<MIX_BLOCKS;i++)
+    mixblock_state_from_config(bank,s,p,A,i);
+}
+
+void mixpanel_state_from_config(int bank){
+  int i;
+  config_get_vector("mixdown_active",bank,0,0,0,input_ch,mixpanel_active);
+
+  for(i=0;i<input_ch;i++){
+    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(atten_panel.panel->subpanel_activebutton[i]),
+						   mixpanel_active[i]);
+
+    config_get_sigat("mixdown_master_attenuate",bank,0,0,0,i,&mix_set[i].master_att);
+    config_get_sigat("mixdown_master_delay",bank,0,0,0,i,&mix_set[i].master_delay);
+
+    multibar_thumb_set(MULTIBAR(atten_panel.att[i]->s),mix_set[i].master_att*.1,0);
+    multibar_thumb_set(MULTIBAR(atten_panel.del[i]->s),mix_set[i].master_delay*.01,0);
+
+    mixdown_state_from_config(bank,mix_set+i,mix_panels[i],i);
+  }
+}
 
 static void dB_slider_change(GtkWidget *w,gpointer in){
   char buffer[80];
@@ -108,7 +208,7 @@ static void toggle_callback(GtkWidget *w,gpointer in){
   *val=gtk_toggle_button_get_active(b);
 }
 
-static char *labels_dB[11]={"","  60","40","20","10","0","10","20","40","60","80"};
+static char *labels_dB[11]={""," -60","-40","-20","-10","0","10","20","40","60","80"};
 static float levels_dB[11]={-80,-60,-40,-20,-10,0,10,20,40,60,80};
 
 static char *labels_dBn[6]={"","-40","-20","-10","0","+10"};
@@ -151,9 +251,9 @@ static mix_panelsave *mixpanel_create_helper(postfish_mainpanel *mp,
 
   /* crossplace controls */
   {
-    slider_readout_pair *AB=calloc(1,sizeof(AB));
-    slider_readout_pair *att=calloc(1,sizeof(att));
-    slider_readout_pair *del=calloc(1,sizeof(del));
+    slider_readout_pair *AB=calloc(1,sizeof(*AB));
+    slider_readout_pair *att=calloc(1,sizeof(*att));
+    slider_readout_pair *del=calloc(1,sizeof(*del));
     GtkWidget *boxA=gtk_hbox_new(1,0);
     GtkWidget *boxB=gtk_hbox_new(1,0);
 
@@ -174,6 +274,10 @@ static mix_panelsave *mixpanel_create_helper(postfish_mainpanel *mp,
     AB->val=&m->placer_place;
     att->val=&m->placer_att;
     del->val=&m->placer_delay;
+
+    ps->place_AB=AB;
+    ps->place_atten=att;
+    ps->place_delay=del;
 
     multibar_callback(MULTIBAR(AB->s),AB_slider_change,AB);
     multibar_thumb_set(MULTIBAR(AB->s),100,0);
@@ -206,6 +310,8 @@ static mix_panelsave *mixpanel_create_helper(postfish_mainpanel *mp,
 			G_CALLBACK (toggle_callback), 
 			(gpointer)&m->placer_destB[i]);
 
+      ps->destA[i]=bA;
+      ps->destB[i]=bB;
     }
     
     gtk_table_attach(GTK_TABLE(table),lA,0,2,6,7,
@@ -268,8 +374,8 @@ static mix_panelsave *mixpanel_create_helper(postfish_mainpanel *mp,
   }
 
   for(i=0;i<MIX_BLOCKS;i++){
-    slider_readout_pair *att=calloc(1,sizeof(att));
-    slider_readout_pair *del=calloc(1,sizeof(del));
+    slider_readout_pair *att=calloc(1,sizeof(*att));
+    slider_readout_pair *del=calloc(1,sizeof(*del));
 
     GtkWidget *boxA=gtk_hbox_new(0,0);
     GtkWidget *boxB=gtk_hbox_new(1,0);
@@ -286,6 +392,11 @@ static mix_panelsave *mixpanel_create_helper(postfish_mainpanel *mp,
     gtk_misc_set_alignment(GTK_MISC(latt),1,.5);
     gtk_misc_set_alignment(GTK_MISC(ldel),1,.5);
 
+    ps->insert_source[i][0]=bM;
+    ps->insert_source[i][1]=bA;
+    ps->insert_source[i][2]=bB;
+    ps->insert_invert[i]=bI;
+
     att->s=multibar_slider_new(11,labels_dB,levels_dB,1);
     del->s=multibar_slider_new(6,labels_del,levels_del,1);
     att->r=readout_new("+00.0dB");
@@ -296,6 +407,9 @@ static mix_panelsave *mixpanel_create_helper(postfish_mainpanel *mp,
     ps->sub[i]=multibar_new(6,labels_dBn,levels_dBn,0,
 			    LO_ATTACK|LO_DECAY|HI_DECAY);
     
+    ps->insert_att[i]=att;
+    ps->insert_del[i]=del;
+
     multibar_callback(MULTIBAR(att->s),dB_slider_change,att);
     multibar_callback(MULTIBAR(del->s),ms_slider_change,del);
 
@@ -335,6 +449,8 @@ static mix_panelsave *mixpanel_create_helper(postfish_mainpanel *mp,
 
       if(thisch%2 == j && i == 0)
 	gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(b),1);
+
+      ps->insert_dest[i][j]=b;
 
       gtk_box_pack_start(GTK_BOX(boxB),b,1,1,0);
     }
@@ -393,6 +509,7 @@ void mixpanel_create_channel(postfish_mainpanel *mp,
 			  buffer,0,i,1);
   
     mix_panels[i]=mixpanel_create_helper(mp,panel,mix_set+i,i);
+    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(activebutton[i]),1);
   }
 }
 
@@ -408,8 +525,11 @@ void attenpanel_create(postfish_mainpanel *mp,
 
   GtkWidget *table=gtk_table_new(MIX_BLOCKS*3,5,0);
   mix_panelsave *ps=calloc(1,sizeof(*ps));
-  atten_panel.master=calloc(input_ch,sizeof(*atten_panel.master));
-  
+  atten_panel.master=calloc(input_ch,sizeof(*atten_panel.master));  
+  atten_panel.att=calloc(input_ch,sizeof(*atten_panel.att));
+  atten_panel.del=calloc(input_ch,sizeof(*atten_panel.del));
+  atten_panel.panel=panel;
+
   for(i=0;i<input_ch;i++){
     char buffer[80];
     GtkWidget *l1=gtk_label_new("attenuation ");
@@ -423,11 +543,13 @@ void attenpanel_create(postfish_mainpanel *mp,
     sprintf(buffer,"channel/reverb %d VU",i+1);
     GtkWidget *lV=gtk_label_new(buffer);
     
-    slider_readout_pair *att=calloc(1,sizeof(att));
-    slider_readout_pair *del=calloc(1,sizeof(del));
+    slider_readout_pair *att=calloc(1,sizeof(*att));
+    slider_readout_pair *del=calloc(1,sizeof(*del));
     
     atten_panel.master[i]=multibar_new(6,labels_dBn,levels_dBn,0,
 				       LO_ATTACK|LO_DECAY|HI_DECAY);
+    atten_panel.att[i]=att;
+    atten_panel.del[i]=del;
 
     att->s=multibar_slider_new(11,labels_dB,levels_dB,1);
     att->r=readout_new("+00.0dB");
@@ -471,7 +593,6 @@ void attenpanel_create(postfish_mainpanel *mp,
     gtk_table_attach(GTK_TABLE(table),del->r,3,4,1+i*3,2+i*3,
 		     GTK_FILL|GTK_EXPAND,0,0,0);
     
-    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(activebutton[i]),1);
   }
 
   gtk_box_pack_start(GTK_BOX(panel->subpanel_box),table,1,1,4);

@@ -49,3 +49,8 @@ extern time_linkage *mix_read(time_linkage *in,
 			      time_linkage *inB); // reverb channel
 extern int pull_mix_feedback(float **peak,float **rms);
 
+extern mix_settings *mix_set;
+extern sig_atomic_t atten_visible;
+extern sig_atomic_t *mixpanel_active;
+extern sig_atomic_t *mixpanel_visible;
+

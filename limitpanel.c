@@ -31,16 +31,34 @@
 #include "feedback.h"
 #include "limit.h"
 #include "limitpanel.h"
+#include "config.h"
 
-extern sig_atomic_t limit_active;
-extern sig_atomic_t limit_visible;
-extern int input_size;
-extern int input_rate;
-
-extern limit_settings limitset;
-
+static GtkWidget *active;
 static GtkWidget *t_slider;
+static GtkWidget *k_slider;
+static GtkWidget *d_slider;
 static GtkWidget *a_slider;
+
+void limitpanel_state_to_config(int bank){
+  config_set_integer("limit_active",bank,0,0,0,0,limit_active);
+  config_set_integer("limit_set",bank,0,0,0,0,limitset.thresh);
+  config_set_integer("limit_set",bank,0,0,0,1,limitset.depth);
+  config_set_integer("limit_set",bank,0,0,0,2,limitset.decay);
+}
+
+void limitpanel_state_from_config(int bank){
+  config_get_sigat("limit_active",bank,0,0,0,0,&limit_active);
+  gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(active),limit_active);
+
+  config_get_sigat("limit_set",bank,0,0,0,0,&limitset.thresh);
+  multibar_thumb_set(MULTIBAR(t_slider),limitset.thresh*.1,0);
+
+  config_get_sigat("limit_set",bank,0,0,0,1,&limitset.depth);
+  multibar_thumb_set(MULTIBAR(k_slider),limitset.depth*.1,0);
+
+  config_get_sigat("limit_set",bank,0,0,0,2,&limitset.decay);
+  multibar_thumb_set(MULTIBAR(d_slider),limitset.decay*.1,0);
+}
 
 static void limit_change(GtkWidget *w,gpointer in){
   char buffer[80];
@@ -126,8 +144,13 @@ void limitpanel_create(postfish_mainpanel *mp,
   GtkWidget *slider2=multibar_slider_new(5,labels2,levels2,1);
   GtkWidget *slider3=multibar_slider_new(6,timing_labels,timing_levels,1);
 
+  active=activebutton;
+
   t_slider=multibar_new(9,labels,levels,1,HI_DECAY);
   a_slider=multibar_new(4,rlabels,rlevels,0,0);
+
+  k_slider=slider2;
+  d_slider=slider3;
 
   gtk_misc_set_alignment(GTK_MISC(label1),1,.5);
   gtk_misc_set_alignment(GTK_MISC(label2),1,.5);

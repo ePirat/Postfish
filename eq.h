@@ -56,3 +56,7 @@ extern int eq_reset();
 extern void eq_set(eq_settings *eq,int freq, float value);
 extern time_linkage *eq_read_master(time_linkage *in);
 extern time_linkage *eq_read_channel(time_linkage *in);
+
+extern eq_settings eq_master_set;
+extern eq_settings *eq_channel_set;
+

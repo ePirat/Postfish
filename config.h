@@ -21,13 +21,12 @@
  * 
  */
 
-#include "postfish.h"
-
-extern void clippanel_create(postfish_mainpanel *mp,
-			     GtkWidget **windowbutton,
-			     GtkWidget **activebutton);
-extern void clippanel_feedback(int workp);
-extern void clippanel_reset(void);
-
-extern void clippanel_state_from_config(int bank);
-extern void clippanel_state_to_config(int bank);
+extern const char *config_get_string(char *key,int bank, int A, int B, int C);
+extern int config_get_integer(char *key,int bank, int A, int B, int C,int valnum, int *val);
+extern int config_get_sigat(char *key,int bank, int A, int B, int C,int valnum, sig_atomic_t *val);
+extern int config_get_vector(char *key,int bank, int A, int B, int C,int n, sig_atomic_t *v);
+extern void config_set_string(char *key,int bank, int A, int B, int C, const char *s);
+extern void config_set_vector(char *key,int bank, int A, int B, int C,int n, sig_atomic_t *v);
+extern void config_set_integer(char *key,int bank, int A, int B, int C, int valnum, int val);
+extern int config_load(char *filename);
+extern void config_save(char *filename);

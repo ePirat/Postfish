@@ -22,10 +22,14 @@
  */
 
 extern int declip_load(void);
-extern int declip_setblock(int n);
-extern int declip_settrigger(float trigger,int ch);
-extern int declip_setiterations(float x);
-extern int declip_setconvergence(float x);
 extern int declip_reset(void);
 extern time_linkage *declip_read(time_linkage *in);
 extern int pull_declip_feedback(int *clip,float *peak,int *total);
+
+extern sig_atomic_t *declip_active;
+extern sig_atomic_t declip_pending_blocksize;
+extern sig_atomic_t *declip_chtrigger;
+extern sig_atomic_t declip_convergence;
+extern sig_atomic_t declip_iterations;
+extern sig_atomic_t declip_visible;
+

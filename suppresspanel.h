@@ -24,3 +24,6 @@
 extern void suppresspanel_create_channel(postfish_mainpanel *mp,
 					 GtkWidget **windowbutton,
 					 GtkWidget **activebutton);
+
+extern void suppresspanel_state_to_config(int bank);
+extern void suppresspanel_state_from_config(int bank);

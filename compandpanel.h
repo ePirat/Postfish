@@ -31,5 +31,7 @@ extern void compandpanel_create_channel(postfish_mainpanel *mp,
 extern void compandpanel_feedback(int displayit);
 extern void compandpanel_reset(void);
 
+extern void compandpanel_state_to_config(int bank);
+extern void compandpanel_state_from_config(int bank);
 
 

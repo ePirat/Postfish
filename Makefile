@@ -3,13 +3,18 @@
 # and Fuck its little dog Libtool too
 
 
-ADD_DEF= -DUGLY_IEEE754_FLOAT32_HACK=1 -maltivec
-
-# use for PPC with altivec.  IF YOU HAVE ALTIVEC, YOU MUST USE THIS
-# LINE, otherwise FFTW3 will randomly crash whenever it uses Altivec
-# and any math denormalizes.
+# The PPC build *must* use -maltivec, even if the target is a non-altivec machine
 
 #ADD_DEF= -DUGLY_IEEE754_FLOAT32_HACK=1 -maltivec
+
+# use the below for x86 and most other platforms where 'float' is 32 bit IEEE754
+
+ADD_DEF= -DUGLY_IEEE754_FLOAT32_HACK=1 
+
+# use the below for anything without IEE754 floats (eg, VAX)
+
+# ADD_DEF=
+
 
 CC=gcc 
 LD=gcc
@@ -23,12 +28,14 @@ SRC = main.c mainpanel.c multibar.c readout.c input.c output.c clippanel.c \
 	declip.c reconstruct.c multicompand.c windowbutton.c subpanel.c \
 	feedback.c freq.c eq.c eqpanel.c compandpanel.c subband.c lpc.c \
 	bessel.c suppresspanel.c suppress.c singlecomp.c singlepanel.c \
-	limit.c limitpanel.c mute.c mixpanel.c mix.c reverb.c reverbpanel.c
+	limit.c limitpanel.c mute.c mixpanel.c mix.c reverb.c reverbpanel.c \
+	outpanel.c config.c
 OBJ = main.o mainpanel.o multibar.o readout.o input.o output.o clippanel.o \
 	declip.o reconstruct.o multicompand.o windowbutton.o subpanel.o \
 	feedback.o freq.o eq.o eqpanel.o compandpanel.o subband.o lpc.o \
 	bessel.o suppresspanel.o suppress.o singlecomp.o singlepanel.o \
-	limit.o limitpanel.o mute.o mixpanel.o mix.o reverb.o reverbpanel.o
+	limit.o limitpanel.o mute.o mixpanel.o mix.o reverb.o reverbpanel.o \
+	outpanel.o config.o
 GCF = -DETCDIR=\\\"$(ETCDIR)\\\" `pkg-config --cflags gtk+-2.0` -DG_DISABLE_DEPRECATED -DGDK_DISABLE_DEPRECATED -DGTK_DISABLE_DEPRECATED -DGDK_PIXBUF_DISABLE_DEPRECATED
 
 all:	

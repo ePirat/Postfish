@@ -56,6 +56,8 @@ typedef struct {
   iir_state *iirT[suppress_freqs];
   iir_state *iirR[suppress_freqs];
 
+  float prevratio[suppress_freqs];
+
 } suppress_state;
 
 suppress_settings suppress_channel_set;
@@ -182,8 +184,23 @@ static void suppress_work_helper(void *vs, suppress_settings *sset){
 	  
 	  //_analysis("fast",i,fast,input_size,1,offset);
 	  //_analysis("slow",i,slow,input_size,1,offset);
-	  for(k=0;k<input_size;k++)
-	    fast[k]=fromdB_a((todB_a(slow+k)-todB_a(fast+k))*.5*multiplier);
+
+	  if(multiplier==sss->prevratio[i]){
+
+	    for(k=0;k<input_size;k++)
+	      fast[k]=fromdB_a((todB_a(slow+k)-todB_a(fast+k))*.5*multiplier);
+
+	  }else{
+	    float multiplier_add=(multiplier-sss->prevratio[i])/input_size;
+	    multiplier=sss->prevratio[i];
+
+	    for(k=0;k<input_size;k++){
+	      fast[k]=fromdB_a((todB_a(slow+k)-todB_a(fast+k))*.5*multiplier);
+	      multiplier+=multiplier_add;
+	    }
+
+	  }
+
 	  //_analysis("adj",i,fast,input_size,1,offset);
 
 	  if(sset->linkp && firstlink==1){
@@ -214,6 +231,9 @@ static void suppress_work_helper(void *vs, suppress_settings *sset){
 	memset(&sss->iirR[i][j],0,sizeof(iir_state));
       }
     }
+
+    sss->prevratio[i]=multiplier;
+
   }
 }
 

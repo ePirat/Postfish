@@ -167,7 +167,7 @@ subpanel_generic *subpanel_create(postfish_mainpanel *mp,
   GtkWidget *toplabelwb=windowbutton_new(prompt);
   GtkWidget *toplabelab[num];
   int i;
-  
+
   for(i=0;i<num;i++){
     if(shortcut && shortcut[i]){
       toplabelab[i]=gtk_toggle_button_new_with_label(shortcut[i]);
@@ -207,6 +207,9 @@ subpanel_generic *subpanel_create(postfish_mainpanel *mp,
   panel->subpanel_toplevel=gtk_window_new (GTK_WINDOW_TOPLEVEL);
   panel->mainpanel=mp;
 
+  panel->group = gtk_accel_group_new ();
+  gtk_window_add_accel_group (GTK_WINDOW(panel->subpanel_toplevel), panel->group);
+
   gtk_container_add (GTK_CONTAINER (panel->subpanel_toplevel), panel->subpanel_topframe);
   gtk_container_add (GTK_CONTAINER (panel->subpanel_topframe), panel->subpanel_box);
   gtk_container_set_border_width (GTK_CONTAINER (panel->subpanel_topframe), 3);
@@ -228,6 +231,9 @@ subpanel_generic *subpanel_create(postfish_mainpanel *mp,
   g_signal_connect (G_OBJECT (panel->subpanel_toplevel), "delete-event",
 		    G_CALLBACK (subpanel_hide), 
 		    panel);
+
+  gtk_widget_add_accelerator(windowbutton, "clicked", panel->group, GDK_W, GDK_MOD1_MASK, 0);
+
 
   /* link the mainpanel and subpanel buttons */
   g_signal_connect_after (G_OBJECT (panel->mainpanel_windowbutton), "clicked",

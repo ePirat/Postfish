@@ -525,10 +525,9 @@ time_linkage *subband_read(time_linkage *in, subband_state *f,
        would have been in the previous frame */
     for(i=0;i<ch;i++){
       int set=(visible[i]||active[i]) && !mute_channel_muted(in->active,i);
-      memset(f->lap_activeP,set,sizeof(*f->lap_activeP)*ch);
-      memset(f->lap_active1,set,sizeof(*f->lap_active1)*ch);
-      memset(f->lap_active0,set,sizeof(*f->lap_active0)*ch);
-      //memset(f->lap_activeC,1,sizeof(*f->lap_activeC)*ch);
+      f->lap_activeP[i]=set;
+      f->lap_active1[i]=set;
+      f->lap_active0[i]=set;
 
       f->wP[i]=w[i];
       f->w1[i]=w[i];

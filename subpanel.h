@@ -30,6 +30,7 @@ typedef struct{
   GtkWidget *subpanel_topframe;
   GtkWidget *subpanel_box;
   sig_atomic_t *activevar;
+  GtkAccelGroup *group;
 
   int active_button_count; /* silliness around the rotating non-alt-shortcut */
   int active_button_start; /* silliness around the rotating non-alt-shortcut */

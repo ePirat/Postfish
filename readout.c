@@ -153,7 +153,6 @@ GtkWidget* readout_new (char *markup){
   GtkWidget *ret= GTK_WIDGET (g_object_new (readout_get_type (), NULL));
   Readout *r=READOUT(ret);
 
-  r->layout=calloc(1,sizeof(r->layout));
   r->layout=gtk_widget_create_pango_layout(ret,markup);
 
   return ret;

@@ -31,7 +31,6 @@
 extern int input_rate;
 extern int input_ch;
 extern int input_size;
-extern int inbytes;
 
 /* accessed only in playback thread/setup */
 
@@ -60,10 +59,10 @@ int *declip_prev_active;
 
 sig_atomic_t declip_visible=0;
 
-static float *chtrigger=0;
-static sig_atomic_t pending_blocksize=0;
-static float convergence=0.;
-static float iterations=0.;
+sig_atomic_t *declip_chtrigger=0;
+sig_atomic_t declip_pending_blocksize=0;
+sig_atomic_t declip_convergence=0;
+sig_atomic_t declip_iterations=0;
 
 /* feedback! */
 typedef struct declip_feedback{
@@ -152,9 +151,9 @@ int declip_load(void){
   int i,j;
   declip_active=calloc(input_ch,sizeof(*declip_active));
   declip_prev_active=calloc(input_ch,sizeof(*declip_prev_active));
-  chtrigger=malloc(input_ch*sizeof(*chtrigger));
+  declip_chtrigger=malloc(input_ch*sizeof(*declip_chtrigger));
   for(i=0;i<input_ch;i++)
-    chtrigger[i]=1.;
+    declip_chtrigger[i]=10000;
   
   out.channels=input_ch;
   out.data=malloc(input_ch*sizeof(*out.data));
@@ -170,7 +169,7 @@ int declip_load(void){
   for(i=0;i<input_ch;i++)
     lap[i]=malloc(input_size*sizeof(**lap));
   
-  window=malloc(input_size*2*sizeof(window));
+  window=malloc(input_size*2*sizeof(*window));
 
   {    
     /* alloc for largest possible blocksize */
@@ -178,8 +177,8 @@ int declip_load(void){
     int loestpad=1-rint(fromBark(toBark(0.)-width)*blocksize*2/input_rate);
     int hiestpad=rint(fromBark(toBark(input_rate*.5)+width)*blocksize*2/input_rate)+loestpad;
     widthlookup=malloc((hiestpad+1)*sizeof(*widthlookup));
-    freq=fftwf_malloc((blocksize*2+2)*sizeof(freq));
-    work=fftwf_malloc((blocksize*2)*sizeof(freq));
+    freq=fftwf_malloc((blocksize*2+2)*sizeof(*freq));
+    work=fftwf_malloc((blocksize*2)*sizeof(*work));
 
     for(i=0,j=32;j<=blocksize*2;i++,j*=2){
       fftwf_weight=fftwf_plan_dft_r2c_1d(j,work,
@@ -190,37 +189,8 @@ int declip_load(void){
   }
   reconstruct_init(32,input_size*4);
   
-  pending_blocksize=input_size*2;
+  declip_pending_blocksize=input_size*2;
   return(0);
-}
-
-int declip_setblock(int n){
-  if(n<32)return -1;
-  if(n>input_size*2)return -1;
-  pending_blocksize=n;
-  return 0;
-}
-
-int declip_settrigger(float trigger,int ch){
-  if(ch<0 || ch>=input_ch)return -1;
-  pthread_mutex_lock(&master_mutex);
-  chtrigger[ch]=trigger-(1./(1<<(inbytes*8-1)))-(1./(1<<(inbytes*8-2)));
-  pthread_mutex_unlock(&master_mutex);
-  return 0;
-}
-
-int declip_setiterations(float it){
-  pthread_mutex_lock(&master_mutex);
-  iterations=it;
-  pthread_mutex_unlock(&master_mutex);
-  return 0;
-}
-
-int declip_setconvergence(float c){
-  pthread_mutex_lock(&master_mutex);
-  convergence=c;
-  pthread_mutex_unlock(&master_mutex);
-  return 0;
 }
 
 /* called only in playback thread */
@@ -312,17 +282,16 @@ time_linkage *declip_read(time_linkage *in){
   int total[input_ch];
   float peak[input_ch];
   u_int32_t active=0;
-  int next_blocksize=pending_blocksize;
+  int next_blocksize=declip_pending_blocksize;
   int orig_blocksize;
 
   float local_convergence;
   float local_iterations;
   
-  pthread_mutex_lock(&master_mutex);
-  local_convergence=convergence;
-  local_iterations=iterations;
-  memcpy(local_trigger,chtrigger,sizeof(local_trigger));
-  pthread_mutex_unlock(&master_mutex);
+  for(i=0;i<input_ch;i++)
+    local_trigger[i]=declip_chtrigger[i]*.0001;
+  local_iterations=declip_iterations*.0001;
+  local_convergence=fromdB(declip_convergence*.1);
 
   memset(count,0,sizeof(count));
   memset(peak,0,sizeof(peak));
@@ -379,9 +348,9 @@ time_linkage *declip_read(time_linkage *in){
 	  }
 	}
 
-      }else{
-	/* no declipping to do, so direct cache/lap buffer rotation */
+      }//else no declipping to do, so direct cache/lap buffer rotation */
 
+      {
 	float *temp=cache[i];
 	cache[i]=in->data[i];
 	in->data[i]=temp;

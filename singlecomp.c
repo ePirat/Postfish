@@ -35,6 +35,16 @@ typedef struct {
   float val;
 } peak_state;
 
+typedef struct {
+  sig_atomic_t u_thresh;
+  sig_atomic_t u_ratio;
+
+  sig_atomic_t o_thresh;
+  sig_atomic_t o_ratio;
+  
+  sig_atomic_t b_ratio;
+} atten_cache;
+
 typedef struct{
   time_linkage out;
   feedback_generic_pool feedpool;
@@ -64,6 +74,9 @@ typedef struct{
   int mutemaskP;
   int mutemask0;
   int ch;
+
+  atten_cache *prevset;
+  atten_cache *currset;
 } singlecomp_state;
 
 static float *window;
@@ -112,7 +125,7 @@ int pull_singlecomp_feedback_channel(float *peak,float *rms){
 
 static void singlecomp_load_helper(singlecomp_state *scs,int ch){
   int i;
-  memset(scs,0,sizeof(scs));
+  memset(scs,0,sizeof(*scs));
 
   scs->ch=ch;
   scs->activeP=calloc(scs->ch,sizeof(*scs->activeP));
@@ -143,6 +156,8 @@ static void singlecomp_load_helper(singlecomp_state *scs,int ch){
   for(i=0;i<scs->ch;i++)
     scs->cache[i]=malloc(input_size*sizeof(**scs->cache));
 
+  scs->prevset=malloc(ch*sizeof(*scs->prevset));
+  scs->currset=malloc(ch*sizeof(*scs->currset));
 }
 
 /* called only by initial setup */
@@ -187,12 +202,12 @@ static void filter_set(float msec,
 }
 
 static void reset_filter(singlecomp_state *scs){
-  memset(scs->o_peak,0,scs->ch*sizeof(&scs->o_peak));
-  memset(scs->u_peak,0,scs->ch*sizeof(&scs->u_peak));
-  memset(scs->b_peak,0,scs->ch*sizeof(&scs->b_peak));
-  memset(scs->o_iir,0,scs->ch*sizeof(&scs->o_iir));
-  memset(scs->u_iir,0,scs->ch*sizeof(&scs->u_iir));
-  memset(scs->b_iir,0,scs->ch*sizeof(&scs->b_iir));
+  memset(scs->o_peak,0,scs->ch*sizeof(*scs->o_peak));
+  memset(scs->u_peak,0,scs->ch*sizeof(*scs->u_peak));
+  memset(scs->b_peak,0,scs->ch*sizeof(*scs->b_peak));
+  memset(scs->o_iir,0,scs->ch*sizeof(*scs->o_iir));
+  memset(scs->u_iir,0,scs->ch*sizeof(*scs->u_iir));
+  memset(scs->b_iir,0,scs->ch*sizeof(*scs->b_iir));
 }
 
 /* called only in playback thread */
@@ -291,7 +306,10 @@ static float hard_knee(float x){
 }
 
 static void over_compand(float *A,float *B,float *adj,
-			 float zerocorner,float multiplier,
+			 float zerocorner,
+			 float currcorner,
+			 float multiplier,
+			 float currmultiplier,
 			 float lookahead,int mode,int softknee,
                          iir_filter *attack, iir_filter *decay,
                          iir_state *iir, peak_state *ps,
@@ -306,18 +324,39 @@ static void over_compand(float *A,float *B,float *adj,
   run_filter(A,B,work,ahead,hold,mode,iir,attack,decay,ps);
   
   if(active){
-    if(softknee){
-      for(k=0;k<input_size;k++)
-        adj[k]+=soft_knee(work[k]-zerocorner)*multiplier;
+    if(multiplier!=currmultiplier || zerocorner!=currcorner){
+      float multiplier_add=(currmultiplier-multiplier)/input_size;
+      float zerocorner_add=(currcorner-zerocorner)/input_size;
+
+      if(softknee){
+	for(k=0;k<input_size;k++){
+	  adj[k]+=soft_knee(work[k]-zerocorner)*multiplier;
+	  multiplier+=multiplier_add;
+	  zerocorner+=zerocorner_add;
+	}
+      }else{
+	for(k=0;k<input_size;k++){
+	  adj[k]+=hard_knee(work[k]-zerocorner)*multiplier;
+	  multiplier+=multiplier_add;
+	  zerocorner+=zerocorner_add;
+	}
+      }
+
     }else{
-      for(k=0;k<input_size;k++)
-        adj[k]+=hard_knee(work[k]-zerocorner)*multiplier;
+      if(softknee){
+	for(k=0;k<input_size;k++)
+	  adj[k]+=soft_knee(work[k]-zerocorner)*multiplier;
+      }else{
+	for(k=0;k<input_size;k++)
+	  adj[k]+=hard_knee(work[k]-zerocorner)*multiplier;
+      }
     }
   }
 }
 
 static void under_compand(float *A,float *B,float *adj,
-			  float zerocorner,float multiplier,
+			  float zerocorner,float currcorner,
+			  float multiplier,float currmultiplier,
 			  float lookahead,int mode,int softknee,
 			  iir_filter *attack, iir_filter *decay,
 			  iir_state *iir, peak_state *ps,
@@ -331,20 +370,41 @@ static void under_compand(float *A,float *B,float *adj,
   run_filter(A,B,work,ahead,hold,mode,iir,attack,decay,ps);
 
   if(active){
-    if(softknee){
-      for(k=0;k<input_size;k++)
-        adj[k]= -soft_knee(zerocorner-work[k])*multiplier;
+    if(multiplier!=currmultiplier || zerocorner!=currcorner){
+      float multiplier_add=(currmultiplier-multiplier)/input_size;
+      float zerocorner_add=(currcorner-zerocorner)/input_size;
+
+      if(softknee){
+	for(k=0;k<input_size;k++){
+	  adj[k]= -soft_knee(zerocorner-work[k])*multiplier;
+	  multiplier+=multiplier_add;
+	  zerocorner+=zerocorner_add;
+	}
+      }else{
+	for(k=0;k<input_size;k++){
+	  adj[k]= -hard_knee(zerocorner-work[k])*multiplier;
+	  multiplier+=multiplier_add;
+	  zerocorner+=zerocorner_add;
+	}
+      }
+
     }else{
-      for(k=0;k<input_size;k++)
-        adj[k]= -hard_knee(zerocorner-work[k])*multiplier;
+      if(softknee){
+	for(k=0;k<input_size;k++)
+	  adj[k]= -soft_knee(zerocorner-work[k])*multiplier;
+      }else{
+	for(k=0;k<input_size;k++)
+	  adj[k]= -hard_knee(zerocorner-work[k])*multiplier;
+      }
     }
   }else
     memset(adj,0,sizeof(*adj)*input_size);
-
+  
 }
 
 static void base_compand(float *A,float *B,float *adj,
-			 float multiplier,int mode,
+			 float multiplier,float currmultiplier,
+			 int mode,
 			 iir_filter *attack, iir_filter *decay,
 			 iir_state *iir, peak_state *ps,
 			 int active){
@@ -355,11 +415,20 @@ static void base_compand(float *A,float *B,float *adj,
   int ahead=(mode?step_ahead(attack->alpha):impulse_ahead2(attack->alpha));
 
   run_filter(A,B,work,ahead,0,mode,iir,attack,decay,ps);
-
-  if(active)
-    for(k=0;k<input_size;k++)
-      adj[k]-=(work[k]+adj[k])*multiplier;
-
+  
+  if(active){
+    if(multiplier!=currmultiplier){
+      float multiplier_add=(currmultiplier-multiplier)/input_size;
+      
+      for(k=0;k<input_size;k++){
+	adj[k]-=(work[k]+adj[k])*multiplier;
+	multiplier+=multiplier_add;
+      }
+    }else{ 
+      for(k=0;k<input_size;k++)
+	adj[k]-=(work[k]+adj[k])*multiplier;
+    }
+  }
 }
 
 static void work_and_lapping(singlecomp_state *scs,
@@ -401,9 +470,9 @@ static void work_and_lapping(singlecomp_state *scs,
     if(u_decayms!=scs->u_decay[i].ms)filter_set(u_decayms,&scs->u_decay[i],0);
     if(b_attackms!=scs->b_attack[i].ms)filter_set(b_attackms,&scs->b_attack[i],1);
     if(b_decayms!=scs->b_decay[i].ms)filter_set(b_decayms,&scs->b_decay[i],0);
-  
+    
     if(!active0 && !activeC){
-
+      
       if(activeP) reset_filter(scs); /* just became inactive; reset all filters */
 
       /* feedabck */
@@ -435,13 +504,26 @@ static void work_and_lapping(singlecomp_state *scs,
 	
 
     }else if(active0 || activeC){
+      float adj[input_size]; // under will set it
+
+      scs->currset[i].u_thresh=scset[i]->u_thresh;
+      scs->currset[i].o_thresh=scset[i]->o_thresh;
+      scs->currset[i].u_ratio=scset[i]->u_ratio;
+      scs->currset[i].o_ratio=scset[i]->o_ratio;
+      scs->currset[i].b_ratio=scset[i]->b_ratio;
+      
+      /* don't slew from an unknown value */
+
+      if(!activeP || !scs->fillstate) 
+	memcpy(scs->prevset+i,scs->currset+i,sizeof(*scs->currset));
 
       /* run the filters */
-      float adj[input_size]; // under will set it
       
       under_compand(scs->cache[i],in->data[i],adj,
-		    (float)(scset[i]->u_thresh),
-		    1.-1000./scset[i]->u_ratio,
+		    scs->prevset[i].u_thresh,
+		    scs->currset[i].u_thresh,
+		    1.-1000./scs->prevset[i].u_ratio,
+		    1.-1000./scs->currset[i].u_ratio,
 		    scset[i]->u_lookahead/1000.,
 		    scset[i]->u_mode,
 		    scset[i]->u_softknee,
@@ -450,8 +532,10 @@ static void work_and_lapping(singlecomp_state *scs,
 		    active0);
       
       over_compand(scs->cache[i],in->data[i],adj,
-		   (float)(scset[i]->o_thresh),
-		   1.-1000./scset[i]->o_ratio,
+		   scs->prevset[i].o_thresh,
+		   scs->currset[i].o_thresh,
+		   1.-1000./scs->prevset[i].o_ratio,
+		   1.-1000./scs->currset[i].o_ratio,
 		   scset[i]->o_lookahead/1000.,
 		   scset[i]->o_mode,
 		   scset[i]->o_softknee,
@@ -484,7 +568,8 @@ static void work_and_lapping(singlecomp_state *scs,
       }
       
       base_compand(scs->cache[i],in->data[i],adj,
-		   1.-1000./scset[i]->b_ratio,
+		   1.-1000./scs->prevset[i].b_ratio,
+		   1.-1000./scs->currset[i].b_ratio,
 		   scset[i]->b_mode,
 		   scs->b_attack+i,scs->b_decay+i,
 		   scs->b_iir+i,scs->b_peak+i,
@@ -562,6 +647,12 @@ static void work_and_lapping(singlecomp_state *scs,
 
     out->active=mutemask0;
     out->samples=scs->cache_samples;
+  }
+
+  {
+    atten_cache *temp=scs->prevset;
+    scs->prevset=scs->currset;
+    scs->currset=temp;
   }
    
   scs->cache_samples=in->samples;

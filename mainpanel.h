@@ -34,6 +34,7 @@ typedef struct postfish_mainpanel postfish_mainpanel;
 #include "limitpanel.h"
 #include "mixpanel.h"
 #include "reverbpanel.h"
+#include "outpanel.h"
 
 struct postfish_mainpanel{
   GtkWidget *twirlimage;
@@ -55,8 +56,6 @@ struct postfish_mainpanel{
   GtkWidget *buttonactive[7];
   GtkWidget *deckactive[7];
 
-  GtkWidget *cue_b;
-
   GtkWidget *inbar;
   GtkWidget *outbar;
   GtkWidget *inreadout;
@@ -65,15 +64,18 @@ struct postfish_mainpanel{
   float inpeak;
   float outpeak;
 
-  GtkWidget *channelshow[18]; /* support only up to 16 + mid/side */
+  GtkWidget *channelshow[MAX_INPUT_CHANNELS]; 
   int channelrotate[10]; /* up to 16 channels, but only base 10 digits on the keyboard */
   GtkWidget ***channel_wa;
   int channeleffects;
 
   GtkWidget *cue;
+  GtkWidget *cue_a;
   GtkWidget *entry_a;
+  GtkWidget *set_a;
+  GtkWidget *cue_b;
   GtkWidget *entry_b;
-
+  GtkWidget *set_b;
 
   /* ui state */
   int fishframe;
@@ -83,4 +85,5 @@ struct postfish_mainpanel{
 
 };
 
-extern gboolean slider_keymodify(GtkWidget *w,GdkEventKey *event,gpointer in);
+extern void mainpanel_go(int n,char *list[],int ch);
+extern void save_state();

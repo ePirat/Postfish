@@ -31,12 +31,7 @@
 #include "feedback.h"
 #include "suppress.h"
 #include "suppresspanel.h"
-
-extern int input_ch;
-extern int input_size;
-extern int input_rate;
-
-extern suppress_settings suppress_channel_set;
+#include "config.h"
 
 typedef struct {
   GtkWidget *cslider;
@@ -47,6 +42,7 @@ typedef struct {
 } tbar;
 
 typedef struct{
+  Multibar *s;
   Readout *r0;
   Readout *r1;
   Readout *r2;
@@ -56,11 +52,49 @@ typedef struct{
 } callback_arg_rv3;
 
 typedef struct suppress_panel_state{
-  callback_arg_rv3 timing;
-  tbar             bars[suppress_freqs+1];
+  subpanel_generic *panel;
+
+  GtkWidget        *link;
+  callback_arg_rv3  timing;
+  tbar              bars[suppress_freqs];
 } suppress_panel_state;
 
 static suppress_panel_state *channel_panel;
+
+void suppresspanel_state_to_config(int bank){
+  config_set_vector("suppresspanel_active",bank,0,0,0,input_ch,suppress_channel_set.active);
+  config_set_vector("suppresspanel_ratio",bank,0,0,0,suppress_freqs,suppress_channel_set.ratio);
+  config_set_integer("suppresspanel_set",bank,0,0,0,0,suppress_channel_set.linkp);
+  config_set_integer("suppresspanel_set",bank,0,0,0,1,suppress_channel_set.smooth);
+  config_set_integer("suppresspanel_set",bank,0,0,0,2,suppress_channel_set.trigger);
+  config_set_integer("suppresspanel_set",bank,0,0,0,3,suppress_channel_set.release);
+}
+
+void suppresspanel_state_from_config(int bank){
+  int i;
+
+  config_get_vector("suppresspanel_active",bank,0,0,0,input_ch,suppress_channel_set.active);
+  for(i=0;i<input_ch;i++)
+    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(channel_panel->panel->subpanel_activebutton[i]),
+				 suppress_channel_set.active[i]);
+
+  config_get_vector("suppresspanel_ratio",bank,0,0,0,suppress_freqs,suppress_channel_set.ratio);
+  for(i=0;i<suppress_freqs;i++)
+    multibar_thumb_set(MULTIBAR(channel_panel->bars[i].cslider),
+		       1000./suppress_channel_set.ratio[i],0);
+
+  config_get_sigat("suppresspanel_set",bank,0,0,0,0,&suppress_channel_set.linkp);
+  gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(channel_panel->link),suppress_channel_set.linkp);
+  
+  config_get_sigat("suppresspanel_set",bank,0,0,0,1,&suppress_channel_set.smooth);
+  multibar_thumb_set(MULTIBAR(channel_panel->timing.s),suppress_channel_set.smooth*.1,0);
+
+  config_get_sigat("suppresspanel_set",bank,0,0,0,2,&suppress_channel_set.trigger);
+  multibar_thumb_set(MULTIBAR(channel_panel->timing.s),suppress_channel_set.trigger*.1,1);
+
+  config_get_sigat("suppresspanel_set",bank,0,0,0,3,&suppress_channel_set.release);
+  multibar_thumb_set(MULTIBAR(channel_panel->timing.s),suppress_channel_set.release*.1,2);
+}
 
 static void compand_change(GtkWidget *w,gpointer in){
   char buffer[80];
@@ -149,6 +183,7 @@ static suppress_panel_state *suppresspanel_create_helper(postfish_mainpanel *mp,
   GtkWidget *linkbox=gtk_hbox_new(0,0);
 
   suppress_panel_state *ps=calloc(1,sizeof(suppress_panel_state));
+  ps->panel=panel;
 
   gtk_container_add(GTK_CONTAINER(panel->subpanel_box),table);
 
@@ -194,10 +229,13 @@ static suppress_panel_state *suppresspanel_create_helper(postfish_mainpanel *mp,
   g_signal_connect (G_OBJECT (linkbutton), "clicked",
 		    G_CALLBACK (suppress_link), &sset->linkp);
   gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(linkbutton),1);
+  ps->link=linkbutton;
 
   /* timing controls */
   {
     GtkWidget *slider=multibar_slider_new(5,timing_labels,timing_levels,3);
+
+    ps->timing.s=MULTIBAR(slider);
 
     ps->timing.r0=READOUT(readout_new("10.0ms"));
     ps->timing.r1=READOUT(readout_new("10.0ms"));
@@ -209,9 +247,9 @@ static suppress_panel_state *suppresspanel_create_helper(postfish_mainpanel *mp,
 
     multibar_callback(MULTIBAR(slider),timing_change,&ps->timing);
     
-    multibar_thumb_set(MULTIBAR(slider),20,0);
+    multibar_thumb_set(MULTIBAR(slider),80,0);
     multibar_thumb_set(MULTIBAR(slider),100,1);
-    multibar_thumb_set(MULTIBAR(slider),1000,2);
+    multibar_thumb_set(MULTIBAR(slider),2000,2);
 
     gtk_table_attach(GTK_TABLE(table),slider,1,2,1,2,
 		     GTK_FILL|GTK_EXPAND,GTK_EXPAND,5,0);

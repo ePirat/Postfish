@@ -60,7 +60,6 @@ typedef struct {
   sig_atomic_t over_attack;
   sig_atomic_t over_decay;
   sig_atomic_t over_lookahead;
-  sig_atomic_t over_trim;
 
   sig_atomic_t base_mode;
   sig_atomic_t base_attack;
@@ -73,7 +72,6 @@ typedef struct {
   sig_atomic_t under_attack;
   sig_atomic_t under_decay;
   sig_atomic_t under_lookahead;
-  sig_atomic_t under_trim;
 
   sig_atomic_t active_bank;
 
@@ -89,5 +87,8 @@ extern time_linkage *multicompand_read_master(time_linkage *in);
 
 extern int pull_multicompand_feedback_channel(float **peak,float **rms,int *bands);
 extern int pull_multicompand_feedback_master(float **peak,float **rms,int *bands);
+
+extern multicompand_settings multi_master_set;
+extern multicompand_settings *multi_channel_set;
 
 

@@ -30,13 +30,13 @@ static off_t        Bcursor=-1;
 static off_t        cursor=0;
 
 sig_atomic_t loop_active;
-int seekable;
+int input_seekable;
 
 int input_rate;
 int input_ch;
-int inbytes;
-static int signp;
 int input_size;
+
+pthread_mutex_t input_mutex=PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
 
 typedef struct {
   FILE *f;
@@ -45,7 +45,26 @@ typedef struct {
   off_t end;
   off_t data;
 
+  int bytes;
+  int signp;
+  int endian;
+  char *name;
+  
 } file_entry;
+
+typedef struct{
+  int ch;
+
+  int files;
+  file_entry *file_list;
+
+  int current_file_entry_number;
+  file_entry *current_file_entry;
+
+} group_entry;
+
+static int groups=0;
+static group_entry *group_list=0;
 
 typedef struct input_feedback{
   feedback_generic parent_class;
@@ -56,22 +75,18 @@ typedef struct input_feedback{
 
 static feedback_generic_pool feedpool;
 
-static file_entry *file_list=NULL;
-static int file_entries=0;
-static int current_file_entry_number=-1;
-static file_entry *current_file_entry=NULL;
 static time_linkage out;
 
 void input_Acursor_set(off_t c){
-  pthread_mutex_lock(&master_mutex);
+  pthread_mutex_lock(&input_mutex);
   Acursor=c;
-  pthread_mutex_unlock(&master_mutex);
+  pthread_mutex_unlock(&input_mutex);
 }
 
 void input_Bcursor_set(off_t c){
-  pthread_mutex_lock(&master_mutex);
+  pthread_mutex_lock(&input_mutex);
   Bcursor=c;
-  pthread_mutex_unlock(&master_mutex);
+  pthread_mutex_unlock(&input_mutex);
 }
 
 off_t input_time_to_cursor(const char *t){
@@ -125,7 +140,7 @@ off_t input_time_to_cursor(const char *t){
   if(h<0)h=0;
 
   return ((off_t)hd + (off_t)s*100 + (off_t)m*60*100 + (off_t)h*60*60*100) *
-    input_rate / 100 * inbytes * input_ch;
+    input_rate / 100;
 }
 
 void time_fix(char *buffer){
@@ -145,7 +160,6 @@ void time_fix(char *buffer){
 
 void input_cursor_to_time(off_t cursor,char *t){
   int h,m,s,hd;
-  cursor/=input_ch*inbytes;
 
   h=cursor/60/60/input_rate;
   cursor%=(off_t)60*60*input_rate;
@@ -159,151 +173,388 @@ void input_cursor_to_time(off_t cursor,char *t){
   time_fix(t);
 }
 
-int input_load(int n,char *list[]){
-  char *fname="stdin";
-  int stdinp=0,i,j,ch=0,rate=0;
-  off_t total=0;
+void input_parse(char *filename,int newgroup){
+  if(newgroup){
+    /* add a group */
+    
+    if(!groups){
+      group_list=calloc(1,sizeof(*group_list));
+    }else{
+      group_list=realloc(group_list,sizeof(*group_list)*(groups+1));
+      memset(group_list+groups,0,sizeof(*group_list));
+    }
+    groups++;
+  }
+      
+  {
+    group_entry *g=group_list+groups-1;
+    file_entry *fe;
+    
+    if(g->files==0){
+      g->file_list=calloc(1,sizeof(*g->file_list));
+    }else{
+      g->file_list=realloc(g->file_list,
+			   sizeof(*g->file_list)*(g->files+1));
+      memset(g->file_list+g->files,0,sizeof(*g->file_list));
+    }
+    fe=g->file_list+g->files;
+    g->files++;
+    
+    fe->name=strdup(filename);
+  }
+}
 
-  if(n==0){
+/* Macros to read header data */
+#define READ_U32_LE(buf) \
+        (((buf)[3]<<24)|((buf)[2]<<16)|((buf)[1]<<8)|((buf)[0]&0xff))
+
+#define READ_U16_LE(buf) \
+        (((buf)[1]<<8)|((buf)[0]&0xff))
+
+#define READ_U32_BE(buf) \
+        (((buf)[0]<<24)|((buf)[1]<<16)|((buf)[2]<<8)|((buf)[3]&0xff))
+
+#define READ_U16_BE(buf) \
+        (((buf)[0]<<8)|((buf)[1]&0xff))
+
+double read_IEEE80(unsigned char *buf){
+  int s=buf[0]&0xff;
+  int e=((buf[0]&0x7f)<<8)|(buf[1]&0xff);
+  double f=((unsigned long)(buf[2]&0xff)<<24)|
+    ((buf[3]&0xff)<<16)|
+    ((buf[4]&0xff)<<8) |
+    (buf[5]&0xff);
+  
+  if(e==32767){
+    if(buf[2]&0x80)
+      return HUGE_VAL; /* Really NaN, but this won't happen in reality */
+    else{
+      if(s)
+	return -HUGE_VAL;
+      else
+	return HUGE_VAL;
+    }
+  }
+  
+  f=ldexp(f,32);
+  f+= ((buf[6]&0xff)<<24)|
+    ((buf[7]&0xff)<<16)|
+    ((buf[8]&0xff)<<8) |
+    (buf[9]&0xff);
+  
+  return ldexp(f, e-16446);
+}
+
+static int find_chunk(FILE *in, char *type, unsigned int *len, int endian){
+  unsigned int i;
+  unsigned char buf[8];
+
+  while(1){
+    if(fread(buf,1,8,in) <8)return 0;
+
+    if(endian)
+      *len = READ_U32_BE(buf+4);
+    else
+      *len = READ_U32_LE(buf+4);
+
+    if(memcmp(buf,type,4)){
+
+      if((*len) & 0x1)(*len)++;
+      
+      for(i=0;i<*len;i++)
+	if(fgetc(in)==EOF)return 0;
+
+    }else return 1;
+  }
+}
+
+int input_load(void){
+
+  int stdinp=0,i,k;
+
+  input_ch=0;
+
+  if(groups==0){
     /* look at stdin... is it a file, pipe, tty...? */
     if(isatty(STDIN_FILENO)){
       fprintf(stderr,
 	      "Postfish requires input either as a list of contiguous WAV\n"
 	      "files on the command line, or WAV data piped|redirected to\n"
-	      "stdin.\n");
+	      "stdin. postfish -h will give more details.\n");
       return 1;
     }
     stdinp=1;    /* file coming in via stdin */
-    file_entries=1;
-  }else
-    file_entries=n;
-
-  file_list=calloc(file_entries,sizeof(file_entry));
-  for(i=0;i<file_entries;i++){
-    FILE *f;
     
-    if(stdinp){
-      int newfd=dup(STDIN_FILENO);
-      f=fdopen(newfd,"rb");
-    }else{
-      f=fopen(list[i],"rb");
-      fname=list[i];
-    }
+    group_list=calloc(1,sizeof(*group_list));
+    group_list[0].file_list=calloc(1,sizeof(*group_list[0].file_list));
 
-    if(f){
-      unsigned char buffer[81];
-      off_t filelength;
-      int datap=0;
-      int fmtp=0;
-      file_list[i].f=f;
-      
-      /* parse header (well, sort of) and get file size */
-      seekable=(fseek(f,0,SEEK_CUR)?0:1);
-      if(!seekable){
-	filelength=-1;
+    groups=1;
+    group_list[0].files=1;
+    group_list[0].file_list[0].name="stdin";
+  }
+
+  for(k=0;k<groups;k++){
+    group_entry *g=group_list+k;
+    off_t total=0;
+
+    for(i=0;i<g->files;i++){
+      file_entry *fe=g->file_list+i;
+      FILE *f;
+      char *fname="stdin";
+
+      if(stdinp){
+	int newfd=dup(STDIN_FILENO);
+	f=fdopen(newfd,"rb");
       }else{
-	fseek(f,0,SEEK_END);
-	filelength=ftello(f);
-	fseek(f,0,SEEK_SET);
+	fname=g->file_list[i].name;
+	f=fopen(fname,"rb");
       }
 
-      fread(buffer,1,12,f);
-      if(strncmp(buffer,"RIFF",4) || strncmp(buffer+8,"WAVE",4)){
-	fprintf(stderr,"%s: Not a WAVE file.\n",fname);
-	return 1;
-      }
-
-      while(fread(buffer,1,8,f)==8){
-	unsigned long chunklen=
-	  buffer[4]|(buffer[5]<<8)|(buffer[6]<<16)|(buffer[7]<<24);
-
-	if(!strncmp(buffer,"fmt ",4)){
-	  int ltype;
-	  int lch;
-	  int lrate;
-	  int lbits;
-
-	  if(chunklen>80){
-	    fprintf(stderr,"%s: WAVE file fmt chunk too large to parse.\n",fname);
-	    return 1;
-	  }
-	  fread(buffer,1,chunklen,f);
-	  
-	  ltype=buffer[0] |(buffer[1]<<8);
-	  lch=  buffer[2] |(buffer[3]<<8);
-	  lrate=buffer[4] |(buffer[5]<<8)|(buffer[6]<<16)|(buffer[7]<<24);
-	  lbits=buffer[14]|(buffer[15]<<8);
-
-	  if(ltype!=1){
-	    fprintf(stderr,"%s: WAVE file not PCM.\n",fname);
-	    return 1;
-	  }
-
-	  if(i==0){
-	    ch=lch;
-	    rate=lrate;
-	    inbytes=lbits/8;
-	    if(inbytes>1)signp=1;
-	  }else{
-	    if(ch!=lch){
-	      fprintf(stderr,"%s: WAVE files must all have same number of channels.\n",fname);
-	      return 1;
-	    }
-	    if(rate!=lrate){
-	      fprintf(stderr,"%s: WAVE files must all be same sampling rate.\n",fname);
-	      return 1;
-	    }
-	    if(inbytes!=lbits/8){
-	      fprintf(stderr,"%s: WAVE files must all be same sample width.\n",fname);
-	      return 1;
-	    }
-	  }
-	  fmtp=1;
-	} else if(!strncmp(buffer,"data",4)){
-	  off_t pos=ftello(f);
-	  if(!fmtp){
-	    fprintf(stderr,"%s: WAVE fmt chunk must preceed data chunk.\n",fname);
-	    return 1;
-	  }
-	  datap=1;
-	  
-	  if(seekable)
-	    filelength=(filelength-pos)/(ch*inbytes)*(ch*inbytes)+pos;
-
-	  if(chunklen==0UL ||
-	     chunklen==0x7fffffffUL || 
-	     chunklen==0xffffffffUL){
-	    file_list[i].begin=total;
-	    total=file_list[i].end=0;
-	    fprintf(stderr,"%s: Incomplete header; assuming stream.\n",fname);
-	  }else if(filelength==-1 || chunklen+pos<=filelength){
-	    file_list[i].begin=total;
-	    total=file_list[i].end=total+chunklen;
-	    fprintf(stderr,"%s: Using declared file size.\n",fname);
-	  }else{
-	    file_list[i].begin=total;
-	    total=file_list[i].end=total+filelength-pos;
-	    fprintf(stderr,"%s: Using actual file size.\n",fname);
-	  }
-	  file_list[i].data=ftello(f);
-	  
-	  break;
-	} else {
-	  fprintf(stderr,"%s: Unknown chunk type %c%c%c%c; skipping.\n",fname,
-		  buffer[0],buffer[1],buffer[2],buffer[3]);
-	  for(j=0;j<(int)chunklen;j++)
-	    if(fgetc(f)==EOF)break;
+      /* Crappy! Use a lib to do this for pete's sake! */
+      if(f){
+	unsigned char headerid[12];
+	off_t filelength;
+	fe->f=f;
+	
+	/* parse header (well, sort of) and get file size */
+	input_seekable=(fseek(f,0,SEEK_CUR)?0:1);
+	if(!input_seekable){
+	  filelength=-1;
+	}else{
+	  fseek(f,0,SEEK_END);
+	  filelength=ftello(f);
+	  fseek(f,0,SEEK_SET);
 	}
-      }
 
-      if(!datap){
-	fprintf(stderr,"%s: WAVE file has no data chunk.\n",fname);
+	fread(headerid,1,12,f);
+	if(!strncmp(headerid,"RIFF",4) && !strncmp(headerid+8,"WAVE",4)){
+	  unsigned int chunklen;
+
+	  if(find_chunk(f,"fmt ",&chunklen,0)){
+	    int ltype;
+	    int lch;
+	    int lrate;
+	    int lbits;
+	    unsigned char *buf=alloca(chunklen);
+	    
+	    fread(buf,1,chunklen,f);
+	    
+	    ltype = READ_U16_LE(buf); 
+	    lch =   READ_U16_LE(buf+2); 
+	    lrate = READ_U32_LE(buf+4);
+	    lbits = READ_U16_LE(buf+14);
+	    
+	    if(ltype!=1){
+	      fprintf(stderr,"%s:\n\tWAVE file not PCM.\n",fname);
+	      return 1;
+	    }
+	      
+	    fe->bytes=(lbits+7)/8;
+	    fe->signp=0;
+	    fe->endian=0;
+	    if(fe->bytes>1)fe->signp=1;
+	    
+	    if(lrate<4000 || lrate>192000){
+	      fprintf(stderr,"%s:\n\tSampling rate out of bounds\n",fname);
+	      return 1;
+	    }
+	    
+	    if(k==0 && i==0){
+	      input_rate=lrate;
+	    }else if(input_rate!=lrate){
+	      fprintf(stderr,"%s:\n\tInput files must all be same sampling rate.\n",fname);
+	      return 1;
+	    }
+	    
+	    if(i==0){
+	      g->ch=lch;
+	      input_ch+=lch;
+	    }else{
+	      if(g->ch!=lch){
+		fprintf(stderr,"%s:\n\tInput files must all have same number of channels.\n",fname);
+		return 1;
+	      }
+	    }
+
+	    if(find_chunk(f,"data",&chunklen,0)){
+	      off_t pos=ftello(f);
+	      
+	      if(input_seekable)
+		filelength=
+		  (filelength-pos)/
+		  (g->ch*fe->bytes)*
+		  (g->ch*fe->bytes)+pos;
+	      
+	      if(chunklen==0UL ||
+		 chunklen==0x7fffffffUL || 
+		 chunklen==0xffffffffUL){
+		if(filelength==-1){
+		  fe->begin=total;
+		  total=fe->end=-1;
+		  fprintf(stderr,"%s: Incomplete header; assuming stream.\n",fname);
+		}else{
+		  fe->begin=total;
+		  total=fe->end=total+(filelength-pos)/(g->ch*fe->bytes);
+		  fprintf(stderr,"%s: Incomplete header; using actual file size.\n",fname);
+		}
+	      }else if(filelength==-1 || chunklen+pos<=filelength){
+		fe->begin=total;
+		total=fe->end=total+ (chunklen/(g->ch*fe->bytes));
+		fprintf(stderr,"%s: Using declared file size.\n",fname);
+
+	      }else{
+		fe->begin=total;
+		total=fe->end=total+(filelength-pos)/(g->ch*fe->bytes);
+		fprintf(stderr,"%s: File truncated; Using actual file size.\n",fname);
+	      }
+	      fe->data=ftello(f);
+	    } else {
+	      fprintf(stderr,"%s: WAVE file has no \"data\" chunk following \"fmt \".\n",fname);
+	      return 1;
+	    }
+	  }else{
+	    fprintf(stderr,"%s: WAVE file has no \"fmt \" chunk.\n",fname);
+	    return 1;
+	  }
+
+	}else if(!strncmp(headerid,"FORM",4) && !strncmp(headerid+8,"AIF",3)){
+	  unsigned int len;
+	  int aifc=0;
+	  if(headerid[11]=='C')aifc=1;
+	  unsigned char *buffer;
+	  char buf2[8];
+
+	  int lch;
+	  int lbits;
+	  int lrate;
+	  
+	  /* look for COMM */
+	  if(!find_chunk(f, "COMM", &len,1)){
+	    fprintf(stderr,"%s: AIFF file has no \"COMM\" chunk.\n",fname);
+	    return 1;
+	  }
+	  
+	  if(len < 18 || (aifc && len<22)) {
+	    fprintf(stderr,"%s: AIFF COMM chunk is truncated.\n",fname);
+	    return 1;
+	  }
+	  
+	  buffer = alloca(len);
+
+	  if(fread(buffer,1,len,f) < len){
+	    fprintf(stderr, "%s: Unexpected EOF in reading AIFF header\n",fname);
+	    return 1;
+	  }
+
+	  lch = READ_U16_BE(buffer);
+	  lbits = READ_U16_BE(buffer+6);
+	  lrate = (int)read_IEEE80(buffer+8);
+
+	  fe->endian = 1; // default
+	      
+	  fe->bytes=(lbits+7)/8;
+	  fe->signp=1;
+	    
+	  if(lrate<4000 || lrate>192000){
+	    fprintf(stderr,"%s:\n\tSampling rate out of bounds\n",fname);
+	    return 1;
+	  }
+
+	  if(k==0 && i==0){
+	    input_rate=lrate;
+	  }else if(input_rate!=lrate){
+	    fprintf(stderr,"%s:\n\tInput files must all be same sampling rate.\n",fname);
+	    return 1;
+	  }
+	    
+	  if(i==0){
+	    g->ch=lch;
+	    input_ch+=lch;
+	  }else{
+	    if(g->ch!=lch){
+	      fprintf(stderr,"%s:\n\tInput files must all have same number of channels.\n",fname);
+	      return 1;
+	    }
+	  }
+
+	  if(aifc){
+	    if(!memcmp(buffer+18, "NONE", 4)) {
+	      fe->endian = 1;
+	    }else if(!memcmp(buffer+18, "sowt", 4)) {
+	      fe->endian = 0;
+	    }else{
+	      fprintf(stderr, "%s: Postfish supports only linear PCM AIFF-C files.\n",fname);
+	      return 1;
+	    }
+	  }
+
+	  if(!find_chunk(f, "SSND", &len, 1)){
+	    fprintf(stderr,"%s: AIFF file has no \"SSND\" chunk.\n",fname);
+	    return 1;
+	  }
+
+	  if(fread(buf2,1,8,f) < 8){
+	    fprintf(stderr,"%s: Unexpected EOF reading AIFF header\n",fname);
+	    return 1;
+	  }
+	  
+	  {
+	    int loffset = READ_U32_BE(buf2);
+	    int lblocksize = READ_U32_BE(buf2+4);
+
+	    /* swallow some data */
+	    for(i=0;i<loffset;i++)
+	      if(fgetc(f)==EOF)break;
+	    
+	    if( lblocksize == 0 && (lbits == 32 || lbits == 24 || lbits == 16 || lbits == 8)){
+
+	      off_t pos=ftello(f);
+	      
+	      if(input_seekable)
+		filelength=
+		  (filelength-pos)/
+		  (g->ch*fe->bytes)*
+		  (g->ch*fe->bytes)+pos;
+	      
+	      if(len==0UL ||
+		 len==0x7fffffffUL || 
+		 len==0xffffffffUL){
+		if(filelength==-1){
+		  fe->begin=total;
+		  total=fe->end=-1;
+		  fprintf(stderr,"%s: Incomplete header; assuming stream.\n",fname);
+		}else{
+		  fe->begin=total;
+		  total=fe->end=total+(filelength-pos)/(g->ch*fe->bytes);
+		  fprintf(stderr,"%s: Incomplete header; using actual file size.\n",fname);
+		}
+	      }else if(filelength==-1 || (len+pos-loffset-8)<=filelength){
+		fe->begin=total;
+		total=fe->end=total+ ((len-loffset-8)/(g->ch*fe->bytes));
+		fprintf(stderr,"%s: Using declared file size.\n",fname);
+
+	      }else{
+		fe->begin=total;
+		total=fe->end=total+(filelength-pos)/(g->ch*fe->bytes);
+		fprintf(stderr,"%s: File truncated; Using actual file size.\n",fname);
+	      }
+	      fe->data=pos;
+	    }else{
+	      fprintf(stderr, "%s: Postfish supports only linear PCM AIFF-C files.\n",fname);
+	      return 1;
+	    }
+	  }
+
+	} else {
+
+	  fprintf(stderr,"%s: Postfish supports only linear PCM WAV and AIFF[-C] files.\n",fname);
+	  return 1;
+	}
+
+      }else{
+	fprintf(stderr,"%s: Unable to open file.\n",fname);
 	return 1;
       }
-      
-    }else{
-      fprintf(stderr,"%s: Unable to open file.\n",fname);
-      return 1;
     }
   }
 
@@ -326,230 +577,349 @@ int input_load(int n,char *list[]){
 
        4000:  256 */
 
-  if(rate<6000){
+  if(input_rate<6000){
     input_size=256;
-  }else if(rate<15000){
+  }else if(input_rate<15000){
     input_size=512;
-  }else if(rate<25000){
+  }else if(input_rate<25000){
     input_size=1024;
-  }else if(rate<50000){
+  }else if(input_rate<50000){
     input_size=2048;
-  }else if(rate<100000){
+  }else if(input_rate<100000){
     input_size=4096;
   }else
     input_size=8192;
 
-  input_ch=out.channels=ch;
-  input_rate=rate;
-  out.data=malloc(sizeof(*out.data)*ch);
-  for(i=0;i<ch;i++)
-    out.data[i]=malloc(sizeof(*out.data[0])*input_size);
+  out.channels=input_ch;
+
+  out.data=malloc(sizeof(*out.data)*input_ch);
+  for(i=0;i<input_ch;i++)
+    out.data[i]=malloc(sizeof(**out.data)*input_size);
   
   return 0;
 }
 
-off_t input_seek(off_t pos){
-  int i;
+off_t input_seek_i(off_t pos,int ps){
+  int i,k;
+  int flag=0;
+  off_t maxpos=0;
 
   if(pos<0)pos=0;
-  if(!seekable){
-    current_file_entry=file_list;
-    current_file_entry_number=0;
+  if(!input_seekable){
+    for(i=0;i<groups;i++){
+      group_list[i].current_file_entry=group_list[i].file_list;
+      group_list[i].current_file_entry_number=0;
+    }
     return -1;
   }
 
-  for(i=0;i<file_entries;i++){
-    current_file_entry=file_list+i;
-    current_file_entry_number=i;
-    if(current_file_entry->begin<=pos && current_file_entry->end>pos){
-      fseeko(current_file_entry->f,
-	     pos-current_file_entry->begin+current_file_entry->data,
-	     SEEK_SET);
-      pthread_mutex_lock(&master_mutex);
-      cursor=pos;
-      playback_seeking=1;
-      pthread_mutex_unlock(&master_mutex);
-      return cursor;
+  pthread_mutex_lock(&input_mutex);
+  if(ps)playback_seeking=1;
+
+  /* seek has to happen correctly in all groups */
+  for(k=0;k<groups;k++){
+    group_entry *g=group_list+k;
+
+    for(i=0;i<g->files;i++){
+      file_entry *fe=g->current_file_entry=g->file_list+i;
+      g->current_file_entry_number=i;
+
+      if(fe->begin<=pos && fe->end>pos){
+	flag=1;
+	fseeko(fe->f, 
+	       (pos-fe->begin)*(g->ch*fe->bytes)+fe->data,
+	       SEEK_SET);
+	break;
+      }
+    }
+    
+    if(i==g->files){
+      /* this group isn't that long; seek to the end of it */
+      file_entry *fe=g->current_file_entry;
+      
+      fseeko(fe->f,(fe->end-fe->begin)*(g->ch*fe->bytes)+fe->data,SEEK_SET);
+      
+      if(fe->end>maxpos)maxpos=fe->end;
     }
   }
-  i--;
 
-  pos=current_file_entry->end;
-  fseeko(current_file_entry->f,
-	 pos-current_file_entry->begin+current_file_entry->data,
-	 SEEK_SET);
-  pthread_mutex_lock(&master_mutex);
-  cursor=pos;
-      playback_seeking=1;
-  pthread_mutex_unlock(&master_mutex);
+  if(flag){
+    cursor=pos;
+    pthread_mutex_unlock(&input_mutex);
+  }else{
+    cursor=maxpos;
+    pthread_mutex_unlock(&input_mutex);
+  }
+
   return cursor;
 }
 
+off_t input_seek(off_t pos){
+  return input_seek_i(pos,1);
+}
+
 off_t input_time_seek_rel(float s){
-  off_t ret;
-  pthread_mutex_lock(&master_mutex);
-  ret=input_seek(cursor+input_rate*inbytes*input_ch*s);
-  pthread_mutex_unlock(&master_mutex);
-  return ret;
+  return input_seek(cursor+input_rate*s);
 }
 
 static feedback_generic *new_input_feedback(void){
   input_feedback *ret=malloc(sizeof(*ret));
-  ret->rms=malloc((input_ch+2)*sizeof(*ret->rms));
-  ret->peak=malloc((input_ch+2)*sizeof(*ret->peak));
+  ret->rms=malloc(input_ch*sizeof(*ret->rms));
+  ret->peak=malloc(input_ch*sizeof(*ret->peak));
   return (feedback_generic *)ret;
 }
 
 static void push_input_feedback(float *peak,float *rms, off_t cursor){
-  int n=input_ch+2;
   input_feedback *f=(input_feedback *)
     feedback_new(&feedpool,new_input_feedback);
   f->cursor=cursor;
-  memcpy(f->rms,rms,n*sizeof(*rms));
-  memcpy(f->peak,peak,n*sizeof(*peak));
+  memcpy(f->rms,rms,input_ch*sizeof(*rms));
+  memcpy(f->peak,peak,input_ch*sizeof(*peak));
   feedback_push(&feedpool,(feedback_generic *)f);
 }
 
 int pull_input_feedback(float *peak,float *rms,off_t *cursor){
   input_feedback *f=(input_feedback *)feedback_pull(&feedpool);
-  int n=input_ch+2;
   if(!f)return 0;
-  if(rms)memcpy(rms,f->rms,sizeof(*rms)*n);
-  if(peak)memcpy(peak,f->peak,sizeof(*peak)*n);
+  if(rms)memcpy(rms,f->rms,sizeof(*rms)*input_ch);
+  if(peak)memcpy(peak,f->peak,sizeof(*peak)*input_ch);
   if(cursor)*cursor=f->cursor;
   feedback_old(&feedpool,(feedback_generic *)f);
   return 1;
 }
 
+static void LEconvert(float **data,
+		      unsigned char *readbuf, int dataoff,
+		      int ch,int bytes, int signp, int n){
+  int i,j,k=0;
+  int32_t val;
+  int32_t xor=(signp?0:0x80000000UL);
+  float scale=1./2147483648.;
+
+  k=0;
+  switch(bytes){
+  case 1:
+    
+    for(i=dataoff;i<dataoff+n;i++)
+      for(j=0;j<ch;j++){
+	val=(readbuf[k]<<24)^xor;
+	data[j][i]=(val==0x7f000000?1.:val*scale);
+	k++;
+      }
+    break;
+
+  case 2:
+
+    for(i=dataoff;i<dataoff+n;i++)
+      for(j=0;j<ch;j++){
+	val=((readbuf[k]<<16)|(readbuf[k+1]<<24))^xor;
+	data[j][i]=(val==0x7fff0000?1.:val*scale);
+	k+=2;
+      }
+    break;
+
+  case 3:
+
+    for(i=dataoff;i<dataoff+n;i++)
+      for(j=0;j<ch;j++){
+	val=((readbuf[k]<<8)|(readbuf[k+1]<<16)|(readbuf[k+2]<<24))^xor;
+	data[j][i]=(val==0x7fffff00?1.:val*scale);
+	k+=3;
+      }
+    break;
+
+  case 4:
+
+    for(i=dataoff;i<dataoff+n;i++)
+      for(j=0;j<ch;j++){
+	val=((readbuf[k])|(readbuf[k+1]<<8)|(readbuf[k+2]<<16)|(readbuf[k+3]<<24))^xor;
+	data[j][i]=(val==0x7fffffff?1.:val*scale);
+	k+=4;
+      }
+    break;
+  }
+}
+
+static void BEconvert(float **data,
+		      unsigned char *readbuf, int dataoff,
+		      int ch,int bytes, int signp, int n){
+  int i,j,k=0;
+  int32_t val;
+  int32_t xor=(signp?0:0x80000000UL);
+  float scale=1./2147483648.;
+
+  k=0;
+  switch(bytes){
+  case 1:
+    
+    for(i=dataoff;i<dataoff+n;i++)
+      for(j=0;j<ch;j++){
+	val=(readbuf[k]<<24)^xor;
+	data[j][i]=(val==0x7f000000?1.:val*scale);
+	k++;
+      }
+    break;
+
+  case 2:
+
+    for(i=dataoff;i<dataoff+n;i++)
+      for(j=0;j<ch;j++){
+	val=((readbuf[k+1]<<16)|(readbuf[k]<<24))^xor;
+	data[j][i]=(val==0x7fff0000?1.:val*scale);
+	k+=2;
+      }
+    break;
+
+  case 3:
+
+    for(i=dataoff;i<dataoff+n;i++)
+      for(j=0;j<ch;j++){
+	val=((readbuf[k+2]<<8)|(readbuf[k+1]<<16)|(readbuf[k]<<24))^xor;
+	data[j][i]=(val==0x7fffff00?1.:val*scale);
+	k+=3;
+      }
+    break;
+
+  case 4:
+
+    for(i=dataoff;i<dataoff+n;i++)
+      for(j=0;j<ch;j++){
+	val=((readbuf[k+3])|(readbuf[k+2]<<8)|(readbuf[k+1]<<16)|(readbuf[k]<<24))^xor;
+	data[j][i]=(val==0x7fffffff?1.:val*scale);
+	k+=4;
+      }
+    break;
+  }
+}
+
+static void zero(float **data, int dataoff, int ch, int n){
+  int i,j;
+  
+  for(i=dataoff;i<dataoff+n;i++)
+    for(j=0;j<ch;j++)
+      data[j][i]=0;
+}
+
+/* no locking within as the only use of input_read is locked in the
+   playback thread (must be locked there because the real lock needs
+   to avoid a seeking race) */
+
 time_linkage *input_read(void){
-  int read_b=0,i,j,k;
-  int toread_b=input_size*out.channels*inbytes;
-  unsigned char *readbuf;
-  float *rms=alloca(sizeof(*rms)*(out.channels+2));
-  float *peak=alloca(sizeof(*peak)*(out.channels+2));
+  int h,i,j;
+  int groupread_s=0;
 
-  memset(rms,0,sizeof(*rms)*(out.channels+2));
-  memset(peak,0,sizeof(*peak)*(out.channels+2));
+  float *rms=alloca(sizeof(*rms)*(out.channels));
+  float *peak=alloca(sizeof(*peak)*(out.channels));
 
-  pthread_mutex_lock(&master_mutex);
+  memset(rms,0,sizeof(*rms)*(out.channels));
+  memset(peak,0,sizeof(*peak)*(out.channels));
+
   out.samples=0;
 
   /* the non-streaming case */
-  if(!loop_active && 
-     cursor>=current_file_entry->end &&
-     current_file_entry->end!=-1){
-    pthread_mutex_unlock(&master_mutex);
-    goto tidy_up;
+  if(!loop_active && input_seekable){
+    for(i=0;i<groups;i++)
+      if(cursor<group_list[i].file_list[group_list[i].files-1].end)
+	break;
+    if(i==groups)goto tidy_up;
   }
 
   /* the streaming case */
-  if(feof(current_file_entry->f) && 
-     current_file_entry_number+1>=file_entries){
-    pthread_mutex_unlock(&master_mutex);
+  if(!input_seekable && feof(group_list[0].current_file_entry->f)){ 
     goto tidy_up;
   }
-  pthread_mutex_unlock(&master_mutex);
 
-  readbuf=alloca(toread_b);
-
-  while(toread_b){
-    off_t ret;
-    off_t read_this_loop=current_file_entry->end-cursor;
-    if(read_this_loop>toread_b)read_this_loop=toread_b;
-
-    ret=fread(readbuf+read_b,1,read_this_loop,current_file_entry->f);
-
-    pthread_mutex_lock(&master_mutex);
-
-    if(ret>0){
-      read_b+=ret;
-      toread_b-=ret;
-      cursor+=ret;
-    }else{
-      if(current_file_entry_number+1>=file_entries){
-
-	/* end of file before full frame */
-	memset(readbuf+read_b,0,toread_b);
-	toread_b=0;
-
-      }
-    }
+  /* If we're A-B looping, we might need several loops/seeks */
+  while(groupread_s<input_size){
+    int chcount=0;
+    int max_read_s=0;
 
     if(loop_active && cursor>=Bcursor){
-      pthread_mutex_unlock(&master_mutex);
-      input_seek(Acursor);
-    }else{
-      if(cursor>=current_file_entry->end){
-	pthread_mutex_unlock(&master_mutex);
-	if(current_file_entry_number+1<file_entries){
-	  current_file_entry_number++;
-	  current_file_entry++;
-	  fseeko(current_file_entry->f,current_file_entry->data,SEEK_SET);
-	}
-      }else
-	pthread_mutex_unlock(&master_mutex);
-    }
-  }
-
-  out.samples=read_b/out.channels/inbytes;
-  
-  k=0;
-  for(i=0;i<out.samples;i++){
-    float mean=0.;
-    float divrms=0.;
-
-    for(j=0;j<out.channels;j++){
-      float dval;
-      long val=0;
-      switch(inbytes){
-      case 1:
-	val=(readbuf[k]<<24);
-	break;
-      case 2:
-	val=(readbuf[k]<<16)|(readbuf[k+1]<<24);
-	break;
-      case 3:
-	val=(readbuf[k]<<8)|(readbuf[k+1]<<16)|(readbuf[k+2]<<24);
-	break;
-      case 4:
-	val=(readbuf[k])|(readbuf[k+1]<<8)|(readbuf[k+2]<<16)|(readbuf[k+3]<<24);
-	break;
-      }
-      if(signp)
-	dval=out.data[j][i]=val/2147483648.;
-      else
-	dval=out.data[j][i]=(val^0x80000000UL)/2147483648.;
-
-      if(fabs(dval)>peak[j])peak[j]=fabs(dval);
-      rms[j]+= dval*dval;
-      mean+=dval;
-
-      k+=inbytes;
+      input_seek_i(Acursor,0);
     }
 
-    /* mean */
-    mean/=j;
-    if(fabs(mean)>peak[j])peak[j]=fabs(mean);
-    rms[j]+= mean*mean;
-
-    /* div */
-    for(j=0;j<out.channels;j++){
-      float dval=mean-out.data[j][i];
-      if(fabs(dval)>peak[out.channels+1])peak[out.channels+1]=fabs(dval);
-      divrms+=dval*dval;
-    }
-    rms[out.channels+1]+=divrms/out.channels;
+    /* each read section is by group */
+    for(h=0;h<groups;h++){
+      group_entry *g=group_list+h;
+      int toread_s=input_size-groupread_s;
+      int fileread_s=0;
       
-  }    
-  
-  for(j=0;j<out.channels+2;j++){
-    rms[j]/=out.samples;
-    rms[j]=sqrt(rms[j]);
+      if(input_seekable && loop_active && toread_s>Bcursor-cursor)
+	toread_s = Bcursor-cursor;
+      
+      /* inner loop in case the read spans multiple files within the group */
+      while(toread_s){
+	file_entry *fe=g->current_file_entry;
+	off_t ret;
+
+	/* span forward to next file entry in the group? */
+	if(cursor+fileread_s>=fe->end && 
+	   g->current_file_entry_number+1<g->files){
+	  fe=++g->current_file_entry;
+	  g->current_file_entry_number++;
+	  fseeko(fe->f,fe->data,SEEK_SET);
+	}
+
+	/* perform read/conversion of this file entry */
+	{
+	  off_t read_this_loop=fe->end-cursor-fileread_s;
+	  unsigned char readbuf[input_size*(g->ch*fe->bytes)];
+	  if(read_this_loop>toread_s)read_this_loop=toread_s;
+	  
+	  ret=fread(readbuf,1,read_this_loop*(g->ch*fe->bytes),fe->f);
+	  
+	  if(ret>0){
+	    ret/=(g->ch*fe->bytes);
+	    
+	    if(fe->endian)
+	      BEconvert(out.data+chcount,readbuf,
+			fileread_s+groupread_s,g->ch,fe->bytes,fe->signp,ret);
+	    else
+	      LEconvert(out.data+chcount,readbuf,
+			fileread_s+groupread_s,g->ch,fe->bytes,fe->signp,ret);
+	    
+	    fileread_s+=ret;
+	    toread_s-=ret;
+
+	  }else{
+	    if(g->current_file_entry_number+1>=g->files){
+
+	      /* end of group before full frame */	      
+	      zero(out.data+chcount,fileread_s+groupread_s,g->ch,toread_s);
+	      toread_s=0;
+	    }
+	  }
+	}
+      }
+
+      if(max_read_s<fileread_s)max_read_s=fileread_s;
+      chcount+=g->ch;
+    }
+
+    groupread_s+=max_read_s;
+    cursor+=max_read_s;
+
+    if(!loop_active || cursor<Bcursor) break;
+
   }
+
+  out.samples=groupread_s;
+
+  for(i=0;i<groupread_s;i++)
+    for(j=0;j<out.channels;j++){
+      float dval=out.data[j][i];
+      dval*=dval;
+      if(dval>peak[j])peak[j]=dval;
+      rms[j]+= dval;
+    }
+  
+  for(j=0;j<out.channels;j++)
+    rms[j]/=out.samples;
 
   push_input_feedback(peak,rms,cursor);
 
  tidy_up:
+
   {
     int tozero=input_size-out.samples;
     if(tozero)
@@ -564,6 +934,7 @@ void input_reset(void){
   while(pull_input_feedback(NULL,NULL,NULL));
   return;
 }
+
 
 
 

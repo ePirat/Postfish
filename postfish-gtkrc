@@ -3,6 +3,14 @@ style "button-poppy" {
 	bg[ACTIVE]="#c0f0ff" 
 	bg[PRELIGHT]="#c0f0ff" 
 
+	text[NORMAL]="#000000"
+	text[ACTIVE]="#000000"
+	text[PRELIGHT]="#000000" 
+
+	fg[NORMAL]="#000000"
+	fg[ACTIVE]="#000000"
+	fg[PRELIGHT]="#000000" 
+
 	font_name = "sans 8"
 	GtkButton::relief = none
 
@@ -173,6 +181,8 @@ widget "*.Readout*" style "readout"
 widget "*.smallreadout" style "small-readout"
 widget "*.GtkEntry" style "readout"
 widget "*.GtkHScale" style "slider"
+widget "*.GtkMenu*" style "button-poppy"
+widget "*.GtkOptionMenu*" style "button-poppy"
 widget "*.GtkToggleButton*" style "button-poppy"
 widget "*.GtkButton*" style "button-poppy"
 widget "*.GtkCheckButton" style "check-poppy"

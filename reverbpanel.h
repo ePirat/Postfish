@@ -21,13 +21,14 @@
  * 
  */
 
-#include "postfish.h"
+extern void reverbpanel_create_master(postfish_mainpanel *mp,
+                               GtkWidget *windowbutton,
+                               GtkWidget *activebutton);
+extern void reverbpanel_create_channel(postfish_mainpanel *mp,
+                                GtkWidget **windowbutton,
+				       GtkWidget **activebutton);
 
-extern void clippanel_create(postfish_mainpanel *mp,
-			     GtkWidget **windowbutton,
-			     GtkWidget **activebutton);
-extern void clippanel_feedback(int workp);
-extern void clippanel_reset(void);
 
-extern void clippanel_state_from_config(int bank);
-extern void clippanel_state_to_config(int bank);
+
+extern void reverbpanel_state_to_config(int bank);
+extern void reverbpanel_state_from_config(int bank);

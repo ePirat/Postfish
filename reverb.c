@@ -52,7 +52,10 @@ typedef struct {
   int size;
   float *buffer[2];
   int ptr;
+  int dptr;
+  int dptr_pending;
   int delay;
+  int delay_pending;
   float fc;
   float lp[2];
   float a1a;
@@ -63,6 +66,8 @@ typedef struct {
 typedef struct {
   float *outbuffer;
   waveguide_nl w[8];
+  int prevwet;
+  int initstate;
 } plate;
 
 typedef struct {
@@ -90,10 +95,13 @@ static plate_state master;
 static void waveguide_init(waveguide_nl *wg,
 			   int size, float fc, float da, float db){
   wg->size = size;
-  wg->delay = size;
+  wg->delay_pending = size;
+  wg->delay = -1;
   wg->buffer[0] = calloc(size, sizeof(float));
   wg->buffer[1] = calloc(size, sizeof(float));
   wg->ptr = 0;
+  wg->dptr = 0;
+  wg->dptr_pending = 0;
   wg->fc = fc;
   wg->lp[0] = 0.0f;
   wg->lp[1] = 0.0f;
@@ -101,25 +109,33 @@ static void waveguide_init(waveguide_nl *wg,
   wg->zm1[1] = 0.0f;
   wg->a1a = (1.0f - da) / (1.0f + da);
   wg->a1b = (1.0f - db) / (1.0f + db);
+
 }
 
 static void waveguide_nl_reset(waveguide_nl *wg){
-  memset(wg->buffer[0], 0, wg->size * sizeof(float));
-  memset(wg->buffer[1], 0, wg->size * sizeof(float));
+  memset(wg->buffer[0], 0, wg->size * sizeof(**wg->buffer));
+  memset(wg->buffer[1], 0, wg->size * sizeof(**wg->buffer));
   wg->lp[0] = 0.0f;
   wg->lp[1] = 0.0f;
   wg->zm1[0] = 0.0f;
   wg->zm1[1] = 0.0f;
+
+  wg->ptr=0;
+  wg->dptr = wg->delay;
+  wg->dptr_pending = wg->delay_pending;
 }
 
 static void waveguide_nl_set_delay(waveguide_nl *wg, int delay){
   if (delay > wg->size) {
-    wg->delay = wg->size;
+    wg->delay_pending = wg->size;
   } else if (delay < 1) {
-    wg->delay = 1;
+    wg->delay_pending = 1;
   } else {
-    wg->delay = delay;
+    wg->delay_pending = delay;
   }
+
+  wg->dptr_pending = wg->ptr + wg->delay_pending;
+  if(wg->dptr_pending >= wg->size) wg->dptr_pending -= wg->size;
 }
 
 static void waveguide_nl_set_fc(waveguide_nl *wg, float fc){
@@ -127,17 +143,17 @@ static void waveguide_nl_set_fc(waveguide_nl *wg, float fc){
 }
 
 static void waveguide_nl_process_lin(waveguide_nl *wg, float in0, float in1, 
-				     float *out0, float *out1){
+				     float *out0, float *out1, int i){
   float tmp;
-  
-  *out0 = wg->buffer[0][(wg->ptr + wg->delay) % wg->size];
+
+  *out0 = wg->buffer[0][wg->dptr];
   *out0 = wg->lp[0] * (wg->fc - 1.0f) + wg->fc * *out0;
   wg->lp[0] = *out0;
   tmp = *out0 * -(wg->a1a) + wg->zm1[0];
   wg->zm1[0] = tmp * wg->a1a + *out0;
   *out0 = tmp;
   
-  *out1 = wg->buffer[1][(wg->ptr + wg->delay) % wg->size];
+  *out1 = wg->buffer[1][wg->dptr];
   *out1 = wg->lp[1] * (wg->fc - 1.0f) + wg->fc * *out1;
   wg->lp[1] = *out1;
   tmp = *out1 * -(wg->a1a) + wg->zm1[1];
@@ -147,7 +163,39 @@ static void waveguide_nl_process_lin(waveguide_nl *wg, float in0, float in1,
   wg->buffer[0][wg->ptr] = in0;
   wg->buffer[1][wg->ptr] = in1;
   wg->ptr--;
+  wg->dptr--;
   if (wg->ptr < 0) wg->ptr += wg->size;
+  if (wg->dptr < 0) wg->dptr += wg->size;
+}
+
+static void waveguide_nl_process_trans(waveguide_nl *wg, float in0, float in1, 
+				       float *out0, float *out1, int i){
+  float tmp;
+
+  *out0 = wg->buffer[0][wg->dptr]*(1.-frame_window[i]) +
+    wg->buffer[0][wg->dptr_pending]*frame_window[i];
+  *out0 = wg->lp[0] * (wg->fc - 1.0f) + wg->fc * *out0;
+  wg->lp[0] = *out0;
+  tmp = *out0 * -(wg->a1a) + wg->zm1[0];
+  wg->zm1[0] = tmp * wg->a1a + *out0;
+  *out0 = tmp;
+  
+  *out1 = wg->buffer[1][wg->dptr]*(1.-frame_window[i]) +
+    wg->buffer[1][wg->dptr_pending]*frame_window[i];
+  *out1 = wg->lp[1] * (wg->fc - 1.0f) + wg->fc * *out1;
+  wg->lp[1] = *out1;
+  tmp = *out1 * -(wg->a1a) + wg->zm1[1];
+  wg->zm1[1] = tmp * wg->a1a + *out1;
+  *out1 = tmp;
+  
+  wg->buffer[0][wg->ptr] = in0;
+  wg->buffer[1][wg->ptr] = in1;
+  wg->ptr--;
+  wg->dptr--;
+  wg->dptr_pending--;
+  if (wg->ptr < 0) wg->ptr += wg->size;
+  if (wg->dptr < 0) wg->dptr += wg->size;
+  if (wg->dptr_pending < 0) wg->dptr_pending += wg->size;
 }
 
 /* model the plate reverb as a set of eight linear waveguides */
@@ -155,17 +203,9 @@ static void waveguide_nl_process_lin(waveguide_nl *wg, float in0, float in1,
 #define LP_INNER 0.96f
 #define LP_OUTER 0.983f
 
-#define RUN_WG(n, junct_a, junct_b) waveguide_nl_process_lin(&w[n], junct_a - out[n*2+1], junct_b - out[n*2], out+n*2, out+n*2+1)
+#define RUN_WG(n, junct_a, junct_b, i) process(&w[n], junct_a - out[n*2+1], junct_b - out[n*2], out+n*2, out+n*2+1, i)
 
 static void plate_reset_helper(plate_state *ps){
-  int i,j;
-
-  for(i=0;i<ps->out.channels;i++){
-    for (j = 0; j < 8; j++) 
-      waveguide_nl_reset(&ps->plates[i].w[j]);
-    memset(ps->plates[i].outbuffer,0,
-	   32*sizeof(*ps->plates[i].outbuffer));
-  }
   ps->fillstate=0;
 }
 
@@ -236,10 +276,24 @@ static void plate_compute(plate_set *p, plate *ps, float *in,
   waveguide_nl *w = ps->w;
   float *out=ps->outbuffer;
 
+  void (*process)(waveguide_nl *, float, float, float*, float*, int)=
+    waveguide_nl_process_lin;
+  
   int pos;
   const float scale = powf(p->time*.0009999f, 1.34f);
   const float lpscale = 1.0f - p->damping*.001f * 0.93f;
-  const float wet = p->wet*.001f;
+  int curwet=p->wet;
+  float wet;
+  float wet_e;
+  
+  if(ps->initstate==0){
+    wet = fromdB(curwet*.1f);
+    wet_e = 1.;
+    ps->initstate=1;
+  }else{
+    wet = fromdB(ps->prevwet*.1f);
+    wet_e = fromdB((curwet-ps->prevwet)*.1f/count);
+  }
 
   /* waveguide reconfig */
   for (pos=0; pos<8; pos++) 
@@ -248,29 +302,42 @@ static void plate_compute(plate_set *p, plate *ps, float *in,
     waveguide_nl_set_fc(&w[pos], LP_INNER * lpscale);
   for (; pos<8; pos++) 
     waveguide_nl_set_fc(&w[pos], LP_OUTER * lpscale);
-	
+
+  if(w[0].delay!=w[0].delay_pending)
+    process=waveguide_nl_process_trans;
+
   for (pos = 0; pos < count; pos++) {
-    const float alpha = (out[0] + out[2] + out[4] + out[6]) * 0.5f + in[pos];
+    const float alpha = (out[0] + out[2] + out[4] + out[6]) * 0.5f + 
+      (in?in[pos]:0.f);
     const float beta = (out[1] + out[9] + out[14]) * 0.666666666f;
     const float gamma = (out[3] + out[8] + out[11]) * 0.666666666f;
     const float delta = (out[5] + out[10] + out[13]) * 0.666666666f;
     const float epsilon = (out[7] + out[12] + out[15]) * 0.666666666f;
     
-    RUN_WG(0, beta, alpha);
-    RUN_WG(1, gamma, alpha);
-    RUN_WG(2, delta, alpha);
-    RUN_WG(3, epsilon, alpha);
-    RUN_WG(4, beta, gamma);
-    RUN_WG(5, gamma, delta);
-    RUN_WG(6, delta, epsilon);
-    RUN_WG(7, epsilon, beta);
+    RUN_WG(0, beta, alpha, pos);
+    RUN_WG(1, gamma, alpha, pos);
+    RUN_WG(2, delta, alpha, pos);
+    RUN_WG(3, epsilon, alpha, pos);
+    RUN_WG(4, beta, gamma, pos);
+    RUN_WG(5, gamma, delta, pos);
+    RUN_WG(6, delta, epsilon, pos);
+    RUN_WG(7, epsilon, beta, pos);
     
     if(!outB || !outC){
-      outA[pos]=in[pos] * (1.0f - wet) +  beta * wet;
+      outA[pos]=  beta * wet;
     }else{
-      outA[pos]=in[pos] * (1.0f - wet);
       outB[pos]= beta * wet;
       outC[pos]= gamma * wet;
+    }
+    wet*=wet_e;
+  }
+  ps->prevwet=curwet;
+
+  if(w[0].delay!=w[0].delay_pending){
+    int i;
+    for(i=0;i<8;i++){
+      w[i].delay=w[i].delay_pending;
+      w[i].dptr=w[i].dptr_pending;
     }
   }
 }
@@ -280,6 +347,7 @@ time_linkage *plate_read_channel(time_linkage *in,
 				 time_linkage **revB){
   int i,j,ch=in->channels;
   plate_state *ps=&channel;
+  int active[ch];
   
   *revA=&ps->outA;
   *revB=&ps->outB;
@@ -288,52 +356,78 @@ time_linkage *plate_read_channel(time_linkage *in,
     ps->out.samples=0;
     ps->outA.samples=0;
     ps->outB.samples=0;
+    return &ps->out;
   }
+
+  for(i=0;i<ch;i++)
+    active[i]=plate_channel_set[i].panel_active;
 
   ps->outA.active=0;
   ps->outB.active=0;
 
   if(ps->fillstate==0){
     for(i=0;i<ch;i++)
-      ps->prevactive[i]=plate_channel_set[i].panel_active;
-    ps->fillstate=1;
+      ps->prevactive[i]=active[i];
   }
 
   for(i=0;i<ch;i++){
-    if(plate_channel_set[i].panel_active || ps->prevactive[i]){
+    if(active[i] || ps->prevactive[i]){
       float *x=in->data[i];
       float *y=ps->out.data[i];
       float *yA=ps->outA.data[i];
       float *yB=ps->outB.data[i];
       
       /* clear the waveguides of old state if they were inactive */
-      if (!ps->prevactive[i]){
+      if (!ps->prevactive[i] || !ps->fillstate){
 	for (j = 0; j < 8; j++) 
 	  waveguide_nl_reset(&ps->plates[i].w[j]);
+	ps->plates[i].initstate=0;
 	memset(ps->plates[i].outbuffer,0,
 	       32*sizeof(*ps->plates[i].outbuffer));
       }
 
       /* process this plate */
-      plate_compute(&plate_channel_set[i], &ps->plates[i], 
-		    x,y,yA,yB,input_size);
-      
-      if(!plate_channel_set[i].panel_active){
-	/* transition to inactive */
-	for(j=0;j<input_ch;j++){
-	  y[j]= y[j]*(1.f - frame_window[j]) + x[j] * frame_window[j];
-	  yA[j]= yA[j]*(1.f - frame_window[j]);
-	  yB[j]= yB[j]*(1.f - frame_window[j]);
-	}
+      if(mute_channel_muted(in->active,i)){
+	plate_compute(&plate_channel_set[i], &ps->plates[i], 
+		      0,0,yA,yB,input_size);
+      }else{
 	
-      }else if (!ps->prevactive[i]){
-	/* transition to active */
-	for(j=0;j<input_ch;j++){
-	  y[j]=   y[j]* frame_window[j] + x[j] * (1. - frame_window[j]);
-	  yA[j]= yA[j]* frame_window[j];
-	  yB[j]= yB[j]* frame_window[j];
+	/* state transition?  If so, the input needs to be smoothed to
+           avoid a step transition ringing through the plate */
+	if(!ps->fillstate || 
+	   !active[i] ||
+	   !ps->prevactive[i]){
+	  
+	  memcpy(y,x,sizeof(*x)*input_size);
+	  if(!active[i]){
+	    /* transition to inactive */
+	    for(j=0;j<input_size;j++)
+	      x[j] *= (1.f - frame_window[j]);
+	    
+	  }else if (!ps->prevactive[i] || !ps->fillstate){
+	    /* transition to active */
+	    for(j=0;j<input_size;j++)
+	      x[j]*= frame_window[j];
+	  }
+	}else{
+	  ps->out.data[i]=x;
+	  in->data[i]=y;
+	}
+
+	plate_compute(&plate_channel_set[i], &ps->plates[i], 
+		      x,0,yA,yB,input_size);
+
+
+      }
+
+      if(!active[i]){
+	/* transition to inactive */
+	for(j=0;j<input_size;j++){
+	  yA[j] *= (1.f - frame_window[j]);
+	  yB[j] *= (1.f - frame_window[j]);
 	}
       }
+	
       ps->outA.active |= 1<<i;
       ps->outB.active |= 1<<i;
 
@@ -343,67 +437,92 @@ time_linkage *plate_read_channel(time_linkage *in,
       ps->out.data[i]=in->data[i];
       in->data[i]=temp;
     }
-    ps->prevactive[i]=plate_channel_set[i].panel_active;
+    ps->prevactive[i]=active[i];
   }
 
   ps->out.active=in->active;
   ps->out.samples=in->samples;
   ps->outA.samples=in->samples;
   ps->outB.samples=in->samples;
+  ps->fillstate=1;
   return &ps->out;
 }
 
 time_linkage *plate_read_master(time_linkage *in){
   int i,j,ch=in->channels;
   plate_state *ps=&master;
-  
+  int active=plate_master_set.panel_active;
+
   if(in->samples==0){
     ps->out.samples=0;
+    return &ps->out;
   }
 
   if(ps->fillstate==0){
-    ps->prevactive[0]=plate_master_set.panel_active;
-    ps->fillstate=1;
+    ps->prevactive[0]=active;
   }
 
   for(i=0;i<ch;i++){
-    if(plate_master_set.panel_active || ps->prevactive[0]){
+    if(active || ps->prevactive[0]){
       float *x=in->data[i];
       float *y=ps->out.data[i];
       
       /* clear the waveguides of old state if they were inactive */
-      if (!ps->prevactive[0]){
+      if (!ps->prevactive[0] || !ps->fillstate){
 	for (j = 0; j < 8; j++) 
 	  waveguide_nl_reset(&ps->plates[i].w[j]);
 	memset(ps->plates[i].outbuffer,0,
 	       32*sizeof(*ps->plates[i].outbuffer));
       }
-      
+
       /* process this plate */
-      plate_compute(&plate_master_set, &ps->plates[i], 
-		    x,y,0,0,input_size);
-      
-      if(!plate_master_set.panel_active){
-	/* transition to inactive */
-	for(j=0;j<input_ch;j++)
-	  y[j]= y[j]*(1.f - frame_window[j]) + x[j] * frame_window[j];
+      if(mute_channel_muted(in->active,i)){
+	plate_compute(&plate_master_set, &ps->plates[i], 
+		      0,y,0,0,input_size);
+      }else{
+
+	memcpy(y,x,sizeof(*x)*input_size);
+
+	/* must be done to the input, else the transition impulse
+           will ring through the plate */
+	if(!active){
+	  /* transition to inactive */
+	  for(j=0;j<input_size;j++)
+	    y[j] *= (1.f - frame_window[j]);
+	  
+	}else if (!ps->prevactive[0] || !ps->fillstate){
+	  /* transition to active */
+	  for(j=0;j<input_size;j++)
+	    y[j]*= frame_window[j];
+	}
 	
-      }else if (!ps->prevactive[0]){
-	/* transition to active */
-	for(j=0;j<input_ch;j++)
-	  y[j]=   y[j]* frame_window[j] + x[j] * (1. - frame_window[j]);
+	plate_compute(&plate_master_set, &ps->plates[i], 
+		      y,y,0,0,input_size);
+      }
+
+      if(!active){
+	/* transition to inactive */
+	for(j=0;j<input_size;j++)
+	  y[j]*= 1.f - frame_window[j];
 
       }
+      if(!mute_channel_muted(in->active,i))
+	for(j=0;j<input_size;j++)
+	  y[j]+=x[j];
+	
+      ps->out.active |= 1<<i;
+
     }else{
       /* fully inactive */
       float *temp=ps->out.data[i];
       ps->out.data[i]=in->data[i];
       in->data[i]=temp;
+      ps->out.active |= in->active & (1<<i);
     }
   }
-  ps->prevactive[0]=plate_master_set.panel_active;
+  ps->prevactive[0]=active;
 
-  ps->out.active=in->active;
   ps->out.samples=in->samples;
+  ps->fillstate=1;
   return &ps->out;
 }

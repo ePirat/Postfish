@@ -31,3 +31,5 @@ extern void singlepanel_feedback(int displayit);
 extern void singlepanel_reset(void);
 
 
+extern void singlepanel_state_to_config(int bank);
+extern void singlepanel_state_from_config(int bank);

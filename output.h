@@ -21,9 +21,47 @@
  * 
  */
 
+typedef struct {
+  sig_atomic_t device;
+  sig_atomic_t source[OUTPUT_CHANNELS];
+  sig_atomic_t bytes;
+  sig_atomic_t ch;
+  sig_atomic_t format; /* WAV, AIFC, LE, BE */
+} output_subsetting;
+
+typedef struct {
+  sig_atomic_t panel_active[2];
+  sig_atomic_t panel_visible;
+
+  output_subsetting stdout;
+  output_subsetting monitor;
+} output_settings;
+
+typedef struct {
+  int type;
+  char *name;
+  char *file;
+} output_monitor_entry;
+
+extern int output_stdout_available;
+extern int output_stdout_device;
+extern int output_monitor_available;
+extern output_monitor_entry *monitor_list;
+extern int monitor_entries;
+
+extern sig_atomic_t master_att;
+
 extern int pull_output_feedback(float *peak,float *rms);
 extern void *playback_thread(void *dummy);
 extern void output_halt_playback(void);
 extern void output_reset(void);
 extern void playback_request_seek(off_t cursor);
 extern int output_feedback_deep(void);
+
+extern int output_probe_stdout(int outfileno);
+extern int output_probe_monitor(void );
+
+extern void outpanel_monitor_off();
+extern void outpanel_stdout_off();
+
+extern output_settings outset;

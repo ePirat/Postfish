@@ -31,3 +31,7 @@ extern int pull_limit_feedback(float *peak,float *att);
 extern int limit_load(int ch);
 extern int limit_reset(void);
 extern time_linkage *limit_read(time_linkage *in);
+
+extern sig_atomic_t limit_active;
+extern sig_atomic_t limit_visible;
+extern limit_settings limitset;

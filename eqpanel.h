@@ -30,3 +30,6 @@ extern void eqpanel_create_channel(postfish_mainpanel *mp,
 				   GtkWidget **activebutton);
 extern void eqpanel_feedback(int workp);
 extern void eqpanel_reset(void);
+
+extern void eqpanel_state_to_config(int bank);
+extern void eqpanel_state_from_config(int bank);

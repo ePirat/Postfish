@@ -27,8 +27,6 @@
 #include "freq.h"
 #include "eq.h"
 
-extern int input_size;
-
 typedef struct{
 
   freq_state eq;

@@ -47,3 +47,5 @@ extern void suppress_reset();
 extern int suppress_load(void);
 extern time_linkage *suppress_read_channel(time_linkage *in);
 
+extern suppress_settings suppress_channel_set;
+

@@ -31,13 +31,7 @@
 #include "feedback.h"
 #include "multicompand.h"
 #include "compandpanel.h"
-
-extern int input_ch;
-extern int input_size;
-extern int input_rate;
-
-extern multicompand_settings multi_master_set;
-extern multicompand_settings *multi_channel_set;
+#include "config.h"
 
 typedef struct {
   GtkWidget *label;
@@ -49,11 +43,13 @@ typedef struct {
 } cbar;
 
 typedef struct{
+  Multibar *s;
   Readout *r;
   sig_atomic_t *v;
 } callback_arg_rv;
 
 typedef struct{
+  Multibar *s;
   Readout *r0;
   Readout *r1;
   sig_atomic_t *v0;
@@ -66,6 +62,21 @@ typedef struct{
 } callback_arg_mi;
 
 typedef struct multi_panel_state{
+  subpanel_generic *panel;
+
+  GtkWidget *over_rms;
+  GtkWidget *over_peak;
+  GtkWidget *over_softknee;
+
+  GtkWidget *under_rms;
+  GtkWidget *under_peak;
+  GtkWidget *under_softknee;
+
+  GtkWidget *base_rms;
+  GtkWidget *base_peak;
+
+  GtkWidget *octave[3];
+
   callback_arg_rv over_compand;
   callback_arg_rv under_compand;
   callback_arg_rv base_compand;
@@ -91,6 +102,127 @@ typedef struct multi_panel_state{
 
 static multi_panel_state *master_panel;
 static multi_panel_state **channel_panel;
+
+
+static void compandpanel_state_to_config_helper(int bank,multicompand_settings *s,int A){
+  int i;
+  config_set_integer("multicompand_active",bank,A,0,0,0,s->panel_active);
+  config_set_integer("multicompand_freqbank",bank,A,0,0,0,s->active_bank);
+  for(i=0;i<multicomp_banks;i++){
+    config_set_vector("multicompand_under_thresh",bank,A,i,0,multicomp_freqs_max,s->bc[i].static_u);
+    config_set_vector("multicompand_over_thresh",bank,A,i,0,multicomp_freqs_max,s->bc[i].static_o);
+  }
+
+  config_set_integer("multicompand_over_set",bank,A,0,0,0,s->over_mode);
+  config_set_integer("multicompand_over_set",bank,A,0,0,1,s->over_softknee);
+  config_set_integer("multicompand_over_set",bank,A,0,0,2,s->over_ratio);
+  config_set_integer("multicompand_over_set",bank,A,0,0,3,s->over_attack);
+  config_set_integer("multicompand_over_set",bank,A,0,0,4,s->over_decay);
+  config_set_integer("multicompand_over_set",bank,A,0,0,5,s->over_lookahead);
+
+  config_set_integer("multicompand_under_set",bank,A,0,0,0,s->under_mode);
+  config_set_integer("multicompand_under_set",bank,A,0,0,1,s->under_softknee);
+  config_set_integer("multicompand_under_set",bank,A,0,0,2,s->under_ratio);
+  config_set_integer("multicompand_under_set",bank,A,0,0,3,s->under_attack);
+  config_set_integer("multicompand_under_set",bank,A,0,0,4,s->under_decay);
+  config_set_integer("multicompand_under_set",bank,A,0,0,5,s->under_lookahead);
+
+  config_set_integer("multicompand_base_set",bank,A,0,0,0,s->base_mode);
+  config_set_integer("multicompand_base_set",bank,A,0,0,2,s->base_ratio);
+  config_set_integer("multicompand_base_set",bank,A,0,0,3,s->base_attack);
+  config_set_integer("multicompand_base_set",bank,A,0,0,4,s->base_decay);
+}
+
+void compandpanel_state_to_config(int bank){
+  int i;
+  compandpanel_state_to_config_helper(bank,&multi_master_set,0);
+  for(i=0;i<input_ch;i++)
+    compandpanel_state_to_config_helper(bank,multi_channel_set+i,i+1);
+}
+
+static void static_octave(GtkWidget *w,gpointer in);
+static void compandpanel_state_from_config_helper(int bank,multicompand_settings *s,
+						  multi_panel_state *p,int A){
+
+  int i;
+  config_get_sigat("multicompand_active",bank,A,0,0,0,&s->panel_active);
+  gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->panel->subpanel_activebutton[0]),s->panel_active);
+
+  config_get_sigat("multicompand_freqbank",bank,A,0,0,0,&s->active_bank);
+  for(i=0;i<multicomp_banks;i++){
+    config_get_vector("multicompand_under_thresh",bank,A,i,0,multicomp_freqs_max,s->bc[i].static_u);
+    config_get_vector("multicompand_over_thresh",bank,A,i,0,multicomp_freqs_max,s->bc[i].static_o);
+  }
+
+  config_get_sigat("multicompand_over_set",bank,A,0,0,0,&s->over_mode);
+  if(s->over_mode)
+    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->over_peak),1);
+  else
+    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->over_rms),1);
+
+  config_get_sigat("multicompand_over_set",bank,A,0,0,1,&s->over_softknee);
+  gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->over_softknee),s->over_softknee);
+  config_get_sigat("multicompand_over_set",bank,A,0,0,2,&s->over_ratio);
+  multibar_thumb_set(p->over_compand.s,1000./s->over_ratio,0);
+  config_get_sigat("multicompand_over_set",bank,A,0,0,3,&s->over_attack);
+  multibar_thumb_set(p->over_timing.s,s->over_attack*.1,0);
+  config_get_sigat("multicompand_over_set",bank,A,0,0,4,&s->over_decay);
+  multibar_thumb_set(p->over_timing.s,s->over_decay*.1,1);
+  config_get_sigat("multicompand_over_set",bank,A,0,0,5,&s->over_lookahead);
+  multibar_thumb_set(p->over_lookahead.s,s->over_lookahead*.1,0);
+
+  config_get_sigat("multicompand_under_set",bank,A,0,0,0,&s->under_mode);
+  if(s->under_mode)
+    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->under_peak),1);
+  else
+    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->under_rms),1);
+
+  config_get_sigat("multicompand_under_set",bank,A,0,0,1,&s->under_softknee);
+  gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->under_softknee),s->under_softknee);
+  config_get_sigat("multicompand_under_set",bank,A,0,0,2,&s->under_ratio);
+  multibar_thumb_set(p->under_compand.s,1000./s->under_ratio,0);
+  config_get_sigat("multicompand_under_set",bank,A,0,0,3,&s->under_attack);
+  multibar_thumb_set(p->under_timing.s,s->under_attack*.1,0);
+  config_get_sigat("multicompand_under_set",bank,A,0,0,4,&s->under_decay);
+  multibar_thumb_set(p->under_timing.s,s->under_decay*.1,1);
+  config_get_sigat("multicompand_under_set",bank,A,0,0,5,&s->under_lookahead);
+  multibar_thumb_set(p->under_lookahead.s,s->under_lookahead*.1,0);
+
+  config_get_sigat("multicompand_base_set",bank,A,0,0,0,&s->base_mode);
+  if(s->base_mode)
+    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->base_peak),1);
+  else
+    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->base_rms),1);
+  config_get_sigat("multicompand_base_set",bank,A,0,0,2,&s->base_ratio);
+  multibar_thumb_set(p->base_compand.s,1000./s->base_ratio,0);
+  config_get_sigat("multicompand_base_set",bank,A,0,0,3,&s->base_attack);
+  multibar_thumb_set(p->base_timing.s,s->base_attack*.1,0);
+  config_get_sigat("multicompand_base_set",bank,A,0,0,4,&s->base_decay);
+  multibar_thumb_set(p->base_timing.s,s->base_decay*.1,1);
+
+  /* setting the active bank also redisplays all the sliders */
+  gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->octave[s->active_bank]),1);
+  /* safe to call blindly; if the above already triggered the work, this is a no op */
+  switch(s->active_bank){  
+  case 0:
+    static_octave(0,&p->octave_full);
+    break;
+  case 1:
+    static_octave(0,&p->octave_half);
+    break;
+  case 2:
+    static_octave(0,&p->octave_third);
+    break;
+  }
+}
+
+void compandpanel_state_from_config(int bank){
+  int i;
+  compandpanel_state_from_config_helper(bank,&multi_master_set,master_panel,0);
+  for(i=0;i<input_ch;i++)
+    compandpanel_state_from_config_helper(bank,multi_channel_set+i,channel_panel[i],i+1);
+}
+
 
 static void compand_change(GtkWidget *w,gpointer in){
   callback_arg_rv *ca=(callback_arg_rv *)in;
@@ -509,10 +641,11 @@ static multi_panel_state *compandpanel_create(postfish_mainpanel *mp,
   float per_levels[9]={0,12.5,25,37.5,50,62.5,75,87.5,100};
   char  *per_labels[9]={"0%","","25%","","50%","","75%","","100%"};
 
-  multi_panel_state *ps=calloc(1,sizeof(multi_panel_state));
+  multi_panel_state *ps=calloc(1,sizeof(*ps));
   ps->inactive_updatep=1;
   ps->bank_active=2;
   ps->ms=ms;
+  ps->panel=panel;
 
   GtkWidget *hbox=gtk_hbox_new(0,0);
   GtkWidget *sliderbox=gtk_vbox_new(0,0);
@@ -590,6 +723,10 @@ static multi_panel_state *compandpanel_create(postfish_mainpanel *mp,
     
     gtk_container_set_border_width(GTK_CONTAINER(sliderframe),4);
 
+    ps->octave[0]=octave_a;
+    ps->octave[1]=octave_b;
+    ps->octave[2]=octave_c;
+
   }
 
   gtk_box_pack_start(GTK_BOX(panel->subpanel_box),hbox,0,0,0);
@@ -637,6 +774,9 @@ static multi_panel_state *compandpanel_create(postfish_mainpanel *mp,
     gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(rms_button),1);
     gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(knee_button),1);
     gtk_table_attach(GTK_TABLE(undertable),envelopebox,0,4,0,1,GTK_FILL,0,0,0);
+    ps->under_rms=rms_button;
+    ps->under_peak=peak_button;
+    ps->under_softknee=knee_button;
   }
 
   /* under compand: ratio */
@@ -646,6 +786,7 @@ static multi_panel_state *compandpanel_create(postfish_mainpanel *mp,
     GtkWidget *readout=readout_new("1.55:1");
     GtkWidget *slider=multibar_slider_new(9,compand_labels,compand_levels,1);
    
+    ps->under_compand.s=MULTIBAR(slider);
     ps->under_compand.r=READOUT(readout);
     ps->under_compand.v=&ps->ms->under_ratio;
 
@@ -669,6 +810,7 @@ static multi_panel_state *compandpanel_create(postfish_mainpanel *mp,
     GtkWidget *readout1=readout_new(" 100ms");
     GtkWidget *slider=multibar_slider_new(6,timing_labels,timing_levels,2);
 
+    ps->under_timing.s=MULTIBAR(slider);
     ps->under_timing.r0=READOUT(readout0);
     ps->under_timing.r1=READOUT(readout1);
     ps->under_timing.v0=&ps->ms->under_attack;
@@ -695,6 +837,7 @@ static multi_panel_state *compandpanel_create(postfish_mainpanel *mp,
     GtkWidget *readout=readout_new("100%");
     GtkWidget *slider=multibar_slider_new(9,per_labels,per_levels,1);
 
+    ps->under_lookahead.s=MULTIBAR(slider);
     ps->under_lookahead.r=READOUT(readout);
     ps->under_lookahead.v=&ps->ms->under_lookahead;
 
@@ -733,6 +876,9 @@ static multi_panel_state *compandpanel_create(postfish_mainpanel *mp,
     gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(rms_button),1);
     gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(knee_button),1);
     gtk_table_attach(GTK_TABLE(overtable),envelopebox,0,4,0,1,GTK_FILL,0,0,0);
+    ps->over_rms=rms_button;
+    ps->over_peak=peak_button;
+    ps->over_softknee=knee_button;
   }
 
   /* over compand: ratio */
@@ -742,6 +888,7 @@ static multi_panel_state *compandpanel_create(postfish_mainpanel *mp,
     GtkWidget *readout=readout_new("1.55:1");
     GtkWidget *slider=multibar_slider_new(9,compand_labels,compand_levels,1);
    
+    ps->over_compand.s=MULTIBAR(slider);
     ps->over_compand.r=READOUT(readout);
     ps->over_compand.v=&ps->ms->over_ratio;
 
@@ -765,6 +912,7 @@ static multi_panel_state *compandpanel_create(postfish_mainpanel *mp,
     GtkWidget *readout1=readout_new(" 100ms");
     GtkWidget *slider=multibar_slider_new(6,timing_labels,timing_levels,2);
    
+    ps->over_timing.s=MULTIBAR(slider);
     ps->over_timing.r0=READOUT(readout0);
     ps->over_timing.r1=READOUT(readout1);
     ps->over_timing.v0=&ps->ms->over_attack;
@@ -791,6 +939,7 @@ static multi_panel_state *compandpanel_create(postfish_mainpanel *mp,
     GtkWidget *readout=readout_new("100%");
     GtkWidget *slider=multibar_slider_new(9,per_labels,per_levels,1);
    
+    ps->over_lookahead.s=MULTIBAR(slider);
     ps->over_lookahead.r=READOUT(readout);
     ps->over_lookahead.v=&ps->ms->over_lookahead;
 
@@ -825,6 +974,8 @@ static multi_panel_state *compandpanel_create(postfish_mainpanel *mp,
 		      G_CALLBACK (mode_peak), &ps->ms->base_mode);
     gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(rms_button),1);
     gtk_table_attach(GTK_TABLE(basetable),envelopebox,0,4,0,1,GTK_FILL,0,0,0);
+    ps->base_rms=rms_button;
+    ps->base_peak=peak_button;
   }
 
   /* base compand: ratio */
@@ -834,6 +985,7 @@ static multi_panel_state *compandpanel_create(postfish_mainpanel *mp,
     GtkWidget *readout=readout_new("1.55:1");
     GtkWidget *slider=multibar_slider_new(9,compand_labels,compand_levels,1);
    
+    ps->base_compand.s=MULTIBAR(slider);
     ps->base_compand.r=READOUT(readout);
     ps->base_compand.v=&ps->ms->base_ratio;
 
@@ -857,6 +1009,7 @@ static multi_panel_state *compandpanel_create(postfish_mainpanel *mp,
     GtkWidget *readout1=readout_new(" 100ms");
     GtkWidget *slider=multibar_slider_new(6,timing_labels,timing_levels,2);
 
+    ps->base_timing.s=MULTIBAR(slider);
     ps->base_timing.r0=READOUT(readout0);
     ps->base_timing.r1=READOUT(readout1);
     ps->base_timing.v0=&ps->ms->base_attack;

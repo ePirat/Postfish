@@ -50,7 +50,8 @@
 #include <signal.h>
 #include <fcntl.h>
 
-#define OUTPUT_CHANNELS 6
+#define OUTPUT_CHANNELS 8     // UI code assumes this is <=8
+#define MAX_INPUT_CHANNELS 32 // engine code requires <= 32 
 
 static inline float todB(float x){
   return logf((x)*(x)+1e-30f)*4.34294480f;
@@ -67,7 +68,7 @@ static inline float todB_a(const float *x){
 }
 
 static inline float fromdB_a(float x){
-  int y=1.39331762961e+06f*((x<-400?-400:x)+764.6161886f);
+  int y=(x < -300 ? 0 : 1.39331762961e+06f*(x+764.6161886f));
   return *(float *)&y;
 }
 
@@ -100,20 +101,19 @@ typedef struct time_linkage {
   u_int32_t active; /* active channel bitmask */
 } time_linkage;
 
-extern pthread_mutex_t master_mutex;
-
 extern sig_atomic_t loop_active;
 extern sig_atomic_t playback_active;
 extern sig_atomic_t playback_exit;
 extern sig_atomic_t playback_seeking;
 extern sig_atomic_t master_att;
 extern int outfileno;
-extern int seekable;
+extern int input_seekable;
 extern int eventpipe[2];
 extern int input_ch;
+extern int input_size;
+extern int input_rate;
 
-extern void mainpanel_go(int n,char *list[],int ch);
 extern int mute_channel_muted(u_int32_t bitmap,int i);
-
+extern void clean_exit(int sig);
 #endif
 

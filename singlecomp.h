@@ -56,3 +56,7 @@ extern int singlecomp_load(int ch);
 extern int singlecomp_reset(void);
 extern time_linkage *singlecomp_read_master(time_linkage *in);
 extern time_linkage *singlecomp_read_channel(time_linkage *in);
+
+extern singlecomp_settings singlecomp_master_set;
+extern singlecomp_settings *singlecomp_channel_set;
+

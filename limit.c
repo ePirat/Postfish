@@ -41,6 +41,9 @@ typedef struct{
 
   int prev_active;
   int initted;
+
+  float pthresh;
+  float pdepth;
 } limit_state;
 
 limit_settings limitset;
@@ -109,7 +112,7 @@ static void filter_set(float msec,
 int limit_reset(void){
   /* reset cached pipe state */
   while(pull_limit_feedback(NULL,NULL));
-  memset(limitstate.iir,0,limitstate.out.channels*sizeof(&limitstate.iir));
+  memset(limitstate.iir,0,limitstate.out.channels*sizeof(*limitstate.iir));
   limitstate.initted=0;
   return 0;
 }
@@ -133,6 +136,7 @@ time_linkage *limit_read(time_linkage *in){
 
   float thresh=limitset.thresh/10.-.01;
   float depth=limitset.depth;
+
   float localpeak;
   float localatt;
 
@@ -144,13 +148,16 @@ time_linkage *limit_read(time_linkage *in){
     return &limitstate.out;
   }
 
+  depth=depth*.2;
+  depth*=depth;
+
   if(!limitstate.initted){
     limitstate.initted=1;
     limitstate.prev_active=activeC;
-  }
 
-  depth=depth*.2;
-  depth*=depth;
+    limitstate.pthresh=thresh;
+    limitstate.pdepth=depth;
+  }
 
   for(i=0;i<ch;i++){
     localpeak=0.;
@@ -162,16 +169,26 @@ time_linkage *limit_read(time_linkage *in){
       
       float *inx=in->data[i];
       float *x=limitstate.out.data[i];
+
+      float prev_thresh=limitstate.pthresh;
+      float prev_depth=limitstate.pdepth;
+
+      float thresh_add=(thresh-prev_thresh)/input_size;
+      float depth_add=(depth-prev_depth)/input_size;
       
+
       /* 'knee' the actual samples, compute attenuation depth */
       for(k=0;k<in->samples;k++){
 	float dB=todB(inx[k]);
-	float knee=limit_knee(dB-thresh,depth)+thresh;
+	float knee=limit_knee(dB-prev_thresh,prev_depth)+prev_thresh;
 	float att=dB-knee;
 	
 	if(att>localatt)localatt=att;
 	
 	x[k]=att;
+
+	prev_depth+=depth_add;
+	prev_thresh+=thresh_add;
       }
 	
       compute_iir_decayonly2(x,input_size,limitstate.iir+i,&limitstate.decay);
@@ -242,6 +259,9 @@ time_linkage *limit_read(time_linkage *in){
 
   limitstate.out.active=in->active;
   limitstate.prev_active=activeC;
+  limitstate.pthresh=thresh;
+  limitstate.pdepth=depth;
+
   return &limitstate.out;
 }
 

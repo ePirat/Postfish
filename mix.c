@@ -262,6 +262,9 @@ time_linkage *mix_read(time_linkage *in,
   memset(peak,0,sizeof(peak));
   memset(rms,0,sizeof(rms));
 
+  /* eliminate asynch change possibility */
+  memcpy(ms.curr,mix_set,sizeof(*mix_set)*input_ch);
+
   /* fillstate here is only used for lazy initialization/reset */
   if(ms.fillstate==0){
     /* zero the cache */
@@ -269,15 +272,13 @@ time_linkage *mix_read(time_linkage *in,
       memset(ms.cacheP[i],0,sizeof(**ms.cacheP)*input_size);
       memset(ms.cachePP[i],0,sizeof(**ms.cachePP)*input_size);
     }
+    memcpy(ms.prev,ms.curr,sizeof(*mix_set)*input_ch);
     ms.fillstate=1;
   }
 
   /* zero the output block; we'll me mixing into it input-by-input */
   for(i=0;i<outch;i++)
     memset(ms.out.data[i],0,sizeof(**ms.out.data)*input_size);
-
-  /* eliminate asynch change possibility */
-  memcpy(ms.curr,mix_set,sizeof(*mix_set)*input_ch);
 
   /* a bit of laziness that may actually save CPU time by avoiding
      special-cases later */
@@ -292,8 +293,8 @@ time_linkage *mix_read(time_linkage *in,
 
     /* input-by-input */
   for(i=0;i<input_ch;i++){
-    int feedit=mixpanel_visible[i] && mixpanel_active[i];
-    int feeditM=atten_visible && mixpanel_active[i];
+    int feedit=mixpanel_visible[i];
+    int feeditM=atten_visible;
 
     /* master feedback is a bit of a pain; the metrics we need aren't
        produced by any of the mixdowns below. Do it by hand */
@@ -496,24 +497,30 @@ time_linkage *mix_read(time_linkage *in,
 	if(sourceM || sourceMP)
 	  mixwork(in->data[i],ms.cacheP[i],ms.cachePP[i],
 		  mix,
-		  att,del,ms.curr[i].insert_invert[k],
-		  attP,delP,ms.prev[i].insert_invert[k]);
+		  (sourceM ? att : 0),
+		  del,ms.curr[i].insert_invert[k],
+		  (sourceMP ? attP : 0),
+		  delP,ms.prev[i].insert_invert[k]);
 
 	/* reverbA */
 	if(sourceA || sourceAP)
 	  if(inA)
 	    mixwork(inA->data[i],ms.cachePA[i],ms.cachePPA[i],
 		    mix,
-		    att,del,ms.curr[i].insert_invert[k],
-		    attP,delP,ms.prev[i].insert_invert[k]);
+		    (sourceA ? att : 0),
+		    del,ms.curr[i].insert_invert[k],
+		    (sourceAP ? attP : 0),
+		    delP,ms.prev[i].insert_invert[k]);
 
 	/* reverbB */
 	if(sourceB || sourceBP)
 	  if(inB)
 	    mixwork(inB->data[i],ms.cachePB[i],ms.cachePPB[i],
 		    mix,
-		    att,del,ms.curr[i].insert_invert[k],
-		    attP,delP,ms.prev[i].insert_invert[k]);
+		    (sourceB ? att : 0),
+		    del,ms.curr[i].insert_invert[k],
+		    (sourceBP ? attP : 0),
+		    delP,ms.prev[i].insert_invert[k]);
 
 	/* mix into output */
 	for(j=0;j<OUTPUT_CHANNELS;j++){
