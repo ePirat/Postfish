@@ -1,0 +1,117 @@
+.TH postfish 1 2004-05-29
+.SH NAME
+postfish \- a heavyweight, Gtk2-based live recording postprocessor
+.SH SYNOPSIS
+.B postfish 
+.RB [ options ] 
+.B infile 
+.RB [ infile ]+ 
+.RB [ -g 
+.B infile 
+.RB [ infile ]+]+ 
+> 
+.B output
+
+.SH DESCRIPTION
+
+the Postfish 
+is a digital audio post-processing, restoration,
+filtering and mixdown tool.  It works as a linear audio filter, much
+like a rack of analog effects.  The first stage of the filter
+pipeline provides a bank of configurable per-channel processing
+filters for up to 32 input channels.  The second stage provides
+mixdown of the processed input audio into a group of up to eight
+output channels.  The third stage applies processing filters to the
+output group post-mixdown.
+
+The Postfish is a stream filter; feed it audio from a list of files
+or input stream, and it renders audio to standard out, as well as
+optionally providing a configurable audio playback monitor via a
+sound device.  If the input audio is being taken from files,
+Postfish also provides simple forward/back/cue seeking and A-B
+looping control.
+
+.SH OPTIONS
+.TP
+.B \-c --configuration-file 
+load state from alternate configuration file
+
+.TP
+.B \-g --group
+place following input files in a new channel grouping
+
+.TP
+.B \-h --help
+print this help
+
+.SH INPUT
+
+Postfish takes WAV/AIFF input either from stdin or from a list of
+files specified on the command line.  A list of input files is handled
+as time-continguous entries, each holding audio data that continues at
+the instant the previous file ends.  Files may also be arranged into
+groups with -g; each group represents additional input channels
+parallel to preceeding groups. All input files must be the same
+sampling rate.  Files in a group must have the same number of
+channels.
+
+.B Examples:
+
+Files a.wav, b.wav, c.wav and d.wav are all four channels and
+ten minutes each.
+
+.B postfish a.wav b.wav c.wav d.wav 
+
+This command line treats the input as forty minutes of four channel 
+audio in the order a.wav, b.wav, c.wav, d.wav.
+
+.B postfish a.wav b.wav \-g c.wav d.wav 
+
+This command line treats the input as twenty minutes of eight channel
+audio.  Channels 1-4 are taken from files a.wav and b.wav while channels
+5-8 are taken from files c.wav  and d.wav.
+
+.B cat a.wav | postfish 
+
+This command line sends a.wav to Postfish as a non-seekable stream
+of four-channel data. If the WAV (or AIFF) header is complete, Postfish
+obeys the length encoded in the header and halts after processing to
+that length.  If the data length in the header is unset (0 or -1),
+Postfish will continue processing data until EOF on stdin.
+
+.SH OUTPUT
+
+Postfish writes output to stdout.
+
+If stdout is piped, the output is nonseekable and Postfish marks the
+produced header incomplete (length of -1).  Stopping and re-starting
+processing writes a fresh stream to stdout.
+
+If stdout is redirected to a file, Postfish will write a complete header
+upon processing halt or program exit.  If processing halts and restarts,
+the file is re-written from scratch.
+
+If stdout is a pipe or redirected to a file, the user may specify
+parallel audio monitor through the audio device using the 'mOn' activator
+button in the main panel's 'master' section, or on the output config
+panel.  The audio device selected for playback is configurable on the
+output config panel.
+
+If stdout is redirected to an audio device, output is sent to that audio
+device exclusively and the 'mOn' activator on the main panel will not
+be available.
+
+.SH STATE/CONFIG
+
+By default, persistent panel state is loaded from the file 
+'postfish-staterc' in the current working directory.  Postfish rewrites
+this file with all current panel state upon exit.  -c specifies loading
+from and saving to an alternate configuration file name.
+
+.SH BUGS
+
+This is Postfish's first prerelease; none known but many certainly exist.
+
+.SH AUTHORS
+
+Monty <monty@xiph.org>
