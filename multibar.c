@@ -127,7 +127,7 @@ static void compute(Multibar *m,float *lowvals, float *highvals, int n){
 	  if(lowvals[i]>=m->levels[j]){
 	    if(lowvals[i]<=m->levels[j+1]){
 	      float del=(lowvals[i]-m->levels[j])/(m->levels[j+1]-m->levels[j]);
-	      pixlo[i]=(j+del)/m->labels*(widget->allocation.width-xpad*2-1)-xpad;
+	      pixlo[i]=(j+del)/m->labels*(widget->allocation.width-xpad*2-1)+xpad;
 	      break;
 	    }else if(j==m->labels){
 	      pixlo[i]=widget->allocation.width-xpad+1;
@@ -147,7 +147,6 @@ static void compute(Multibar *m,float *lowvals, float *highvals, int n){
 	    }
 	  }else
 	    break;
-	
       }
       
       /* dampen movement according to setup */
