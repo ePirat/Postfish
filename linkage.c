@@ -103,6 +103,8 @@ void time_linkage_clear(time_linkage *in){
   int i;
   for(i=0;i<in->channels;i++)
     memset(in->data[i],0,sizeof(**in->data)*input_size);
+  in->samples=0;
+  in->active=0;
 }
 
 int time_linkage_copy(time_linkage *dest,time_linkage *src){

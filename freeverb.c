@@ -615,7 +615,7 @@ int p_reverb_load(void){
   for(i=0;i<input_ch;i++)
     rcs[i]=reverb_channelset+i;
   rms=malloc(OUTPUT_CHANNELS*sizeof(*rms));
-  for(i=0;i<input_ch;i++)
+  for(i=0;i<OUTPUT_CHANNELS;i++)
     rms[i]=&reverb_masterset;
 
   time_linkage_init(&outA,input_ch);

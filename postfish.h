@@ -129,11 +129,6 @@ static inline void underguard(float *x){
 #define toBark(n)   (13.1f*atan(.00074f*(n))+2.24f*atan((n)*(n)*1.85e-8f)+1e-4f*(n))
 #define fromBark(z) (102.f*(z)-2.f*pow(z,2.f)+.4f*pow(z,3.f)+pow(1.46f,z)-1.f)
 
-typedef struct postfish_instance {
-  int blocksize;
-  int rate;
-} postfish_instance;
-
 typedef struct time_linkage {
   int alias;
   int samples;  /* normally same as size; exception is EOF */
