@@ -70,7 +70,6 @@ int pull_freq_feedback(freq_state *ff,float **peak,float **rms){
 
 int freq_class_load(freq_class_setup *f,const float *frequencies, int bands){
   int i,j;
-  int blocksize=input_size*2;
   memset(f,0,sizeof(*f));
 
   f->qblocksize=input_size;
@@ -257,10 +256,10 @@ static void freq_metric_work(float *x,freq_class_setup *c,
     float lpeak=0.;
     for(j=0;j<c->qblocksize*2+1;j++){
       float val=fabs(sq_mags[j]*ho_window[j]);
-      lrms+=val*.5;
+      lrms+=val;
       if(val>lpeak)lpeak=val;
     }
-    rms[i][channel]=todB(lrms*c->ho_area[i])*.5;
+    rms[i][channel]=todB(lrms*.5*c->ho_area[i])*.5;
     peak[i][channel]=todB(lpeak)*.5;
   }
 }
@@ -269,8 +268,6 @@ static void fill_freq_buffer_helper(float *buffer,float *window,
 				    float *cache, float *in,
 				    int qblocksize,int muted0,int mutedC,
 				    float scale){
-  int i;
-  
   /* place data in fftwf buffer */
   memset(buffer,0,sizeof(*buffer)*qblocksize);
 
@@ -359,8 +356,10 @@ static void freq_work(freq_class_setup *fc,
       if(activeC)func(fc->fftwf_buffer,i);
       
       /* feedback and reverse transform */
-      have_feedback=1;
-      freq_metric_work(fc->fftwf_buffer,fc,f->peak,f->rms,i);
+      if(visible[i]){
+	freq_metric_work(fc->fftwf_buffer,fc,f->peak,f->rms,i);
+	have_feedback=1;
+      }
       if(activeC)
 	fftwf_execute(fc->fftwf_backward);
       else

@@ -397,7 +397,7 @@ static singlecomp_panel_state *singlepanel_create_helper (postfish_mainpanel *mp
                       G_CALLBACK (mode_peak), &ps->ms->u_mode);
 
     gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(rms_button),1);
-    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(knee_button),1);
+    //gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(knee_button),1);
     gtk_table_attach(GTK_TABLE(undertable),envelopebox,0,4,0,1,GTK_FILL,0,0,0);
 
     ps->u_rms=rms_button;
@@ -501,7 +501,7 @@ static singlecomp_panel_state *singlepanel_create_helper (postfish_mainpanel *mp
                       G_CALLBACK (mode_peak), &ps->ms->o_mode);
 
     gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(rms_button),1);
-    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(knee_button),1);
+    //gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(knee_button),1);
     gtk_table_attach(GTK_TABLE(overtable),envelopebox,0,4,0,1,GTK_FILL,0,0,0);
     ps->o_rms=rms_button;
     ps->o_peak=peak_button;

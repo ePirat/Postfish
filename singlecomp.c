@@ -50,20 +50,23 @@ typedef struct{
   time_linkage out;
   feedback_generic_pool feedpool;
 
-  iir_state *o_iir;
-  iir_state *u_iir;
-  iir_state *b_iir;
+  iir_state o_iir[MAX_INPUT_CHANNELS];
+  iir_state u_iir[MAX_INPUT_CHANNELS];
+  iir_state b_iir[MAX_INPUT_CHANNELS];
+  int o_delay[MAX_INPUT_CHANNELS];
+  int u_delay[MAX_INPUT_CHANNELS];
+  int b_delay[MAX_INPUT_CHANNELS];
 
-  peak_state *o_peak;
-  peak_state *u_peak;
-  peak_state *b_peak;
+  peak_state o_peak[MAX_INPUT_CHANNELS];
+  peak_state u_peak[MAX_INPUT_CHANNELS];
+  peak_state b_peak[MAX_INPUT_CHANNELS];
 
-  iir_filter *o_attack;
-  iir_filter *o_decay;
-  iir_filter *u_attack;
-  iir_filter *u_decay;
-  iir_filter *b_attack;
-  iir_filter *b_decay;
+  iir_filter o_attack[MAX_INPUT_CHANNELS];
+  iir_filter u_attack[MAX_INPUT_CHANNELS];
+  iir_filter b_attack[MAX_INPUT_CHANNELS];
+  iir_filter o_decay[MAX_INPUT_CHANNELS];
+  iir_filter u_decay[MAX_INPUT_CHANNELS];
+  iir_filter b_decay[MAX_INPUT_CHANNELS];
 
   int fillstate;
   float **cache;
@@ -132,21 +135,6 @@ static void singlecomp_load_helper(singlecomp_state *scs,int ch){
   scs->activeP=calloc(scs->ch,sizeof(*scs->activeP));
   scs->active0=calloc(scs->ch,sizeof(*scs->active0));
 
-  scs->o_attack=calloc(scs->ch,sizeof(*scs->o_attack));
-  scs->o_decay=calloc(scs->ch,sizeof(*scs->o_decay));
-  scs->u_attack=calloc(scs->ch,sizeof(*scs->u_attack));
-  scs->u_decay=calloc(scs->ch,sizeof(*scs->u_decay));
-  scs->b_attack=calloc(scs->ch,sizeof(*scs->b_attack));
-  scs->b_decay=calloc(scs->ch,sizeof(*scs->b_decay));
-
-  scs->o_iir=calloc(scs->ch,sizeof(*scs->o_iir));
-  scs->b_iir=calloc(scs->ch,sizeof(*scs->b_iir));
-  scs->u_iir=calloc(scs->ch,sizeof(*scs->u_iir));
-
-  scs->o_peak=calloc(scs->ch,sizeof(*scs->o_peak));
-  scs->b_peak=calloc(scs->ch,sizeof(*scs->b_peak));
-  scs->u_peak=calloc(scs->ch,sizeof(*scs->u_peak));
-
   scs->out.channels=scs->ch;
   scs->out.data=malloc(scs->ch*sizeof(*scs->out.data));
   for(i=0;i<scs->ch;i++)
@@ -199,15 +187,6 @@ static void filter_set(float msec,
   filter->ms=msec;
 }
 
-static void reset_filter(singlecomp_state *scs){
-  memset(scs->o_peak,0,scs->ch*sizeof(*scs->o_peak));
-  memset(scs->u_peak,0,scs->ch*sizeof(*scs->u_peak));
-  memset(scs->b_peak,0,scs->ch*sizeof(*scs->b_peak));
-  memset(scs->o_iir,0,scs->ch*sizeof(*scs->o_iir));
-  memset(scs->u_iir,0,scs->ch*sizeof(*scs->u_iir));
-  memset(scs->b_iir,0,scs->ch*sizeof(*scs->b_iir));
-}
-
 static void reset_onech_filter(singlecomp_state *scs,int i){
   memset(scs->o_peak+i,0,sizeof(*scs->o_peak));
   memset(scs->u_peak+i,0,sizeof(*scs->u_peak));
@@ -215,10 +194,19 @@ static void reset_onech_filter(singlecomp_state *scs,int i){
   memset(scs->o_iir+i,0,sizeof(*scs->o_iir));
   memset(scs->u_iir+i,0,sizeof(*scs->u_iir));
   memset(scs->b_iir+i,0,sizeof(*scs->b_iir));
+  scs->o_delay[i]=1;
+  scs->u_delay[i]=1;
+  scs->b_delay[i]=1;
+}
+
+static void reset_filter(singlecomp_state *scs){
+  int i;
+  for(i=0;i<scs->ch;i++)
+    reset_onech_filter(scs,i);
 }
 
 /* called only in playback thread */
-int singlecomp_reset(void ){
+int singlecomp_reset(void){
   /* reset cached pipe state */
   master_state.fillstate=0;
   channel_state.fillstate=0;
@@ -412,13 +400,13 @@ static void under_compand(float *A,float *B,float *adj,
 
       if(softknee){
 	for(k=0;k<input_size;k++){
-	  adj[k]= -soft_knee(zerocorner-work[k])*multiplier;
+	  adj[k]+= -soft_knee(zerocorner-work[k])*multiplier;
 	  multiplier+=multiplier_add;
 	  zerocorner+=zerocorner_add;
 	}
       }else{
 	for(k=0;k<input_size;k++){
-	  adj[k]= -hard_knee(zerocorner-work[k])*multiplier;
+	  adj[k]+= -hard_knee(zerocorner-work[k])*multiplier;
 	  multiplier+=multiplier_add;
 	  zerocorner+=zerocorner_add;
 	}
@@ -427,14 +415,13 @@ static void under_compand(float *A,float *B,float *adj,
     }else{
       if(softknee){
 	for(k=0;k<input_size;k++)
-	  adj[k]= -soft_knee(zerocorner-work[k])*multiplier;
+	  adj[k]+= -soft_knee(zerocorner-work[k])*multiplier;
       }else{
 	for(k=0;k<input_size;k++)
-	  adj[k]= -hard_knee(zerocorner-work[k])*multiplier;
+	  adj[k]+= -hard_knee(zerocorner-work[k])*multiplier;
       }
     }
-  }else
-    memset(adj,0,sizeof(*adj)*input_size);
+  }
   
 }
 
@@ -483,6 +470,8 @@ static void work_and_lapping(singlecomp_state *scs,
   memset(rmsfeed,0,sizeof(rmsfeed));
   
   for(i=0;i<scs->ch;i++){
+
+    int o_active=0,u_active=0,b_active=0;
 
     int activeC= active[i] && !mute_channel_muted(mutemaskC,i);
     int active0= scs->active0[i];
@@ -540,44 +529,80 @@ static void work_and_lapping(singlecomp_state *scs,
 
     }else if(active0 || activeC){
       float adj[input_size]; // under will set it
+      atten_cache *prevset=scs->prevset+i;
+      atten_cache *currset=scs->currset+i;
 
-      scs->currset[i].u_thresh=scset[i]->u_thresh;
-      scs->currset[i].o_thresh=scset[i]->o_thresh;
-      scs->currset[i].u_ratio=scset[i]->u_ratio;
-      scs->currset[i].o_ratio=scset[i]->o_ratio;
-      scs->currset[i].b_ratio=scset[i]->b_ratio;
+      currset->u_thresh=scset[i]->u_thresh;
+      currset->o_thresh=scset[i]->o_thresh;
+      currset->u_ratio=scset[i]->u_ratio;
+      currset->o_ratio=scset[i]->o_ratio;
+      currset->b_ratio=scset[i]->b_ratio;
       
       /* don't slew from an unknown value */
 
       if(!activeP || !scs->fillstate) 
-	memcpy(scs->prevset+i,scs->currset+i,sizeof(*scs->currset));
+	memcpy(prevset,currset,sizeof(*currset));
 
+      /* don't run filters that will be applied at unity */
+      if(prevset->u_ratio==1000 && currset->u_ratio==1000){
+	scs->u_delay[i]=2;
+	memset(scs->u_peak+i,0,sizeof(peak_state));
+	memset(scs->u_iir+i,0,sizeof(iir_state));
+      }else{
+	if(scs->u_delay[i]-->0)currset->u_ratio=1000;
+	if(scs->u_delay[i]<0)scs->u_delay[i]=0;
+	u_active=1;
+      }
+
+      if(prevset->o_ratio==1000 && currset->o_ratio==1000){
+	scs->o_delay[i]=2;
+	memset(scs->o_peak+i,0,sizeof(peak_state));
+	memset(scs->o_iir+i,0,sizeof(iir_state));
+      }else{
+	if(scs->o_delay[i]-->0)currset->o_ratio=1000;
+	if(scs->o_delay[i]<0)scs->o_delay[i]=0;
+	o_active=1;
+      }
+
+      if(prevset->b_ratio==1000 && currset->b_ratio==1000){
+	scs->b_delay[i]=2;
+	memset(scs->b_peak+i,0,sizeof(peak_state));
+	memset(scs->b_iir+i,0,sizeof(iir_state));
+      }else{
+	if(scs->b_delay[i]-->0)currset->b_ratio=1000;
+	if(scs->b_delay[i]<0)scs->b_delay[i]=0;
+	b_active=1;
+      }
+      
       /* run the filters */
-      
-      under_compand(scs->cache[i],in->data[i],adj,
-		    scs->prevset[i].u_thresh,
-		    scs->currset[i].u_thresh,
-		    1.-1000./scs->prevset[i].u_ratio,
-		    1.-1000./scs->currset[i].u_ratio,
-		    scset[i]->u_lookahead/1000.,
-		    scset[i]->u_mode,
-		    scset[i]->u_softknee,
-		    scs->u_attack+i,scs->u_decay+i,
-		    scs->u_iir+i,scs->u_peak+i,
-		    active0);
-      
-      over_compand(scs->cache[i],in->data[i],adj,
-		   scs->prevset[i].o_thresh,
-		   scs->currset[i].o_thresh,
-		   1.-1000./scs->prevset[i].o_ratio,
-		   1.-1000./scs->currset[i].o_ratio,
-		   scset[i]->o_lookahead/1000.,
-		   scset[i]->o_mode,
-		   scset[i]->o_softknee,
-		   scs->o_attack+i,scs->o_decay+i,
-		   scs->o_iir+i,scs->o_peak+i,
-		   active0);
+      memset(adj,0,sizeof(*adj)*input_size);
 
+      if(u_active)
+	under_compand(scs->cache[i],in->data[i],adj,
+		      scs->prevset[i].u_thresh,
+		      scs->currset[i].u_thresh,
+		      1.-1000./scs->prevset[i].u_ratio,
+		      1.-1000./scs->currset[i].u_ratio,
+		      scset[i]->u_lookahead/1000.,
+		      scset[i]->u_mode,
+		      scset[i]->u_softknee,
+		      scs->u_attack+i,scs->u_decay+i,
+		      scs->u_iir+i,scs->u_peak+i,
+		      active0);
+      
+      if(o_active)
+	over_compand(scs->cache[i],in->data[i],adj,
+		     scs->prevset[i].o_thresh,
+		     scs->currset[i].o_thresh,
+		     1.-1000./scs->prevset[i].o_ratio,
+		     1.-1000./scs->currset[i].o_ratio,
+		     scset[i]->o_lookahead/1000.,
+		     scset[i]->o_mode,
+		     scset[i]->o_softknee,
+		     scs->o_attack+i,scs->o_decay+i,
+		     scs->o_iir+i,scs->o_peak+i,
+		     active0);
+      
       /* feedback before base */
       if(scset[i]->panel_visible){
 	int k;
@@ -602,13 +627,14 @@ static void work_and_lapping(singlecomp_state *scs,
 	rmsfeed[i]=todB_a(&rms)*.5;
       }
 
-      base_compand(scs->cache[i],in->data[i],adj,
-		   1.-1000./scs->prevset[i].b_ratio,
-		   1.-1000./scs->currset[i].b_ratio,
+      if(b_active)
+	base_compand(scs->cache[i],in->data[i],adj,
+		     1.-1000./scs->prevset[i].b_ratio,
+		     1.-1000./scs->currset[i].b_ratio,
 		   scset[i]->b_mode,
-		   scs->b_attack+i,scs->b_decay+i,
-		   scs->b_iir+i,scs->b_peak+i,
-		   active0);
+		     scs->b_attack+i,scs->b_decay+i,
+		     scs->b_iir+i,scs->b_peak+i,
+		     active0);
 
       if(active0 && out){
 	/* current frame should be manipulated; render into out,
@@ -655,7 +681,6 @@ static void work_and_lapping(singlecomp_state *scs,
     scs->active0[i]=activeC;
 
   }
-
 
   if(out){
     /* feedback is also triggered off of output */

@@ -772,7 +772,7 @@ static multi_panel_state *compandpanel_create(postfish_mainpanel *mp,
     g_signal_connect (G_OBJECT (peak_button), "clicked",
 		      G_CALLBACK (mode_peak), &ps->ms->under_mode);
     gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(rms_button),1);
-    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(knee_button),1);
+    //gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(knee_button),1);
     gtk_table_attach(GTK_TABLE(undertable),envelopebox,0,4,0,1,GTK_FILL,0,0,0);
     ps->under_rms=rms_button;
     ps->under_peak=peak_button;
@@ -874,7 +874,7 @@ static multi_panel_state *compandpanel_create(postfish_mainpanel *mp,
     g_signal_connect (G_OBJECT (peak_button), "clicked",
 		      G_CALLBACK (mode_peak), &ps->ms->over_mode);
     gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(rms_button),1);
-    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(knee_button),1);
+    //gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(knee_button),1);
     gtk_table_attach(GTK_TABLE(overtable),envelopebox,0,4,0,1,GTK_FILL,0,0,0);
     ps->over_rms=rms_button;
     ps->over_peak=peak_button;

@@ -6,11 +6,11 @@
 # Use the below line to build for PowerPC
 # The PPC build *must* use -maltivec, even if the target is a non-altivec machine
 
-ADD_DEF= -DUGLY_IEEE754_FLOAT32_HACK=1 -maltivec -mcpu=7400
+#ADD_DEF= -DUGLY_IEEE754_FLOAT32_HACK=1 -maltivec -mcpu=7400
 
 # use the below for x86 and most other platforms where 'float' is 32 bit IEEE754
 
-#ADD_DEF= -DUGLY_IEEE754_FLOAT32_HACK=1 -march=athlon-mp
+ADD_DEF= -DUGLY_IEEE754_FLOAT32_HACK=1 
 
 # use the below for anything without IEE754 floats (eg, VAX)
 
@@ -40,13 +40,13 @@ OBJ = main.o mainpanel.o multibar.o readout.o input.o output.o clippanel.o \
 GCF = -DETCDIR=\\\"$(ETCDIR)\\\" `pkg-config --cflags gtk+-2.0` -DG_DISABLE_DEPRECATED -DGDK_DISABLE_DEPRECATED -DGTK_DISABLE_DEPRECATED -DGDK_PIXBUF_DISABLE_DEPRECATED
 
 all:	
-	$(MAKE) target CFLAGS="-O3 -ffast-math -fomit-frame-pointer $(GCF) $(ADD_DEF)"
+	$(MAKE) target CFLAGS="-O2 -ffast-math -fomit-frame-pointer $(GCF) $(ADD_DEF)"
 
 debug:
 	$(MAKE) target CFLAGS="-g -Wall -W -Wno-unused-parameter -D__NO_MATH_INLINES $(GCF) $(ADD_DEF)"
 
 profile:
-	$(MAKE) target CFLAGS="-pg -g -O3 -ffast-math $(GCF) $(ADD_DEF)" LIBS="-lgprof-helper "
+	$(MAKE) target CFLAGS="-pg -g -O2 -ffast-math $(GCF) $(ADD_DEF)" LIBS="-lgprof-helper "
 
 clean:
 	rm -f $(OBJ) *.d *.d.* gmon.out postfish

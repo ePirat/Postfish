@@ -56,22 +56,27 @@ typedef struct {
   feedback_generic_pool feedpool;
   subband_state ss;
   
-  iir_filter *over_attack;
-  iir_filter *over_decay;
+  iir_filter over_attack[MAX_INPUT_CHANNELS];
+  iir_filter over_decay[MAX_INPUT_CHANNELS];
 
-  iir_filter *under_attack;
-  iir_filter *under_decay;
+  iir_filter under_attack[MAX_INPUT_CHANNELS];
+  iir_filter under_decay[MAX_INPUT_CHANNELS];
 
-  iir_filter *base_attack;
-  iir_filter *base_decay;
+  iir_filter base_attack[MAX_INPUT_CHANNELS];
+  iir_filter base_decay[MAX_INPUT_CHANNELS];
 
-  iir_state *over_iir[multicomp_freqs_max];
-  iir_state *under_iir[multicomp_freqs_max];
-  iir_state *base_iir[multicomp_freqs_max];
+  iir_state over_iir[multicomp_freqs_max][MAX_INPUT_CHANNELS];
+  int over_delay[MAX_INPUT_CHANNELS];
 
-  peak_state *over_peak[multicomp_freqs_max];
-  peak_state *under_peak[multicomp_freqs_max];
-  peak_state *base_peak[multicomp_freqs_max];
+  iir_state under_iir[multicomp_freqs_max][MAX_INPUT_CHANNELS];
+  int under_delay[MAX_INPUT_CHANNELS];
+
+  iir_state base_iir[multicomp_freqs_max][MAX_INPUT_CHANNELS];
+  int base_delay[MAX_INPUT_CHANNELS];
+
+  peak_state over_peak[multicomp_freqs_max][MAX_INPUT_CHANNELS];
+  peak_state under_peak[multicomp_freqs_max][MAX_INPUT_CHANNELS];
+  peak_state base_peak[multicomp_freqs_max][MAX_INPUT_CHANNELS];
 
   atten_cache *prevset;
   atten_cache *currset;
@@ -127,17 +132,25 @@ int pull_multicompand_feedback_channel(float **peak,float **rms,int *b){
   return pull_multicompand_feedback(&channel_state,peak,rms,b);
 }
 
+static void reset_filters_onech(multicompand_state *ms,int ch){
+  int i;
+  ms->base_delay[ch]=2;
+  ms->over_delay[ch]=2;
+  ms->under_delay[ch]=2;
+  for(i=0;i<multicomp_freqs_max;i++){
+    memset(&ms->over_peak[i][ch],0,sizeof(peak_state));
+    memset(&ms->under_peak[i][ch],0,sizeof(peak_state));
+    memset(&ms->base_peak[i][ch],0,sizeof(peak_state));
+    memset(&ms->over_iir[i][ch],0,sizeof(iir_state));
+    memset(&ms->under_iir[i][ch],0,sizeof(iir_state));
+    memset(&ms->base_iir[i][ch],0,sizeof(iir_state));
+  }
+}
+
 static void reset_filters(multicompand_state *ms){
-  int i,j;
-  for(i=0;i<multicomp_freqs_max;i++)
-    for(j=0;j<ms->ch;j++){
-      memset(&ms->over_peak[i][j],0,sizeof(peak_state));
-      memset(&ms->under_peak[i][j],0,sizeof(peak_state));
-      memset(&ms->base_peak[i][j],0,sizeof(peak_state));
-      memset(&ms->over_iir[i][j],0,sizeof(iir_state));
-      memset(&ms->under_iir[i][j],0,sizeof(iir_state));
-      memset(&ms->base_iir[i][j],0,sizeof(iir_state));
-    }
+  int j;
+  for(j=0;j<ms->ch;j++)
+    reset_filters_onech(ms,j);
 }
 
 void multicompand_reset(){
@@ -161,24 +174,6 @@ static int multicompand_load_helper(multicompand_state *ms,int ch){
   ms->ch=ch;
   subband_load(&ms->ss,multicomp_freqs_max,qblocksize,ch);
 
-  ms->over_attack=calloc(ms->ch,sizeof(*ms->over_attack));
-  ms->over_decay=calloc(ms->ch,sizeof(*ms->over_decay));
-
-  ms->under_attack=calloc(ms->ch,sizeof(*ms->under_attack));
-  ms->under_decay=calloc(ms->ch,sizeof(*ms->under_decay));
-
-  ms->base_attack=calloc(ms->ch,sizeof(*ms->base_attack));
-  ms->base_decay=calloc(ms->ch,sizeof(*ms->base_decay));
-
-  for(i=0;i<multicomp_freqs_max;i++){
-    ms->over_peak[i]=calloc(ms->ch,sizeof(peak_state));
-    ms->under_peak[i]=calloc(ms->ch,sizeof(peak_state));
-    ms->base_peak[i]=calloc(ms->ch,sizeof(peak_state));
-    ms->over_iir[i]=calloc(ms->ch,sizeof(iir_state));
-    ms->under_iir[i]=calloc(ms->ch,sizeof(iir_state));
-    ms->base_iir[i]=calloc(ms->ch,sizeof(iir_state));
-  }
-
   ms->peak=calloc(multicomp_freqs_max,sizeof(*ms->peak));
   ms->rms=calloc(multicomp_freqs_max,sizeof(*ms->rms));
   for(i=0;i<multicomp_freqs_max;i++)ms->peak[i]=malloc(ms->ch*sizeof(**ms->peak));
@@ -186,6 +181,8 @@ static int multicompand_load_helper(multicompand_state *ms,int ch){
 
   ms->prevset=malloc(ch*sizeof(*ms->prevset));
   ms->currset=malloc(ch*sizeof(*ms->currset));
+
+  reset_filters(ms);
   
   return 0;
 }
@@ -440,13 +437,13 @@ static void under_compand(float *x,
       
       if(knee){
 	for(k=0;k<input_size;k++){
-	  adj[k]=soft_knee(zerocorner-underdB[k])*ratio_multiplier;
+	  adj[k]+=soft_knee(zerocorner-underdB[k])*ratio_multiplier;
 	  ratio_multiplier+=ratio_add;
 	  zerocorner+=corner_add;
 	}
       }else{
 	for(k=0;k<input_size;k++){
-	  adj[k]=hard_knee(zerocorner-underdB[k])*ratio_multiplier;
+	  adj[k]+=hard_knee(zerocorner-underdB[k])*ratio_multiplier;
 	  ratio_multiplier+=ratio_add;
 	  zerocorner+=corner_add;
 	}
@@ -455,10 +452,10 @@ static void under_compand(float *x,
     }else{
       if(knee){
 	for(k=0;k<input_size;k++)
-	  adj[k]=soft_knee(zerocorner-underdB[k])*ratio_multiplier;
+	  adj[k]+=soft_knee(zerocorner-underdB[k])*ratio_multiplier;
       }else{
 	for(k=0;k<input_size;k++)
-	  adj[k]=hard_knee(zerocorner-underdB[k])*ratio_multiplier;
+	  adj[k]+=hard_knee(zerocorner-underdB[k])*ratio_multiplier;
       }
     }
   }
@@ -489,7 +486,8 @@ static int multicompand_work_perchannel(multicompand_state *ms,
   subband_window *w=ss->w1[channel];
   subband_window *wP=ss->wP[channel];
   float adj[input_size];
-  
+
+  int o_active=0,u_active=0,b_active=0;
 
   if(w==&sw[0]){
     bank=0;
@@ -510,20 +508,65 @@ static int multicompand_work_perchannel(multicompand_state *ms,
     /* don't slew from an unknown value */
     if(!ss->effect_activeP[channel] || !ms->initstate) 
       memcpy(prevset,currset,sizeof(*currset));
-  }
+
+    /* don't run filters that will be applied at unity */
+    if(prevset->under_ratio==1000 && currset->under_ratio==1000){
+      ms->under_delay[channel]=2;
+      for(i=0;i<multicomp_freqs_max;i++){
+	memset(&ms->under_peak[i][channel],0,sizeof(peak_state));
+	memset(&ms->under_iir[i][channel],0,sizeof(iir_state));
+      }
+    }else{
+      if(ms->under_delay[channel]-->0)currset->under_ratio=1000;
+      if(ms->under_delay[channel]<0)ms->under_delay[channel]=0;
+      u_active=1;
+    }
+
+    if(prevset->over_ratio==1000 && currset->over_ratio==1000){
+      ms->over_delay[channel]=2;
+      for(i=0;i<multicomp_freqs_max;i++){
+	memset(&ms->over_peak[i][channel],0,sizeof(peak_state));
+	memset(&ms->over_iir[i][channel],0,sizeof(iir_state));
+      }
+    }else{
+      if(ms->over_delay[channel]-->0)currset->over_ratio=1000;
+      if(ms->over_delay[channel]<0)ms->over_delay[channel]=0;
+      o_active=1;
+    }
+
+    if(prevset->base_ratio==1000 && currset->base_ratio==1000){
+      ms->base_delay[channel]=2;
+      for(i=0;i<multicomp_freqs_max;i++){
+	memset(&ms->base_peak[i][channel],0,sizeof(peak_state));
+	memset(&ms->base_iir[i][channel],0,sizeof(iir_state));
+      }
+    }else{
+      if(ms->base_delay[channel]-->0)currset->base_ratio=1000;
+      if(ms->base_delay[channel]<0)ms->base_delay[channel]=0;
+      b_active=1;
+    }
+
+  } else if (ss->effect_activeP[channel]){ 
+    /* this lapping channel just became inactive */
+    reset_filters_onech(ms,channel);
+  }   
+  
+  /* one thing is worth a note here; 'maxbands' can be
+     'overrange' for the current bank.  This is intentional; we
+     may need to run the additional (allocated and valid)
+     filters before or after their bands are active.  The only
+     garbage data here is the xxxx_u, xxxx_o and xxxx_b
+     settings.  There are allocated, but unset; if overrange,
+     they're ignored in the compand worker */
 
   for(i=0;i<maxbands;i++){
     
     float *x=ss->lap[i][channel];
     
-    if(active){
-      /* one thing is worth a note here; 'maxbands' can be
-	 'overrange' for the current bank.  This is intentional; we
-	 may need to run the additional (allocated and valid)
-	 filters before or after their bands are active.  The only
-	 garbage data here is the xxxx_u, xxxx_o and xxxx_b
-	 settings.  There are allocated, but unset; if overrange,
-	 they're ignored in the compand worker */
+    if(u_active || o_active || b_active)
+      memset(adj,0,sizeof(*adj)*input_size);
+      
+    if(u_active)
       under_compand(x,  
 		    prevset->static_u[i],
 		    currset->static_u[i],
@@ -531,13 +574,14 @@ static int multicompand_work_perchannel(multicompand_state *ms,
 		    &ms->under_decay[channel],
 		    &ms->under_iir[i][channel],
 		    &ms->under_peak[i][channel],
-		    c->under_lookahead/1000.,
+		      c->under_lookahead/1000.,
 		    c->under_mode,
 		    c->under_softknee,
 		    prevset->under_ratio,
 		    currset->under_ratio,
 		    (i>=w->freq_bands?0:adj));
-      
+    
+    if(o_active)	
       over_compand(x,  
 		   prevset->static_o[i],
 		   currset->static_o[i],
@@ -551,13 +595,10 @@ static int multicompand_work_perchannel(multicompand_state *ms,
 		   prevset->over_ratio,
 		   currset->over_ratio,
 		   (i>=w->freq_bands?0:adj));
-      
-    }
-    
-    if(ss->visible1[channel]){
 
+    if(ss->visible1[channel]){
       feedback_p=1;
-	
+      
       if(!mute_channel_muted(ss->mutemask1,channel)){
 	/* determine rms and peak for feedback */
 	float max=-1.;
@@ -582,7 +623,7 @@ static int multicompand_work_perchannel(multicompand_state *ms,
       }
     }
     
-    if(active){
+    if(b_active)
       base_compand(x,  
 		   &ms->base_attack[channel],
 		   &ms->base_decay[channel],
@@ -592,20 +633,13 @@ static int multicompand_work_perchannel(multicompand_state *ms,
 		   prevset->base_ratio,
 		   currset->base_ratio,
 		   (i>=w->freq_bands?0:adj));
-      
+
+    if(u_active || o_active || b_active){
       if(ss->effect_active1[channel]){
 	for(k=0;k<input_size;k++)
 	  x[k]*=fromdB_a(adj[k]);
       }
-    } else if (ss->effect_activeP[channel]){ 
-      /* this lapping channel just became inactive */
-      memset(&ms->over_peak[i][channel],0,sizeof(peak_state));
-      memset(&ms->under_peak[i][channel],0,sizeof(peak_state));
-      memset(&ms->base_peak[i][channel],0,sizeof(peak_state));
-      memset(&ms->over_iir[i][channel],0,sizeof(iir_state));
-      memset(&ms->under_iir[i][channel],0,sizeof(iir_state));
-      memset(&ms->base_iir[i][channel],0,sizeof(iir_state));
-    }   
+    }
   }
   
   for(;i<wP->freq_bands;i++){

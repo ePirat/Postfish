@@ -80,7 +80,7 @@ static void deverb_reset_one(int freq,int ch){
 }
 
 void deverb_reset(){
-  int i,j;
+  int i;
   
   subband_reset(&channel_state.ss);
   
