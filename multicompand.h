@@ -48,9 +48,11 @@ static char * const multicomp_freq_labels[multicomp_banks][multicomp_freqs_max]=
 typedef struct {
   sig_atomic_t static_o[multicomp_freqs_max];
   sig_atomic_t static_u[multicomp_freqs_max];
-} banked_compand_settings;
+} banked_multicompand_settings;
 
 typedef struct {
+
+  banked_multicompand_settings bc[multicomp_banks];
 
   sig_atomic_t over_mode;
   sig_atomic_t over_softknee;
@@ -74,16 +76,17 @@ typedef struct {
   sig_atomic_t under_trim;
 
   sig_atomic_t active_bank;
-} other_compand_settings;
+
+  sig_atomic_t panel_active;
+  sig_atomic_t panel_visible;
+} multicompand_settings;
 
 extern void multicompand_reset();
 extern int multicompand_load(void);
-extern time_linkage *multicompand_read(time_linkage *in);
-extern int pull_multicompand_feedback(float **peak,float **rms,int *bands);
 
-extern int multicompand_over_attack_set(float msec);
-extern int multicompand_over_decay_set(float msec);
-extern int multicompand_under_attack_set(float msec);
-extern int multicompand_under_decay_set(float msec);
-extern int multicompand_base_attack_set(float msec);
-extern int multicompand_base_decay_set(float msec);
+extern time_linkage *multicompand_read_channels(time_linkage *in);
+extern time_linkage *multicompand_read_master(time_linkage *in);
+
+extern int pull_multicompand_feedback_channels(float **peak,float **rms,int *bands);
+extern int pull_multicompand_feedback_master(float **peak,float **rms,int *bands);
+

@@ -32,14 +32,11 @@
 #include "multicompand.h"
 #include "compandpanel.h"
 
-extern sig_atomic_t compand_active;
-extern sig_atomic_t compand_visible;
 extern int input_ch;
 extern int input_size;
 extern int input_rate;
 
-extern banked_compand_settings bc[multicomp_banks];
-extern other_compand_settings c;
+extern multicompand_settings multi_master_set;
 
 typedef struct {
   GtkWidget *label;
@@ -80,15 +77,15 @@ static void compand_change(GtkWidget *w,Readout *r,sig_atomic_t *var){
   *var=rint(val*1000.);
 }
 static void under_compand_change(GtkWidget *w,gpointer in){
-  compand_change(w,(Readout *)in,&c.under_ratio);
+  compand_change(w,(Readout *)in,&multi_master_set.under_ratio);
 }
 
 static void over_compand_change(GtkWidget *w,gpointer in){
-  compand_change(w,(Readout *)in,&c.over_ratio);
+  compand_change(w,(Readout *)in,&multi_master_set.over_ratio);
 }
 
 static void base_compand_change(GtkWidget *w,gpointer in){
-  compand_change(w,(Readout *)in,&c.base_ratio);
+  compand_change(w,(Readout *)in,&multi_master_set.base_ratio);
 }
 
 static void timing_display(GtkWidget *w,Readout *r,float v){
@@ -117,8 +114,8 @@ static void under_timing_change(GtkWidget *w,gpointer in){
   timing_display(w,r->r0,attack);
   timing_display(w,r->r1,decay);
  
-  multicompand_under_attack_set(attack);
-  multicompand_under_decay_set(decay);  
+  multi_master_set.under_attack=rint(attack*10.);
+  multi_master_set.under_decay=rint(decay*10.);
 }
 
 static void over_timing_change(GtkWidget *w,gpointer in){
@@ -129,9 +126,8 @@ static void over_timing_change(GtkWidget *w,gpointer in){
   timing_display(w,r->r0,attack);
   timing_display(w,r->r1,decay);
   
-  multicompand_over_attack_set(attack);
-  multicompand_over_decay_set(decay);
-  
+  multi_master_set.over_attack=rint(attack*10.);
+  multi_master_set.over_decay=rint(decay*10.);
 }
 
 static void base_timing_change(GtkWidget *w,gpointer in){
@@ -142,9 +138,8 @@ static void base_timing_change(GtkWidget *w,gpointer in){
   timing_display(w,r->r0,attack);
   timing_display(w,r->r1,decay);
   
-  multicompand_base_attack_set(attack);
-  multicompand_base_decay_set(decay);
-  
+  multi_master_set.base_attack=rint(attack*10.);
+  multi_master_set.base_decay=rint(decay*10.);
 }
 
 static void under_lookahead_change(GtkWidget *w,gpointer in){
@@ -155,7 +150,7 @@ static void under_lookahead_change(GtkWidget *w,gpointer in){
   sprintf(buffer,"%3.0f%%",val);
   readout_set(r,buffer);
   
-  c.under_lookahead=rint(val*10.);
+  multi_master_set.under_lookahead=rint(val*10.);
 }
 
 static void over_lookahead_change(GtkWidget *w,gpointer in){
@@ -166,7 +161,7 @@ static void over_lookahead_change(GtkWidget *w,gpointer in){
   sprintf(buffer,"%3.0f%%",val);
   readout_set(r,buffer);
   
-  c.over_lookahead=rint(val*10.);
+  multi_master_set.over_lookahead=rint(val*10.);
 }
 
 static int updating_av_slider=0;
@@ -181,8 +176,8 @@ static void average_change(GtkWidget *w,gpointer in){
 
   /* compute the current average */
   for(i=0;i<multicomp_freqs[bank_active];i++){
-    oav+=rint(bc[bank_active].static_o[i]);
-    uav+=rint(bc[bank_active].static_u[i]);
+    oav+=rint(multi_master_set.bc[bank_active].static_o[i]);
+    uav+=rint(multi_master_set.bc[bank_active].static_u[i]);
   }
   oav=rint(oav/multicomp_freqs[bank_active]);
   uav=rint(uav/multicomp_freqs[bank_active]);
@@ -201,7 +196,7 @@ static void average_change(GtkWidget *w,gpointer in){
       /* update u average (might have pushed it) */
       uav=0;
       for(i=0;i<multicomp_freqs[bank_active];i++)
-	uav+=rint(bc[bank_active].static_u[i]);
+	uav+=rint(multi_master_set.bc[bank_active].static_u[i]);
       uav=rint(uav/multicomp_freqs[bank_active]);
       multibar_thumb_set(MULTIBAR(bars[multicomp_freqs_max].slider),uav,0);
     }else{
@@ -213,7 +208,7 @@ static void average_change(GtkWidget *w,gpointer in){
       /* update o average (might have pushed it) */
       oav=0;
       for(i=0;i<multicomp_freqs[bank_active];i++)
-	oav+=rint(bc[bank_active].static_o[i]);
+	oav+=rint(multi_master_set.bc[bank_active].static_o[i]);
       oav=rint(oav/multicomp_freqs[bank_active]);
       multibar_thumb_set(MULTIBAR(bars[multicomp_freqs_max].slider),oav,1);
     }
@@ -231,12 +226,12 @@ static void slider_change(GtkWidget *w,gpointer in){
   u=multibar_get_value(MULTIBAR(b->slider),0);
   sprintf(buffer,"%+4ddB",u);
   readout_set(READOUT(b->readoutu),buffer);
-  bc[bank_active].static_u[b->number]=u;
+  multi_master_set.bc[bank_active].static_u[b->number]=u;
   
   o=multibar_get_value(MULTIBAR(b->slider),1);
   sprintf(buffer,"%+4ddB",o);
   readout_set(READOUT(b->readouto),buffer);
-  bc[bank_active].static_o[b->number]=o;
+  multi_master_set.bc[bank_active].static_o[b->number]=o;
 
   if(inactive_updatep){
     /* keep the inactive banks also tracking settings */
@@ -244,160 +239,160 @@ static void slider_change(GtkWidget *w,gpointer in){
     switch(bank_active){
     case 0:
       if(b->number==0){
-	bc[2].static_o[0]+=o-bc[2].static_o[1];
-	bc[2].static_u[0]+=u-bc[2].static_u[1];
+	multi_master_set.bc[2].static_o[0]+=o-multi_master_set.bc[2].static_o[1];
+	multi_master_set.bc[2].static_u[0]+=u-multi_master_set.bc[2].static_u[1];
       }
       
       /* convolutions for roundoff behavior */
       if(b->number>0){
-	adj=(bc[1].static_o[b->number*2-1]*2 -
-	     bc[1].static_o[b->number*2-2]-bc[1].static_o[b->number*2])/2;
-	bc[1].static_o[b->number*2-1]=
-	    (bc[1].static_o[b->number*2-2]+o)/2+adj;
+	adj=(multi_master_set.bc[1].static_o[b->number*2-1]*2 -
+	     multi_master_set.bc[1].static_o[b->number*2-2]-multi_master_set.bc[1].static_o[b->number*2])/2;
+	multi_master_set.bc[1].static_o[b->number*2-1]=
+	    (multi_master_set.bc[1].static_o[b->number*2-2]+o)/2+adj;
 	
-	adj=(bc[1].static_u[b->number*2-1]*2 -
-	     bc[1].static_u[b->number*2-2]-bc[1].static_u[b->number*2])/2;
-	bc[1].static_u[b->number*2-1]=
-	  (bc[1].static_u[b->number*2-2]+u)/2+adj;
+	adj=(multi_master_set.bc[1].static_u[b->number*2-1]*2 -
+	     multi_master_set.bc[1].static_u[b->number*2-2]-multi_master_set.bc[1].static_u[b->number*2])/2;
+	multi_master_set.bc[1].static_u[b->number*2-1]=
+	  (multi_master_set.bc[1].static_u[b->number*2-2]+u)/2+adj;
 	
-	adj=(bc[2].static_o[b->number*3-1]*3 -
-	     bc[2].static_o[b->number*3-2] - 
-	     bc[2].static_o[b->number*3-2] - 
-	     bc[2].static_o[b->number*3+1])/3;
-	bc[2].static_o[b->number*3-1]=
-	  (bc[2].static_o[b->number*3-2]+
-	   bc[2].static_o[b->number*3-2]+
+	adj=(multi_master_set.bc[2].static_o[b->number*3-1]*3 -
+	     multi_master_set.bc[2].static_o[b->number*3-2] - 
+	     multi_master_set.bc[2].static_o[b->number*3-2] - 
+	     multi_master_set.bc[2].static_o[b->number*3+1])/3;
+	multi_master_set.bc[2].static_o[b->number*3-1]=
+	  (multi_master_set.bc[2].static_o[b->number*3-2]+
+	   multi_master_set.bc[2].static_o[b->number*3-2]+
 	   o)/3+adj;
 	
-	adj=(bc[2].static_o[b->number*3]*3 -
-	     bc[2].static_o[b->number*3-2] - 
-	     bc[2].static_o[b->number*3+1] - 
-	     bc[2].static_o[b->number*3+1])/3;
-	bc[2].static_o[b->number*3]=
-	  (bc[2].static_o[b->number*3-2]+o+o)/3+adj;
+	adj=(multi_master_set.bc[2].static_o[b->number*3]*3 -
+	     multi_master_set.bc[2].static_o[b->number*3-2] - 
+	     multi_master_set.bc[2].static_o[b->number*3+1] - 
+	     multi_master_set.bc[2].static_o[b->number*3+1])/3;
+	multi_master_set.bc[2].static_o[b->number*3]=
+	  (multi_master_set.bc[2].static_o[b->number*3-2]+o+o)/3+adj;
 	
-	adj=(bc[2].static_u[b->number*3-1]*3 -
-	     bc[2].static_u[b->number*3-2] - 
-	     bc[2].static_u[b->number*3-2] - 
-	     bc[2].static_u[b->number*3+1])/3;
-	bc[2].static_u[b->number*3-1]=
-	  (bc[2].static_u[b->number*3-2]+
-	   bc[2].static_u[b->number*3-2]+
+	adj=(multi_master_set.bc[2].static_u[b->number*3-1]*3 -
+	     multi_master_set.bc[2].static_u[b->number*3-2] - 
+	     multi_master_set.bc[2].static_u[b->number*3-2] - 
+	     multi_master_set.bc[2].static_u[b->number*3+1])/3;
+	multi_master_set.bc[2].static_u[b->number*3-1]=
+	  (multi_master_set.bc[2].static_u[b->number*3-2]+
+	   multi_master_set.bc[2].static_u[b->number*3-2]+
 	   u)/3+adj;
 	
-	adj=(bc[2].static_u[b->number*3]*3 -
-	     bc[2].static_u[b->number*3-2] - 
-	     bc[2].static_u[b->number*3+1] - 
-	     bc[2].static_u[b->number*3+1])/3;
-	bc[2].static_u[b->number*3]=
-	  (bc[2].static_u[b->number*3-2]+u+u)/3+adj;
+	adj=(multi_master_set.bc[2].static_u[b->number*3]*3 -
+	     multi_master_set.bc[2].static_u[b->number*3-2] - 
+	     multi_master_set.bc[2].static_u[b->number*3+1] - 
+	     multi_master_set.bc[2].static_u[b->number*3+1])/3;
+	multi_master_set.bc[2].static_u[b->number*3]=
+	  (multi_master_set.bc[2].static_u[b->number*3-2]+u+u)/3+adj;
 	
       }
       
       if(b->number<9){
-	adj=(bc[1].static_o[b->number*2+1]*2-
-	     bc[1].static_o[b->number*2+2]-bc[1].static_o[b->number*2])/2;
-	bc[1].static_o[b->number*2+1]=
-	  (bc[1].static_o[b->number*2+2]+o)/2+adj;
+	adj=(multi_master_set.bc[1].static_o[b->number*2+1]*2-
+	     multi_master_set.bc[1].static_o[b->number*2+2]-multi_master_set.bc[1].static_o[b->number*2])/2;
+	multi_master_set.bc[1].static_o[b->number*2+1]=
+	  (multi_master_set.bc[1].static_o[b->number*2+2]+o)/2+adj;
 	
-	adj=(bc[1].static_u[b->number*2+1]*2-
-	     bc[1].static_u[b->number*2+2]-bc[1].static_u[b->number*2])/2;
-	bc[1].static_u[b->number*2+1]=
-	  (bc[1].static_u[b->number*2+2]+u)/2+adj;
+	adj=(multi_master_set.bc[1].static_u[b->number*2+1]*2-
+	     multi_master_set.bc[1].static_u[b->number*2+2]-multi_master_set.bc[1].static_u[b->number*2])/2;
+	multi_master_set.bc[1].static_u[b->number*2+1]=
+	  (multi_master_set.bc[1].static_u[b->number*2+2]+u)/2+adj;
 	
-	adj=(bc[2].static_o[b->number*3+3]*3 -
-	     bc[2].static_o[b->number*3+4] - 
-	     bc[2].static_o[b->number*3+4] - 
-	     bc[2].static_o[b->number*3+1])/3;
-	bc[2].static_o[b->number*3+3]=
-	  (bc[2].static_o[b->number*3+4]+
-	   bc[2].static_o[b->number*3+4]+
+	adj=(multi_master_set.bc[2].static_o[b->number*3+3]*3 -
+	     multi_master_set.bc[2].static_o[b->number*3+4] - 
+	     multi_master_set.bc[2].static_o[b->number*3+4] - 
+	     multi_master_set.bc[2].static_o[b->number*3+1])/3;
+	multi_master_set.bc[2].static_o[b->number*3+3]=
+	  (multi_master_set.bc[2].static_o[b->number*3+4]+
+	   multi_master_set.bc[2].static_o[b->number*3+4]+
 	   o)/3+adj;
 	
-	adj=(bc[2].static_o[b->number*3+2]*3 -
-	     bc[2].static_o[b->number*3+4] - 
-	     bc[2].static_o[b->number*3+1] - 
-	     bc[2].static_o[b->number*3+1])/3;
-	bc[2].static_o[b->number*3+2]=
-	  (bc[2].static_o[b->number*3+4]+o+o)/3+adj;
+	adj=(multi_master_set.bc[2].static_o[b->number*3+2]*3 -
+	     multi_master_set.bc[2].static_o[b->number*3+4] - 
+	     multi_master_set.bc[2].static_o[b->number*3+1] - 
+	     multi_master_set.bc[2].static_o[b->number*3+1])/3;
+	multi_master_set.bc[2].static_o[b->number*3+2]=
+	  (multi_master_set.bc[2].static_o[b->number*3+4]+o+o)/3+adj;
 	
-	adj=(bc[2].static_u[b->number*3+3]*3 -
-	     bc[2].static_u[b->number*3+4] - 
-	     bc[2].static_u[b->number*3+4] - 
-	     bc[2].static_u[b->number*3+1])/3;
-	bc[2].static_u[b->number*3+3]=
-	  (bc[2].static_u[b->number*3+4]+
-	   bc[2].static_u[b->number*3+4]+
+	adj=(multi_master_set.bc[2].static_u[b->number*3+3]*3 -
+	     multi_master_set.bc[2].static_u[b->number*3+4] - 
+	     multi_master_set.bc[2].static_u[b->number*3+4] - 
+	     multi_master_set.bc[2].static_u[b->number*3+1])/3;
+	multi_master_set.bc[2].static_u[b->number*3+3]=
+	  (multi_master_set.bc[2].static_u[b->number*3+4]+
+	   multi_master_set.bc[2].static_u[b->number*3+4]+
 	   u)/3+adj;
 	
-	adj=(bc[2].static_u[b->number*3+2]*3 -
-	     bc[2].static_u[b->number*3+4] - 
-	     bc[2].static_u[b->number*3+1] - 
-	     bc[2].static_u[b->number*3+1])/3;
-	bc[2].static_u[b->number*3+2]=
-	  (bc[2].static_u[b->number*3+4]+u+u)/3+adj;
+	adj=(multi_master_set.bc[2].static_u[b->number*3+2]*3 -
+	     multi_master_set.bc[2].static_u[b->number*3+4] - 
+	     multi_master_set.bc[2].static_u[b->number*3+1] - 
+	     multi_master_set.bc[2].static_u[b->number*3+1])/3;
+	multi_master_set.bc[2].static_u[b->number*3+2]=
+	  (multi_master_set.bc[2].static_u[b->number*3+4]+u+u)/3+adj;
 	
       }
       
       if(b->number==9){
-	bc[1].static_o[19]+=o-bc[1].static_o[18];
-	bc[1].static_u[19]+=u-bc[1].static_u[18];
-	bc[2].static_o[29]+=o-bc[2].static_o[28];
-	bc[2].static_u[29]+=u-bc[2].static_u[28];
+	multi_master_set.bc[1].static_o[19]+=o-multi_master_set.bc[1].static_o[18];
+	multi_master_set.bc[1].static_u[19]+=u-multi_master_set.bc[1].static_u[18];
+	multi_master_set.bc[2].static_o[29]+=o-multi_master_set.bc[2].static_o[28];
+	multi_master_set.bc[2].static_u[29]+=u-multi_master_set.bc[2].static_u[28];
       }
 
-      bc[1].static_o[b->number*2]=o;
-      bc[1].static_u[b->number*2]=u;
-      bc[2].static_o[b->number*3+1]=o;
-      bc[2].static_u[b->number*3+1]=u;
+      multi_master_set.bc[1].static_o[b->number*2]=o;
+      multi_master_set.bc[1].static_u[b->number*2]=u;
+      multi_master_set.bc[2].static_o[b->number*3+1]=o;
+      multi_master_set.bc[2].static_u[b->number*3+1]=u;
 
       break;
     case 1:
       if((b->number&1)==0){
-	bc[0].static_o[b->number>>1]=o;
-	bc[0].static_u[b->number>>1]=u;
-	bc[2].static_o[b->number/2*3+1]=o;
-	bc[2].static_u[b->number/2*3+1]=u;
+	multi_master_set.bc[0].static_o[b->number>>1]=o;
+	multi_master_set.bc[0].static_u[b->number>>1]=u;
+	multi_master_set.bc[2].static_o[b->number/2*3+1]=o;
+	multi_master_set.bc[2].static_u[b->number/2*3+1]=u;
       }else{
 	if(b->number<19){
-	  int val=(bc[2].static_o[b->number/2*3+2]+
-		     bc[2].static_o[b->number/2*3+3])/2;
-	  bc[2].static_o[b->number/2*3+2]+=(o-val);
-	  bc[2].static_o[b->number/2*3+3]+=(o-val);
+	  int val=(multi_master_set.bc[2].static_o[b->number/2*3+2]+
+		     multi_master_set.bc[2].static_o[b->number/2*3+3])/2;
+	  multi_master_set.bc[2].static_o[b->number/2*3+2]+=(o-val);
+	  multi_master_set.bc[2].static_o[b->number/2*3+3]+=(o-val);
 	  
-	  val=(bc[2].static_u[b->number/2*3+2]+
-	       bc[2].static_u[b->number/2*3+3])/2;
-	  bc[2].static_u[b->number/2*3+2]+=(u-val);
-	  bc[2].static_u[b->number/2*3+3]+=(u-val);
+	  val=(multi_master_set.bc[2].static_u[b->number/2*3+2]+
+	       multi_master_set.bc[2].static_u[b->number/2*3+3])/2;
+	  multi_master_set.bc[2].static_u[b->number/2*3+2]+=(u-val);
+	  multi_master_set.bc[2].static_u[b->number/2*3+3]+=(u-val);
 	  
 	}else{
-	  bc[2].static_o[b->number/2*3+2]=o;
-	  bc[2].static_u[b->number/2*3+2]=u;
+	  multi_master_set.bc[2].static_o[b->number/2*3+2]=o;
+	  multi_master_set.bc[2].static_u[b->number/2*3+2]=u;
 	}
       }
       if(b->number==0){
-	bc[2].static_o[0]+=o-bc[2].static_o[1];
-	bc[2].static_u[0]+=u-bc[2].static_u[1];
+	multi_master_set.bc[2].static_o[0]+=o-multi_master_set.bc[2].static_o[1];
+	multi_master_set.bc[2].static_u[0]+=u-multi_master_set.bc[2].static_u[1];
       }
 
       break;
     case 2:
       if((b->number%3)==1){
-	bc[0].static_o[b->number/3]=o;
-	bc[0].static_u[b->number/3]=u;
-	bc[1].static_o[b->number/3*2]=o;
-	bc[1].static_u[b->number/3*2]=u;
+	multi_master_set.bc[0].static_o[b->number/3]=o;
+	multi_master_set.bc[0].static_u[b->number/3]=u;
+	multi_master_set.bc[1].static_o[b->number/3*2]=o;
+	multi_master_set.bc[1].static_u[b->number/3*2]=u;
       }else if(b->number>1){
 	if(b->number<29){
-	  bc[1].static_o[(b->number-1)/3*2+1]=
-	    (bc[2].static_o[(b->number-1)/3*3+2]+
-	     bc[2].static_o[(b->number-1)/3*3+3])/2;
-	  bc[1].static_u[(b->number-1)/3*2+1]=
-	    (bc[2].static_u[(b->number-1)/3*3+2]+
-	     bc[2].static_u[(b->number-1)/3*3+3])/2;
+	  multi_master_set.bc[1].static_o[(b->number-1)/3*2+1]=
+	    (multi_master_set.bc[2].static_o[(b->number-1)/3*3+2]+
+	     multi_master_set.bc[2].static_o[(b->number-1)/3*3+3])/2;
+	  multi_master_set.bc[1].static_u[(b->number-1)/3*2+1]=
+	    (multi_master_set.bc[2].static_u[(b->number-1)/3*3+2]+
+	     multi_master_set.bc[2].static_u[(b->number-1)/3*3+3])/2;
 	}else{
-	  bc[1].static_o[(b->number-1)/3*2+1]=o;
-	  bc[1].static_u[(b->number-1)/3*2+1]=u;
+	  multi_master_set.bc[1].static_o[(b->number-1)/3*2+1]=o;
+	  multi_master_set.bc[1].static_u[(b->number-1)/3*2+1]=u;
 	}
       }
       break;
@@ -411,8 +406,8 @@ static void slider_change(GtkWidget *w,gpointer in){
     
     /* compute the current average */
     for(i=0;i<multicomp_freqs[bank_active];i++){
-      oav+=rint(bc[bank_active].static_o[i]);
-      uav+=rint(bc[bank_active].static_u[i]);
+      oav+=rint(multi_master_set.bc[bank_active].static_o[i]);
+      uav+=rint(multi_master_set.bc[bank_active].static_u[i]);
     }
     oav=rint(oav/multicomp_freqs[bank_active]);
     uav=rint(uav/multicomp_freqs[bank_active]);
@@ -443,8 +438,8 @@ static void static_octave(GtkWidget *w,gpointer in){
 	  inactive_updatep=0;
 	  
 	  {
-	    float o=bc[bank_active].static_o[i];
-	    float u=bc[bank_active].static_u[i];
+	    float o=multi_master_set.bc[bank_active].static_o[i];
+	    float u=multi_master_set.bc[bank_active].static_u[i];
 
 	    multibar_thumb_set(MULTIBAR(bars[i].slider),u,0);
 	    multibar_thumb_set(MULTIBAR(bars[i].slider),o,1);
@@ -460,7 +455,7 @@ static void static_octave(GtkWidget *w,gpointer in){
 	}
       }
 
-      c.active_bank=bank_active;
+      multi_master_set.active_bank=bank_active;
       
     }
   }
@@ -468,27 +463,27 @@ static void static_octave(GtkWidget *w,gpointer in){
 
 static void over_mode(GtkButton *b,gpointer in){
   int mode=(int)in;
-  c.over_mode=mode;
+  multi_master_set.over_mode=mode;
 }
 
 static void under_mode(GtkButton *b,gpointer in){
   int mode=(int)in;
-  c.under_mode=mode;
+  multi_master_set.under_mode=mode;
 }
 
 static void base_mode(GtkButton *b,gpointer in){
   int mode=(int)in;
-  c.base_mode=mode;
+  multi_master_set.base_mode=mode;
 }
 
 static void under_knee(GtkToggleButton *b,gpointer in){
   int mode=gtk_toggle_button_get_active(b);
-  c.under_softknee=mode;
+  multi_master_set.under_softknee=mode;
 }
 
 static void over_knee(GtkToggleButton *b,gpointer in){
   int mode=gtk_toggle_button_get_active(b);
-  c.over_softknee=mode;
+  multi_master_set.over_softknee=mode;
 }
 
 void compandpanel_create(postfish_mainpanel *mp,
@@ -512,8 +507,8 @@ void compandpanel_create(postfish_mainpanel *mp,
   char *shortcut[]={" m "};
 
   subpanel_generic *panel=subpanel_create(mp,windowbutton,&activebutton,
-					  &compand_active,
-					  &compand_visible,
+					  &multi_master_set.panel_active,
+					  &multi_master_set.panel_visible,
 					  "_Multiband Compand",shortcut,
 					  0,1);
   
@@ -925,10 +920,10 @@ void compandpanel_feedback(int displayit){
     }
   }
 
-  if(pull_multicompand_feedback(peakfeed,rmsfeed,&bands)==1)
+  if(pull_multicompand_feedback_master(peakfeed,rmsfeed,&bands)==1)
     for(i=0;i<bands;i++)
       multibar_set(MULTIBAR(bars[i].slider),rmsfeed[i],peakfeed[i],
-		   input_ch,(displayit && compand_visible));
+		   input_ch,(displayit && multi_master_set.panel_visible));
 }
 
 void compandpanel_reset(void){
