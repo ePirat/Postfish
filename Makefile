@@ -36,7 +36,8 @@ OBJ = main.o mainpanel.o multibar.o readout.o input.o output.o clippanel.o \
 	bessel.o suppresspanel.o suppress.o singlecomp.o singlepanel.o \
 	limit.o limitpanel.o mute.o mixpanel.o mix.o reverb.o reverbpanel.o \
 	outpanel.o config.o
-GCF = -DETCDIR=\\\"$(ETCDIR)\\\" `pkg-config --cflags gtk+-2.0` -DG_DISABLE_DEPRECATED -DGDK_DISABLE_DEPRECATED -DGTK_DISABLE_DEPRECATED -DGDK_PIXBUF_DISABLE_DEPRECATED
+#GCF = -DETCDIR=\\\"$(ETCDIR)\\\" `pkg-config --cflags gtk+-2.0` -DG_DISABLE_DEPRECATED -DGDK_DISABLE_DEPRECATED -DGTK_DISABLE_DEPRECATED -DGDK_PIXBUF_DISABLE_DEPRECATED
+GCF = -DETCDIR=\\\"$(ETCDIR)\\\" `pkg-config --cflags gtk+-2.0` 
 
 all:	
 	$(MAKE) target CFLAGS="-O3 -ffast-math -fomit-frame-pointer $(GCF) $(ADD_DEF)"
