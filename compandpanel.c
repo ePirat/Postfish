@@ -90,6 +90,7 @@ typedef struct multi_panel_state{
 } multi_panel_state;
 
 multi_panel_state *master_panel;
+multi_panel_state **channel_panel;
 
 static void compand_change(GtkWidget *w,gpointer in){
   callback_arg_rv *ca=(callback_arg_rv *)in;
@@ -490,9 +491,9 @@ static void mode_knee(GtkToggleButton *b,gpointer in){
   *var=mode;
 }
 
-static void compandpanel_create(postfish_mainpanel *mp,
-				subpanel_generic *panel,
-				multicompand_settings *ms){
+static multi_panel_state *compandpanel_create(postfish_mainpanel *mp,
+					      subpanel_generic *panel,
+					      multicompand_settings *ms){
   int i;
   char *labels[14]={"130","120","110","100","90","80","70",
 		    "60","50","40","30","20","10","0"};
@@ -508,7 +509,7 @@ static void compandpanel_create(postfish_mainpanel *mp,
   float per_levels[9]={0,12.5,25,37.5,50,62.5,75,87.5,100};
   char  *per_labels[8]={"","25%","","50%","","75%","","100%"};
 
-  multi_panel_state *ps=master_panel=calloc(1,sizeof(multi_panel_state));
+  multi_panel_state *ps=calloc(1,sizeof(multi_panel_state));
   ps->inactive_updatep=1;
   ps->bank_active=2;
   ps->ms=ms;
@@ -912,8 +913,7 @@ static void compandpanel_create(postfish_mainpanel *mp,
     
     ps->bars[multicomp_freqs_max].slider=multibar_slider_new(14,labels,levels,2);
 
-    multibar_callback(MULTIBAR(ps->bars[multicomp_freqs_max].slider),average_change,
-		      master_panel);
+    multibar_callback(MULTIBAR(ps->bars[multicomp_freqs_max].slider),average_change,ps);
 
     multibar_thumb_set(MULTIBAR(ps->bars[multicomp_freqs_max].slider),-140.,0);
     multibar_thumb_set(MULTIBAR(ps->bars[multicomp_freqs_max].slider),0.,1);
@@ -932,6 +932,7 @@ static void compandpanel_create(postfish_mainpanel *mp,
   /* Now unmap the sliders we don't want */
   static_octave(NULL,&ps->octave_full);
 
+  return ps;
 }
 
 void compandpanel_create_master(postfish_mainpanel *mp,
@@ -944,13 +945,15 @@ void compandpanel_create_master(postfish_mainpanel *mp,
 					  "_Multiband Compand (master)",shortcut,
 					  0,1);
 
-  compandpanel_create(mp,panel,&multi_master_set);
+  master_panel=compandpanel_create(mp,panel,&multi_master_set);
 }
 
 void compandpanel_create_channel(postfish_mainpanel *mp,
 				 GtkWidget **windowbutton,
 				 GtkWidget **activebutton){
   int i;
+  
+  channel_panel=calloc(input_ch,sizeof(*channel_panel));
 
   /* a panel for each channel */
   for(i=0;i<input_ch;i++){
@@ -964,7 +967,7 @@ void compandpanel_create_channel(postfish_mainpanel *mp,
 			  buffer,NULL,
 			  i,1);
     
-    compandpanel_create(mp,panel,multi_channel_set+1);
+    channel_panel[i]=compandpanel_create(mp,panel,multi_channel_set+i);
   }
 }
 
@@ -973,7 +976,7 @@ static float **peakfeed=0;
 static float **rmsfeed=0;
 
 void compandpanel_feedback(int displayit){
-  int i,bands;
+  int i,j,bands;
   if(!peakfeed){
     peakfeed=malloc(sizeof(*peakfeed)*multicomp_freqs_max);
     rmsfeed=malloc(sizeof(*rmsfeed)*multicomp_freqs_max);
@@ -988,12 +991,34 @@ void compandpanel_feedback(int displayit){
     for(i=0;i<bands;i++)
       multibar_set(MULTIBAR(master_panel->bars[i].slider),rmsfeed[i],peakfeed[i],
 		   input_ch,(displayit && multi_master_set.panel_visible));
+
+  /* channel panels are a bit different; we want each in its native color */
+  if(pull_multicompand_feedback_channel(peakfeed,rmsfeed,&bands)==1){
+    for(j=0;j<input_ch;j++){
+      for(i=0;i<bands;i++){
+	float rms[input_ch];
+	float peak[input_ch];
+	
+	memset(rms,0,sizeof(rms));
+	memset(peak,0,sizeof(peak));
+	rms[j]=rmsfeed[i][j];
+	peak[j]=peakfeed[i][j];
+	
+	multibar_set(MULTIBAR(channel_panel[j]->bars[i].slider),rms,peak,
+		     input_ch,(displayit && multi_channel_set[j].panel_visible));
+      }
+    }
+  }
 }
 
 void compandpanel_reset(void){
-  int i;
+  int i,j;
   for(i=0;i<multicomp_freqs_max;i++)
     multibar_reset(MULTIBAR(master_panel->bars[i].slider));
+
+  for(i=0;i<multicomp_freqs_max;i++)
+    for(j=0;j<input_ch;j++)
+      multibar_reset(MULTIBAR(channel_panel[j]->bars[i].slider));
 }
 
 

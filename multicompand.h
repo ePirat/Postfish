@@ -84,9 +84,10 @@ typedef struct {
 extern void multicompand_reset();
 extern int multicompand_load(void);
 
-extern time_linkage *multicompand_read_channels(time_linkage *in);
+extern time_linkage *multicompand_read_channel(time_linkage *in);
 extern time_linkage *multicompand_read_master(time_linkage *in);
 
-extern int pull_multicompand_feedback_channels(float **peak,float **rms,int *bands);
+extern int pull_multicompand_feedback_channel(float **peak,float **rms,int *bands);
 extern int pull_multicompand_feedback_master(float **peak,float **rms,int *bands);
+
 

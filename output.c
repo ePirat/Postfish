@@ -238,10 +238,8 @@ void *playback_thread(void *dummy){
 
     link=declip_read(link);
     result|=link->samples;
-
-
-
-
+    link=multicompand_read_channel(link);
+    result|=link->samples;
 
     link=multicompand_read_master(link);
     result|=link->samples;
