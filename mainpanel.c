@@ -955,7 +955,7 @@ void mainpanel_create(postfish_mainpanel *panel,char **chlabels){
   mainpanel_chentry(panel,channeltable,"Mute ",0,0,0,mutedummy_create);
   mainpanel_chentry(panel,channeltable,"_Declip ",1,1,0,clippanel_create);
   mainpanel_chentry(panel,channeltable,"_Multicomp ",2,0,1,compandpanel_create_channel);
-  mainpanel_chentry(panel,channeltable,"_Onecomp ",3,0,1,0);
+  mainpanel_chentry(panel,channeltable,"_Singlecomp ",3,0,1,0);
   mainpanel_chentry(panel,channeltable,"De_verb ",4,1,0,suppresspanel_create_channel);
   mainpanel_chentry(panel,channeltable,"_Reverb ",5,1,0,0);
   mainpanel_chentry(panel,channeltable,"_EQ ",6,0,1,0);
