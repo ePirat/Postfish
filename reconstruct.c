@@ -122,7 +122,5 @@ void reconstruct(drft_lookup *fft,
 
   }
 
-  fprintf(stderr,"converged in %d with res=%f\n",i,sqrt(res_new)/sqrt(res_0));
-
 }
 

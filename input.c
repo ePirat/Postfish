@@ -517,9 +517,9 @@ time_linkage *input_read(void){
 	break;
       }
       if(signp)
-	dval=out.data[j][i]=val/2147483647.;
+	dval=out.data[j][i]=val/2147483648.;
       else
-	dval=out.data[j][i]=(val^0x80000000UL)/2147483647.;
+	dval=out.data[j][i]=(val^0x80000000UL)/2147483648.;
 
       if(fabs(dval)>peak[j])peak[j]=fabs(dval);
       rms[j]+= dval*dval;

@@ -862,7 +862,7 @@ static gboolean feedback_process(postfish_mainpanel *panel){
      available and not dirtied by a seek */
   if(!playback_seeking){
     off_t   time_cursor;
-    int     n=input_ch+2;
+    int     n=(input_ch>1?input_ch+2:input_ch);
     double *rms=alloca(sizeof(*rms)*(input_ch+2));
     double *peak=alloca(sizeof(*peak)*(input_ch+2));
 

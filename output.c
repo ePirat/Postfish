@@ -124,9 +124,9 @@ static int isachr(FILE *f){
   return 0;
 }
 
+static int outbytes;
 static FILE *playback_startup(int outfileno, int ch, int r, int *bep){
   FILE *playback_fd=NULL;
-  int format=AFMT_S16_NE;
   int rate=r,channels=ch,ret;
 
   if(outfileno==-1){
@@ -144,6 +144,8 @@ static FILE *playback_startup(int outfileno, int ch, int r, int *bep){
   if(isachr(playback_fd)){
     int fragment=0x0004000d;
     int fd=fileno(playback_fd);
+    int format=AFMT_S16_NE;
+    outbytes=2;
 
     /* try to lower the DSP delay; this ioctl may fail gracefully */
     ret=ioctl(fd,SNDCTL_DSP_SETFRAGMENT,&fragment);
@@ -167,7 +169,8 @@ static FILE *playback_startup(int outfileno, int ch, int r, int *bep){
       exit(1);
     }
   }else{
-    WriteWav(playback_fd,ch,r,16,-1);
+    outbytes=3;
+    WriteWav(playback_fd,ch,r,24,-1);
     *bep=0;
   }
 
@@ -176,8 +179,8 @@ static FILE *playback_startup(int outfileno, int ch, int r, int *bep){
 
 /* playback must be halted to change blocksize. */
 void *playback_thread(void *dummy){
-  int audiobufsize=8192,i,j,k;
-  unsigned char *audiobuf=malloc(audiobufsize);
+  int audiobufsize=0,i,j,k;
+  unsigned char *audiobuf=NULL;
   int bigendianp=(AFMT_S16_NE==AFMT_S16_BE?1:0);
   FILE *playback_fd=NULL;
   int setupp=0;
@@ -241,13 +244,16 @@ void *playback_thread(void *dummy){
 	setupp=1;
       }
       
-      if(audiobufsize<link->channels*link->samples*2){
-	audiobufsize=link->channels*link->samples*2;
-	audiobuf=realloc(audiobuf,sizeof(*audiobuf)*audiobufsize);
+      if(audiobufsize<link->channels*link->samples*outbytes){
+	audiobufsize=link->channels*link->samples*outbytes;
+	if(audiobuf)
+	  audiobuf=realloc(audiobuf,sizeof(*audiobuf)*audiobufsize);
+	else
+	  audiobuf=malloc(sizeof(*audiobuf)*audiobufsize);
       }
       
       /* final limiting and conversion */
-      
+
       for(k=0,i=0;i<link->samples;i++){
 	double mean=0.;
 	double div=0.;
@@ -255,17 +261,41 @@ void *playback_thread(void *dummy){
 	
 	for(j=0;j<link->channels;j++){
 	  double dval=link->data[j][i];
-	  int val=rint(dval*32767.);
-	  if(val>32767)val=32767;
-	  if(val<-32768)val=-32768;
-	  if(bigendianp){
-	    audiobuf[k++]=val>>8;
-	    audiobuf[k++]=val;
-	  }else{
-	    audiobuf[k++]=val;
-	    audiobuf[k++]=val>>8;
-	  }
-	  
+
+	  switch(outbytes){
+	  case 3:
+	    {
+	      int32_t val=rint(dval*8388608.);
+	      if(val>8388607)val=8388607;
+	      if(val<-8388608)val=-8388608;
+	      
+	      if(bigendianp){
+		audiobuf[k++]=val>>16;
+		audiobuf[k++]=val>>8;
+		audiobuf[k++]=val;
+	      }else{
+		audiobuf[k++]=val;
+		audiobuf[k++]=val>>8;
+		audiobuf[k++]=val>>16;
+	      }
+	    }
+	    break;
+	  case 2:
+	    {
+	      int32_t val=rint(dval*32768.);
+	      if(val>32767)val=32767;
+	      if(val<-32768)val=-32768;
+	      if(bigendianp){
+		audiobuf[k++]=val>>8;
+		audiobuf[k++]=val;
+	      }else{
+		audiobuf[k++]=val;
+		audiobuf[k++]=val>>8;
+	      }
+	    }
+	    break;
+	  }	  
+
 	  if(fabs(dval)>peak[j])peak[j]=fabs(dval);
 	  rms[j]+= dval*dval;
 	  mean+=dval;
@@ -292,7 +322,7 @@ void *playback_thread(void *dummy){
 	rms[j]=sqrt(rms[j]);
       }
       
-      count+=fwrite(audiobuf,1,link->channels*link->samples*2,playback_fd);
+      count+=fwrite(audiobuf,1,link->channels*link->samples*outbytes,playback_fd);
       
       /* inform Lord Vader his shuttle is ready */
       push_output_feedback(peak,rms);
@@ -307,7 +337,7 @@ void *playback_thread(void *dummy){
       ioctl(fd,SNDCTL_DSP_RESET);
     }else{
       if(ch>-1)
-	WriteWav(playback_fd,ch,rate,16,count);
+	WriteWav(playback_fd,ch,rate,24,count);
     } 
     fclose(playback_fd);
   }
