@@ -15,9 +15,14 @@ style "panel-label" {
 	font_name = "sans bold 11"
 }
 
+style "panel-text" {
+	font_name = "sans 9"
+}
+
 style "frame-label" {
 	font_name = "sans bold 10"
 }
+
 style "frame-text" {
 	font_name = "sans 9"
 }
@@ -67,7 +72,7 @@ style "readout" {
 	bg[NORMAL]="#ffffff" 
 	bg[ACTIVE]="#ffffff" 
 
-	font_name = "Nimbus Mono L, Courier New, Monospace 8"	
+	font_name = "Nimbus Mono L, Courier, Monospace 9"	
 }
 
 style "darkpanel" {
@@ -113,6 +118,8 @@ style "side" {
 	text[PRELIGHT] = "#00B200"
 	bg[NORMAL]="#80a0ff" 
 }
+
+widget "*.GtkLabel" style "panel-text"
 
 widget "*.color0" style "left"
 widget "*.color1" style "right"
