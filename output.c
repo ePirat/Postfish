@@ -474,12 +474,13 @@ static int OSS_playback_startup(FILE *f, int rate, int *ch, int *endian, int *bi
     /* try to lower the DSP delay; this ioctl may fail gracefully */
     {
       
-      long bytesperframe=input_size*local_ch*2;
+      long bytesperframe=(local_bits+7)/8*local_ch*input_size;
       int fraglog=ilog(bytesperframe);
-      int fragment=0x00040000|fraglog;
+      int fragment=0x00040000|fraglog,fragcheck;
       
+      fragcheck=fragment;
       int ret=ioctl(fd,SNDCTL_DSP_SETFRAGMENT,&fragment);
-      if(ret){
+      if(ret || fragcheck!=fragment){
 	fprintf(stderr,"Could not set DSP fragment size; continuing.\n");
       }
     }
@@ -832,11 +833,11 @@ void *playback_thread(void *dummy){
     result|=link->samples;
     link=declip_read(link);
     result|=link->samples;
+    link=suppress_read_channel(link);
+    result|=link->samples;
     link=multicompand_read_channel(link);
     result|=link->samples;
     link=singlecomp_read_channel(link);
-    result|=link->samples;
-    link=suppress_read_channel(link);
     result|=link->samples;
     link=eq_read_channel(link);
     result|=link->samples;
@@ -915,11 +916,16 @@ void *playback_thread(void *dummy){
 	      fcntl(mfd,F_SETFL,0); /* unset non-blocking */
 	      monitor_fd=fdopen(dup(mfd),"wb");
 	      close(mfd);
+
 	      if(monitor_fd==NULL){
 		fprintf(stderr,"unable to fdopen audio monitor device %s for playback.\n",
 			monitor_list[monitor_devicenum].file);
 		outpanel_monitor_off();
 	      }else{
+		if(setvbuf(monitor_fd, NULL, _IONBF , 0)){
+		  fprintf(stderr,"Unable to remove block buffering on audio monitor; continuing\n");
+		}
+
 		if(output_startup(monitor_fd,monitor_list[monitor_devicenum].type,0,input_rate,
 				  &monitor_ch,&monitor_endian,&monitor_bits,&monitor_signp)){
 		  outpanel_monitor_off();

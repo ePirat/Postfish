@@ -182,7 +182,7 @@ widget "*.smallreadout" style "small-readout"
 widget "*.GtkEntry" style "readout"
 widget "*.GtkHScale" style "slider"
 widget "*.GtkMenu*" style "button-poppy"
-widget "*.GtkOptionMenu*" style "button-poppy"
+widget "*.GtkComboBox*" style "button-poppy"
 widget "*.GtkToggleButton*" style "button-poppy"
 widget "*.GtkButton*" style "button-poppy"
 widget "*.GtkCheckButton" style "check-poppy"
@@ -197,4 +197,5 @@ widget "*.Multibar*" style "multibar"
 widget "*.Multislide*" style "multislide"
 
 widget "*.clipbar*" style "clipbar"
+
 

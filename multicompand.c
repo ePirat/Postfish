@@ -465,6 +465,7 @@ static int multicompand_work_perchannel(multicompand_state *ms,
   subband_window *wP=ss->wP[channel];
   float adj[input_size];
   
+
   if(w==&sw[0]){
     bank=0;
   }else if(w==&sw[1]){
@@ -567,7 +568,7 @@ static int multicompand_work_perchannel(multicompand_state *ms,
 		   currset->base_ratio,
 		   (i>=w->freq_bands?0:adj));
       
-      if(ss->effect_activeC[channel]){
+      if(ss->effect_active1[channel]){
 	for(k=0;k<input_size;k++)
 	  x[k]*=fromdB_a(adj[k]);
       }
@@ -667,7 +668,7 @@ static void multicompand_work_channel(void *vs){
       ms->rms[i][j]=-150;
     }
   }
- 
+
   for(i=0;i<ms->ch;i++){
     int maxbands=find_maxbands(&ms->ss,i);
     if(maxbands>maxmaxbands)maxmaxbands=maxbands;
@@ -707,18 +708,18 @@ time_linkage *multicompand_read_master(time_linkage *in){
     float b_attackms=multi_master_set.base_attack*.1;
     float b_decayms=multi_master_set.base_decay*.1;
 
-    if(o_attackms!=master_state.over_attack[0].ms) 
-      filterbank_set(&master_state,o_attackms,master_state.over_attack,1);
-    if(o_decayms !=master_state.over_decay[0].ms)  
-      filterbank_set(&master_state,o_decayms,master_state.over_decay,0);
-    if(u_attackms!=master_state.under_attack[0].ms)
-      filterbank_set(&master_state,u_attackms,master_state.under_attack,1);
-    if(u_decayms !=master_state.under_decay[0].ms) 
-      filterbank_set(&master_state,u_decayms,master_state.under_decay,0);
-    if(b_attackms!=master_state.base_attack[0].ms) 
-      filterbank_set(&master_state,b_attackms,master_state.base_attack,1);
-    if(b_decayms !=master_state.base_decay[0].ms)  
-      filterbank_set(&master_state,b_decayms,master_state.base_decay,0);
+    if(o_attackms!=ms->over_attack[0].ms) 
+      filterbank_set(ms,o_attackms,ms->over_attack,1);
+    if(o_decayms !=ms->over_decay[0].ms)  
+      filterbank_set(ms,o_decayms,ms->over_decay,0);
+    if(u_attackms!=ms->under_attack[0].ms)
+      filterbank_set(ms,u_attackms,ms->under_attack,1);
+    if(u_decayms !=ms->under_decay[0].ms) 
+      filterbank_set(ms,u_decayms,ms->under_decay,0);
+    if(b_attackms!=ms->base_attack[0].ms) 
+      filterbank_set(ms,b_attackms,ms->base_attack,1);
+    if(b_decayms !=ms->base_decay[0].ms)  
+      filterbank_set(ms,b_decayms,ms->base_decay,0);
   }
 
   return subband_read(in, &master_state.ss, w, visible,active,
@@ -742,18 +743,18 @@ time_linkage *multicompand_read_channel(time_linkage *in){
     float b_attackms=multi_channel_set[i].base_attack*.1;
     float b_decayms=multi_channel_set[i].base_decay*.1;
 
-    if(o_attackms!=channel_state.over_attack[i].ms) 
-      filter_set(&master_state,o_attackms,channel_state.over_attack+i,1);
-    if(o_decayms !=channel_state.over_decay[i].ms)  
-      filter_set(&master_state,o_decayms,channel_state.over_decay+i,0);
-    if(u_attackms!=channel_state.under_attack[i].ms)
-      filter_set(&master_state,u_attackms,channel_state.under_attack+i,1);
-    if(u_decayms !=channel_state.under_decay[i].ms) 
-      filter_set(&master_state,u_decayms,channel_state.under_decay+i,0);
-    if(b_attackms!=channel_state.base_attack[i].ms) 
-      filter_set(&master_state,b_attackms,channel_state.base_attack+i,1);
-    if(b_decayms !=channel_state.base_decay[i].ms)  
-      filter_set(&master_state,b_decayms,channel_state.base_decay+i,0);
+    if(o_attackms!=ms->over_attack[i].ms) 
+      filter_set(ms,o_attackms,ms->over_attack+i,1);
+    if(o_decayms !=ms->over_decay[i].ms)  
+      filter_set(ms,o_decayms,ms->over_decay+i,0);
+    if(u_attackms!=ms->under_attack[i].ms)
+      filter_set(ms,u_attackms,ms->under_attack+i,1);
+    if(u_decayms !=ms->under_decay[i].ms) 
+      filter_set(ms,u_decayms,ms->under_decay+i,0);
+    if(b_attackms!=ms->base_attack[i].ms) 
+      filter_set(ms,b_attackms,ms->base_attack+i,1);
+    if(b_decayms !=ms->base_decay[i].ms)  
+      filter_set(ms,b_decayms,ms->base_decay+i,0);
 
     w[i]=&sw[multi_channel_set[i].active_bank];
     visible[i]=multi_channel_set[i].panel_visible;

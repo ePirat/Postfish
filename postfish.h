@@ -57,8 +57,16 @@ static inline float todB(float x){
   return logf((x)*(x)+1e-30f)*4.34294480f;
 }
 
+static inline double todBd(double x){
+  return log((x)*(x)+1e-30)*4.34294480;
+}
+
 static inline float fromdB(float x){
   return expf((x)*.11512925f);
+}
+
+static inline int zerome(double x){
+  return (x*x < 1.e-30);
 }
 
 #ifdef UGLY_IEEE754_FLOAT32_HACK

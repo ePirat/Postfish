@@ -346,14 +346,16 @@ static void unsubband_work(subband_state *f,time_linkage *in, time_linkage *out)
     int active_p1= f->effect_active1[i];
     int active_p0= f->effect_active0[i];
 
+    int muted_pP= mute_channel_muted(f->mutemaskP,i);
     int muted_p1= mute_channel_muted(f->mutemask1,i);
+    int muted_p0= mute_channel_muted(f->mutemask0,i);
 
     int maxbands=f->wC[i]->freq_bands;
     if(maxbands<f->w0[i]->freq_bands)maxbands=f->w0[i]->freq_bands;
     if(maxbands<f->w1[i]->freq_bands)maxbands=f->w1[i]->freq_bands;
   
     /* even if the lapping for a channel is active, we will draw
-       output from the cache is the effect is inactive; it saves
+       output from the cache if the effect is inactive; it saves
        performing the summation across bands */
 
     /*   OUTPUT PROCESSING
@@ -420,11 +422,11 @@ static void unsubband_work(subband_state *f,time_linkage *in, time_linkage *out)
 	  for(j=0;j<f->qblocksize;j++)
 	    lo[j]*=lw[j]*scale;
 
-	} /* otherwise any transitions we need are already windowed as
-	     above by the lap handling code in subband_work */
+	} /* else any transitions we need are already windowed as
+             above by the lap handling code in subband_work */
 	
 	/* d) window/add cache bits if needed */
-	if(!active_pP){
+	if(!active_pP && !muted_pP){
 	  /* beginning transition */
 	  float *lo=o+f->qblocksize;
 	  float *lc=f->cache1[i]+f->qblocksize;
@@ -435,7 +437,7 @@ static void unsubband_work(subband_state *f,time_linkage *in, time_linkage *out)
 	  for(j=0;j<f->qblocksize;j++)
 	    lo[j]+=lc[j]*lw[j]*scale;
 	  
-	}else if (!active_p0){
+	}else if (!active_p0 && !muted_p0){
 	  /* end transition */
 	  float *lo=o+input_size-f->qblocksize*2;
 	  float *lc=f->cache1[i]+input_size-f->qblocksize*2;

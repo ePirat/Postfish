@@ -80,16 +80,16 @@ void outpanel_state_from_config(int bank){
 
   config_get_sigat("output_monitor_set",bank,0,0,0,0,&outset.monitor.device);
   if(state.monitor.device)
-    gtk_option_menu_set_history(GTK_OPTION_MENU(state.monitor.device),outset.monitor.device);
+    gtk_combo_box_set_active(GTK_COMBO_BOX(state.monitor.device),outset.monitor.device);
   config_get_sigat("output_monitor_set",bank,0,0,0,1,&outset.monitor.bytes);
   if(state.monitor.depth)
-    gtk_option_menu_set_history(GTK_OPTION_MENU(state.monitor.depth),outset.monitor.bytes);
+    gtk_combo_box_set_active(GTK_COMBO_BOX(state.monitor.depth),outset.monitor.bytes);
   config_get_sigat("output_monitor_set",bank,0,0,0,2,&outset.monitor.ch);
   if(state.monitor.ch)
-    gtk_option_menu_set_history(GTK_OPTION_MENU(state.monitor.ch),outset.monitor.ch);
+    gtk_combo_box_set_active(GTK_COMBO_BOX(state.monitor.ch),outset.monitor.ch);
   config_get_sigat("output_monitor_set",bank,0,0,0,3,&outset.monitor.format);
   if(state.monitor.format)
-    gtk_option_menu_set_history(GTK_OPTION_MENU(state.monitor.format),outset.monitor.format);
+    gtk_combo_box_set_active(GTK_COMBO_BOX(state.monitor.format),outset.monitor.format);
 
 
   config_get_vector("output_stdout_source",bank,0,0,0,OUTPUT_CHANNELS,outset.stdout.source);
@@ -99,16 +99,16 @@ void outpanel_state_from_config(int bank){
 
   config_get_sigat("output_stdout_set",bank,0,0,0,0,&outset.stdout.device);
   if(state.stdout.device)
-    gtk_option_menu_set_history(GTK_OPTION_MENU(state.stdout.device),outset.stdout.device);
+    gtk_combo_box_set_active(GTK_COMBO_BOX(state.stdout.device),outset.stdout.device);
   config_get_sigat("output_stdout_set",bank,0,0,0,1,&outset.stdout.bytes);
   if(state.stdout.depth)
-    gtk_option_menu_set_history(GTK_OPTION_MENU(state.stdout.depth),outset.stdout.bytes);
+    gtk_combo_box_set_active(GTK_COMBO_BOX(state.stdout.depth),outset.stdout.bytes);
   config_get_sigat("output_stdout_set",bank,0,0,0,2,&outset.stdout.ch);
   if(state.stdout.ch)
-    gtk_option_menu_set_history(GTK_OPTION_MENU(state.stdout.ch),outset.stdout.ch);
+    gtk_combo_box_set_active(GTK_COMBO_BOX(state.stdout.ch),outset.stdout.ch);
   config_get_sigat("output_stdout_set",bank,0,0,0,3,&outset.stdout.format);
   if(state.stdout.format)
-    gtk_option_menu_set_history(GTK_OPTION_MENU(state.stdout.format),outset.stdout.format);
+    gtk_combo_box_set_active(GTK_COMBO_BOX(state.stdout.format),outset.stdout.format);
 
 
 }
@@ -116,7 +116,7 @@ void outpanel_state_from_config(int bank){
 static void menuchange(GtkWidget *w,gpointer in){
   sig_atomic_t *var=(sig_atomic_t *)in;
 
-  *var=gtk_option_menu_get_history(GTK_OPTION_MENU(w));
+  *var=gtk_combo_box_get_active(GTK_COMBO_BOX(w));
 }
 
 static void buttonchange(GtkWidget *w,gpointer in){
@@ -171,7 +171,7 @@ static GtkWidget *outpanel_subpanel(postfish_mainpanel *mp,
       b=gtk_toggle_button_new_with_label(buffer);
       
       gtk_box_pack_start(GTK_BOX(b1),b,0,0,0);
-      // careful; this breaks (cosmetically) for OUTPUT_CHANNELS>8
+      // careful; this breaks (cosmetically) for OUTPUT_CHANNELS > 8
       gtk_widget_add_accelerator (b, "activate", mp->group, GDK_1+i, 0, 0); 
       gtk_widget_set_sensitive(b,active);
       g_signal_connect (G_OBJECT (b), "clicked",
@@ -186,25 +186,20 @@ static GtkWidget *outpanel_subpanel(postfish_mainpanel *mp,
 
   {
     int i;
-    GtkWidget *option_menu=gtk_option_menu_new();
-    GtkWidget *menu=gtk_menu_new();
+    GtkWidget *menu=gtk_combo_box_new_text();
     
     if(devp){
       /* device selection */
-      for(i=0;i<monitor_entries;i++){
-	GtkWidget *item=gtk_menu_item_new_with_label(monitor_list[i].name);
-	gtk_menu_shell_append (GTK_MENU_SHELL(menu),item);
-      }
+      for(i=0;i<monitor_entries;i++)
+	gtk_combo_box_append_text (GTK_COMBO_BOX (menu), monitor_list[i].name);
       
-      if(i==0){
-	GtkWidget *item=gtk_menu_item_new_with_label("stdout");
-	gtk_menu_shell_append (GTK_MENU_SHELL(menu),item);
-      }
+      if(i==0)
+	gtk_combo_box_append_text (GTK_COMBO_BOX (menu), "stdout");
 
-      g_signal_connect (G_OBJECT (option_menu), "changed",
+      g_signal_connect (G_OBJECT (menu), "changed",
 			G_CALLBACK (menuchange), &set->device);
-
-      os->device=option_menu;
+      
+      os->device=menu;
       os->format=0;
     }else{
       
@@ -212,22 +207,19 @@ static GtkWidget *outpanel_subpanel(postfish_mainpanel *mp,
       int i;
       char *formats[]={"WAV","AIFF-C","raw (little endian)","raw (big endian)"};
       
-      for(i=0;i<4;i++){
-	GtkWidget *item=gtk_menu_item_new_with_label(formats[i]);
-	gtk_menu_shell_append (GTK_MENU_SHELL(menu),item);
-      }
-      g_signal_connect (G_OBJECT (option_menu), "changed",
+      for(i=0;i<4;i++)
+	gtk_combo_box_append_text (GTK_COMBO_BOX (menu), formats[i]);
+
+      g_signal_connect (G_OBJECT (menu), "changed",
 			G_CALLBACK (menuchange), &set->format);
-      os->format=option_menu;
+      os->format=menu;
       os->device=0;
     }
 
-    gtk_option_menu_set_menu(GTK_OPTION_MENU(option_menu),menu);
-    gtk_option_menu_set_history(GTK_OPTION_MENU(option_menu),0);
+    gtk_combo_box_set_active(GTK_COMBO_BOX(menu),0);
     
-    gtk_box_pack_start(GTK_BOX(b2),option_menu,1,1,0);
+    gtk_box_pack_start(GTK_BOX(b2),menu,1,1,0);
 
-    gtk_widget_set_sensitive(option_menu,active);
     gtk_widget_set_sensitive(menu,active);
 
   }
@@ -237,24 +229,19 @@ static GtkWidget *outpanel_subpanel(postfish_mainpanel *mp,
   {
     /* channels selection */
     int i;
-    GtkWidget *option_menu=gtk_option_menu_new();
-    GtkWidget *menu=gtk_menu_new();
+    GtkWidget *menu=gtk_combo_box_new_text();
     char *formats[]={"auto","1","2","4","6","8"};
     
-    for(i=0;i<6;i++){
-      GtkWidget *item=gtk_menu_item_new_with_label(formats[i]);
-      gtk_menu_shell_append (GTK_MENU_SHELL(menu),item);
-    }
+    for(i=0;i<6;i++)
+      gtk_combo_box_append_text (GTK_COMBO_BOX (menu), formats[i]);
 
-    gtk_option_menu_set_menu(GTK_OPTION_MENU(option_menu),menu);
-    gtk_option_menu_set_history(GTK_OPTION_MENU(option_menu),0);
+    gtk_combo_box_set_active(GTK_COMBO_BOX(menu),0);
     
-    gtk_box_pack_start(GTK_BOX(b3),option_menu,1,1,0);
-    gtk_widget_set_sensitive(option_menu,active);
+    gtk_box_pack_start(GTK_BOX(b3),menu,1,1,0);
     gtk_widget_set_sensitive(menu,active);
-    g_signal_connect (G_OBJECT (option_menu), "changed",
+    g_signal_connect (G_OBJECT (menu), "changed",
 		      G_CALLBACK (menuchange), &set->ch);
-    os->ch=option_menu;
+    os->ch=menu;
   }
   gtk_table_attach(GTK_TABLE(table),b3,1,2,2,3,GTK_FILL,0,0,0);
   
@@ -262,26 +249,21 @@ static GtkWidget *outpanel_subpanel(postfish_mainpanel *mp,
   {
     /* bit depth selection */
     int i;
-    GtkWidget *option_menu=gtk_option_menu_new();
-    GtkWidget *menu=gtk_menu_new();
+    GtkWidget *menu=gtk_combo_box_new_text();
     char *formats[]={"auto","8","16","24"};
     
-    for(i=0;i<4;i++){
-      GtkWidget *item=gtk_menu_item_new_with_label(formats[i]);
-      gtk_menu_shell_append (GTK_MENU_SHELL(menu),item);
-    }
+    for(i=0;i<4;i++)
+      gtk_combo_box_append_text (GTK_COMBO_BOX (menu), formats[i]);
 
-    gtk_option_menu_set_menu(GTK_OPTION_MENU(option_menu),menu);
-    gtk_option_menu_set_history(GTK_OPTION_MENU(option_menu),0);
+    gtk_combo_box_set_active(GTK_COMBO_BOX(menu),0);
     
-    gtk_box_pack_start(GTK_BOX(b4),option_menu,1,1,0);
-    gtk_widget_set_sensitive(option_menu,active);
+    gtk_box_pack_start(GTK_BOX(b4),menu,1,1,0);
     gtk_widget_set_sensitive(menu,active);
 
-    g_signal_connect (G_OBJECT (option_menu), "changed",
+    g_signal_connect (G_OBJECT (menu), "changed",
 		      G_CALLBACK (menuchange), &set->bytes);
 
-    os->depth=option_menu;
+    os->depth=menu;
   }
   gtk_table_attach(GTK_TABLE(table),b4,1,2,3,4,GTK_FILL,0,0,0);
 

@@ -599,7 +599,7 @@ int input_load(void){
   return 0;
 }
 
-off_t input_seek_i(off_t pos,int ps){
+static off_t input_seek_i(off_t pos,int ps){
   int i,k;
   int flag=0;
   off_t maxpos=0;
@@ -692,7 +692,6 @@ static void LEconvert(float **data,
 		      unsigned char *readbuf, int dataoff,
 		      int ch,int bytes, int signp, int n){
   int i,j,k=0;
-  int32_t val;
   int32_t xor=(signp?0:0x80000000UL);
   float scale=1./2147483648.;
 
@@ -702,8 +701,7 @@ static void LEconvert(float **data,
     
     for(i=dataoff;i<dataoff+n;i++)
       for(j=0;j<ch;j++){
-	val=(readbuf[k]<<24)^xor;
-	data[j][i]=(val==0x7f000000?1.:val*scale);
+	data[j][i]=((readbuf[k]<<24)^xor)*scale;
 	k++;
       }
     break;
@@ -712,8 +710,7 @@ static void LEconvert(float **data,
 
     for(i=dataoff;i<dataoff+n;i++)
       for(j=0;j<ch;j++){
-	val=((readbuf[k]<<16)|(readbuf[k+1]<<24))^xor;
-	data[j][i]=(val==0x7fff0000?1.:val*scale);
+	data[j][i]=(((readbuf[k]<<16)|(readbuf[k+1]<<24))^xor)*scale;
 	k+=2;
       }
     break;
@@ -722,8 +719,7 @@ static void LEconvert(float **data,
 
     for(i=dataoff;i<dataoff+n;i++)
       for(j=0;j<ch;j++){
-	val=((readbuf[k]<<8)|(readbuf[k+1]<<16)|(readbuf[k+2]<<24))^xor;
-	data[j][i]=(val==0x7fffff00?1.:val*scale);
+	data[j][i]=(((readbuf[k]<<8)|(readbuf[k+1]<<16)|(readbuf[k+2]<<24))^xor)*scale;
 	k+=3;
       }
     break;
@@ -732,8 +728,7 @@ static void LEconvert(float **data,
 
     for(i=dataoff;i<dataoff+n;i++)
       for(j=0;j<ch;j++){
-	val=((readbuf[k])|(readbuf[k+1]<<8)|(readbuf[k+2]<<16)|(readbuf[k+3]<<24))^xor;
-	data[j][i]=(val==0x7fffffff?1.:val*scale);
+	data[j][i]=(((readbuf[k])|(readbuf[k+1]<<8)|(readbuf[k+2]<<16)|(readbuf[k+3]<<24))^xor)*scale;
 	k+=4;
       }
     break;
@@ -744,7 +739,6 @@ static void BEconvert(float **data,
 		      unsigned char *readbuf, int dataoff,
 		      int ch,int bytes, int signp, int n){
   int i,j,k=0;
-  int32_t val;
   int32_t xor=(signp?0:0x80000000UL);
   float scale=1./2147483648.;
 
@@ -754,8 +748,7 @@ static void BEconvert(float **data,
     
     for(i=dataoff;i<dataoff+n;i++)
       for(j=0;j<ch;j++){
-	val=(readbuf[k]<<24)^xor;
-	data[j][i]=(val==0x7f000000?1.:val*scale);
+	data[j][i]=((readbuf[k]<<24)^xor)*scale;
 	k++;
       }
     break;
@@ -764,8 +757,7 @@ static void BEconvert(float **data,
 
     for(i=dataoff;i<dataoff+n;i++)
       for(j=0;j<ch;j++){
-	val=((readbuf[k+1]<<16)|(readbuf[k]<<24))^xor;
-	data[j][i]=(val==0x7fff0000?1.:val*scale);
+	data[j][i]=(((readbuf[k+1]<<16)|(readbuf[k]<<24))^xor)*scale;
 	k+=2;
       }
     break;
@@ -774,8 +766,7 @@ static void BEconvert(float **data,
 
     for(i=dataoff;i<dataoff+n;i++)
       for(j=0;j<ch;j++){
-	val=((readbuf[k+2]<<8)|(readbuf[k+1]<<16)|(readbuf[k]<<24))^xor;
-	data[j][i]=(val==0x7fffff00?1.:val*scale);
+	data[j][i]=(((readbuf[k+2]<<8)|(readbuf[k+1]<<16)|(readbuf[k]<<24))^xor)*scale;
 	k+=3;
       }
     break;
@@ -784,8 +775,7 @@ static void BEconvert(float **data,
 
     for(i=dataoff;i<dataoff+n;i++)
       for(j=0;j<ch;j++){
-	val=((readbuf[k+3])|(readbuf[k+2]<<8)|(readbuf[k+1]<<16)|(readbuf[k]<<24))^xor;
-	data[j][i]=(val==0x7fffffff?1.:val*scale);
+	data[j][i]=(((readbuf[k+3])|(readbuf[k+2]<<8)|(readbuf[k+1]<<16)|(readbuf[k]<<24))^xor)*scale;
 	k+=4;
       }
     break;

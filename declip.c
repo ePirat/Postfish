@@ -201,10 +201,11 @@ int declip_reset(void){
   return 0;
 }
 
+int noisy=0;
 static void sliding_bark_average(float *f,int n,float width){
   int i=0;
-  float acc=0.,del=0.;
-  float sec[hipad+1];
+  double acc=0.,del=0.;
+  double sec[hipad+1];
 
   memset(sec,0,sizeof(sec));
 
@@ -233,7 +234,6 @@ static void sliding_bark_average(float *f,int n,float width){
     f[(i<<1)+1]=f[i<<1]=1./(acc*acc);
     del+=sec[i+lopad];
     acc+=del;
-    
   }
   f[n+1]=f[n]=f[n-1];
 }
@@ -244,7 +244,15 @@ static void declip(int blocksize,float trigger,
 		   int *runningtotal, int *runningcount){
   float flag[blocksize*2];
   int    iterbound,i,count=0;
-  
+
+  /* too many apps screw up proper output scaling, so previously
+     clipped audio ends up getting rounded to just short of the rail
+     upon export.  To avoid users accidentally shooting themselves in
+     the foot, trigger clipping at -.05dB rather than 0dB even if 0dB
+     is selected. This corresponds to mis-rounding 8 bit audio by 1.5
+     steps.*/
+  if(trigger>.99426)trigger=.99426; 
+
   for(i=blocksize/2;i<blocksize*3/2;i++){
     flag[i]=0.;
     if(work[i]>=trigger || work[i]<=-trigger){
@@ -252,6 +260,7 @@ static void declip(int blocksize,float trigger,
       count++;
     }
   }
+
   
   *runningtotal+=blocksize;
   *runningcount+=count;
@@ -259,7 +268,6 @@ static void declip(int blocksize,float trigger,
   if(count){
     for(i=0;i<blocksize/2;i++)flag[i]=0.;
     for(i=blocksize*3/2;i<blocksize*2;i++)flag[i]=0.;
-    
     for(i=0;i<blocksize;i++)work[i+blocksize/2]*=window[i];
     
     fftwf_execute(fftwf_weight);
@@ -268,10 +276,11 @@ static void declip(int blocksize,float trigger,
     if(iterbound<10)iterbound=10;
     
     reconstruct(work,freq,flag,epsilon,iterbound);
-    
+
     for(i=0;i<blocksize;i++)work[i+blocksize/2]*=window[i];
   }else
     for(i=0;i<blocksize;i++)work[i+blocksize/2]*=window[i]*window[i];
+
 }
 
 /* called only by playback thread */
@@ -596,6 +605,5 @@ time_linkage *declip_read(time_linkage *in){
   }
 
   out.active=active;
-
   return &out;
 }

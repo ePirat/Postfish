@@ -42,7 +42,6 @@ static float *q;
 static float *s;
 static int blocksize=0;
 
-
 void reconstruct_init(int minblock,int maxblock){
   int i;
 
@@ -132,6 +131,7 @@ void reconstruct(float *x, float *w,
   /* compute initial Atb */
   for(j=0;j<n;j++)q[j]=x[j]*(flag[j]-1.);
   AtWA(w,n);
+  res_new=res_0=inner_product(q,q,n);
   for(j=0;j<n;j++)Atb[j]=q[j];
 
   /* compute initial residue */
@@ -144,9 +144,9 @@ void reconstruct(float *x, float *w,
   for(j=0;j<n;j++)q[j]=d[j]=s[j]*=flag[j];
 
   phi_new=inner_product(r,d,n);
-  res_new=res_0=inner_product(Atb,Atb,n);
 
   for(i=0;i<max && sqrt(res_new)/sqrt(res_0)>e;i++){
+
     AtWA(w,n);
     alpha=phi_new/inner_product(d,q,n);
     for(j=0;j<n;j++)x[j]+=alpha*d[j];
@@ -172,4 +172,3 @@ void reconstruct(float *x, float *w,
   }
 
 }
-

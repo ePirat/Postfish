@@ -36,6 +36,7 @@
 
 static postfish_mainpanel p;
 extern char *configfile;
+extern sig_atomic_t main_looping;
 
 static void action_setb_to(postfish_mainpanel *p,const char *time);
 static void action_seta_to(postfish_mainpanel *p,const char *time);
@@ -204,7 +205,7 @@ static int reanimate_fish(postfish_mainpanel *p){
     if(p->fishframe==0 && !playback_active){
       /* reschedule to blink */
       p->fishframe_timer=
-	gtk_timeout_add(rand()%1000*30,(GtkFunction)reanimate_fish,p);
+	g_timeout_add(rand()%1000*30,(GSourceFunc)reanimate_fish,p);
       return FALSE;
     }
   }else{
@@ -220,13 +221,13 @@ static int reanimate_fish(postfish_mainpanel *p){
     if(p->fishframe==12){
       /* reschedule to animate */
       p->fishframe_timer=
-	gtk_timeout_add(10,(GtkFunction)reanimate_fish,p);
+	g_timeout_add(10,(GSourceFunc)reanimate_fish,p);
       return FALSE;
     }
     if(p->fishframe==0){
       /* reschedule to blink */
       p->fishframe_timer=
-	gtk_timeout_add(rand()%1000*30,(GtkFunction)reanimate_fish,p);
+	g_timeout_add(rand()%1000*30,(GSourceFunc)reanimate_fish,p);
       return FALSE;
     }
   }
@@ -235,13 +236,13 @@ static int reanimate_fish(postfish_mainpanel *p){
 
 static void animate_fish(postfish_mainpanel *p){
   if(p->fishframe_init){
-    gtk_timeout_remove(p->fishframe_timer);
+    g_source_remove(p->fishframe_timer);
     p->fishframe_timer=
-      gtk_timeout_add(80,(GtkFunction)reanimate_fish,p);
+      g_timeout_add(80,(GSourceFunc)reanimate_fish,p);
   }else{
     p->fishframe_init=1;
     p->fishframe_timer=
-      gtk_timeout_add(rand()%1000*30,(GtkFunction)reanimate_fish,p);
+      g_timeout_add(rand()%1000*30,(GSourceFunc)reanimate_fish,p);
   }
 }
 
@@ -338,14 +339,17 @@ static void action_setb(GtkWidget *widget,postfish_mainpanel *p){
 }
 
 static void shutdown(void){
-  gtk_main_quit ();
+  output_halt_playback();
+  save_state();
+  main_looping=0;
+  gtk_main_quit();
 }
 
 static void masterdB_change(GtkWidget *dummy, gpointer in){
   postfish_mainpanel *p=in;
   char buf[80];
   float val=multibar_get_value(MULTIBAR(p->masterdB_s),0);
-  sprintf(buf,"%.1fdB",val);
+  sprintf(buf,"%+5.1fdB",val);
   readout_set(READOUT(p->masterdB_r),buf);
 
   if(gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(p->masterdB_a)))
@@ -1056,9 +1060,9 @@ void mainpanel_create(postfish_mainpanel *panel,char **chlabels){
   }
 
   mainpanel_chentry(panel,channeltable,"_Declip ",0,clippanel_create,0);
-  mainpanel_chentry(panel,channeltable,"_Multicomp ",1,0,compandpanel_create_channel);
-  mainpanel_chentry(panel,channeltable,"_Singlecomp ",2,0,singlepanel_create_channel);
-  mainpanel_chentry(panel,channeltable,"De_verb ",3,suppresspanel_create_channel,0);
+  mainpanel_chentry(panel,channeltable,"De_verb ",1,suppresspanel_create_channel,0);
+  mainpanel_chentry(panel,channeltable,"_Multicomp ",2,0,compandpanel_create_channel);
+  mainpanel_chentry(panel,channeltable,"_Singlecomp ",3,0,singlepanel_create_channel);
   mainpanel_chentry(panel,channeltable,"_EQ ",4,0,eqpanel_create_channel);
   mainpanel_chentry(panel,channeltable,"_Reverb ",5,0,reverbpanel_create_channel);
   mainpanel_chentry(panel,channeltable,"Atten/Mi_x ",6,attenpanel_create,
@@ -1130,9 +1134,6 @@ void mainpanel_create(postfish_mainpanel *panel,char **chlabels){
   g_signal_connect (G_OBJECT (panel->toplevel), "delete_event",
 		    G_CALLBACK (shutdown), NULL);
     
-  g_signal_connect (G_OBJECT (panel->toplevel), "delete_event",
-		    G_CALLBACK (shutdown), NULL);
-
     
   gtk_widget_show_all(panel->toplevel);
   gtk_window_set_resizable(GTK_WINDOW(panel->toplevel),0);
@@ -1181,7 +1182,7 @@ static void feedback_process(postfish_mainpanel *panel){
 	
       }
       
-      multibar_set(MULTIBAR(panel->outbar),rms,peak,input_ch,current_p);
+      multibar_set(MULTIBAR(panel->outbar),rms,peak,OUTPUT_CHANNELS,current_p);
       
       if(pull_input_feedback(peak,rms,&time_cursor)){
 	for(i=0;i<input_ch;i++){
@@ -1237,7 +1238,6 @@ static int look_for_gtkrc(char *filename){
 }
 
 #include <stdlib.h>
-extern sig_atomic_t main_looping;
 void mainpanel_go(int argc,char *argv[], int ch){
   char *homedir=getenv("HOME");
   char *labels[33];

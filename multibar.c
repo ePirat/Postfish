@@ -552,7 +552,7 @@ static void draw(GtkWidget *widget,int n){
 	gdk_draw_polygon(m->backing,gc,TRUE,p,7);
 	gdk_draw_lines(m->backing,dark_gc,d,3);
       
-	if(m->thumbfocus==j){
+	if(m->thumbfocus==j && m->widgetfocus){
 	  if(x&1)
 	    gdk_gc_set_stipple(black_gc,stipple);
 	  else
@@ -632,6 +632,7 @@ static gboolean multibar_focus (GtkWidget         *widget,
   int ret=TRUE;
 
   if(m->thumbs==0)return FALSE;
+  if(!m->widgetfocus)m->thumbfocus=-1;
 
   switch(direction){
   case GTK_DIR_TAB_FORWARD:
@@ -666,15 +667,16 @@ static gboolean multibar_focus (GtkWidget         *widget,
       ret=TRUE;
     }else{
       transition_thumbfocus=m->thumbfocus;
+      m->thumbfocus=-1;
       ret=FALSE;
     }
     break;
 
   default:
+    m->thumbfocus=-1;
     ret=FALSE;
   }
 
-  m->prev_thumbfocus=m->thumbfocus;
   if(ret==TRUE) gtk_widget_grab_focus(widget);
   draw_and_expose(widget);
 
@@ -683,40 +685,38 @@ static gboolean multibar_focus (GtkWidget         *widget,
 
 static gint determine_thumb(Multibar *m,int ix, int iy){
   GtkWidget *widget=GTK_WIDGET(m);
-  int height=widget->allocation.height;
+  int max=widget->allocation.height;
   float distances[3]={-1,-1,-1};
   int thumb=-1;
 
-  /* lower thumb */
+  /* center thumb */
   if(m->thumbs==1 || m->thumbs>2){
     int num=(m->thumbs==1?0:1);
-
-    int x= ix-m->thumbpixel[num];
-    int y= iy-(height*4/5-2);
-    distances[num]=sqrt(x*x + y*y);
+    int x= m->thumbpixel[num]-ix;
+    distances[num]=fabs(x);
   }
 
   /* left thumb */
   if(m->thumbs>1){
-    int x= ix-(m->thumbpixel[0]-(height/2));
-    int y= iy-(height/2-3);
-    distances[0]=sqrt(x*x + y*y);
+    int x= m->thumbpixel[0]-ix;
+    distances[0]=fabs(x-.1);
   }
   
   /* right thumb */
   if(m->thumbs>1){
     int num=(m->thumbs==2?1:2);
-    int x= ix-(m->thumbpixel[num]+(height/2));
-    int y= iy-(height/2-3);
-    distances[num]=sqrt(x*x + y*y);
-  }
+    int x= m->thumbpixel[num]-ix;
+    distances[num]=fabs(x+.1);
+   }
   
-  if(m->thumbs && distances[0]<height)thumb=0;
-  if(m->thumbs>1 && distances[1]<height)
+  if(m->thumbs && distances[0]<max)thumb=0;
+  if(m->thumbs>1 && distances[1]<max)
     if(thumb == -1 || distances[1]<distances[0])thumb=1;
-  if(m->thumbs>2 && distances[2]<height)
+  if(m->thumbs>2 && distances[2]<max)
     if(thumb == -1 || (distances[2]<distances[0] && 
 		       distances[2]<distances[1]))thumb=2;
+  if(m->thumbs>2 && distances[1]<max/2)thumb=1;
+
   return thumb;
 }
 
@@ -844,47 +844,60 @@ static void vals_bound(Multibar *m){
       }
     }
   }
+}
 
+static gint lightme(GtkWidget *w,gint x,gint y){
+  Multibar *m=MULTIBAR(w);
+  int thumb=determine_thumb(m,x,y);
+  GtkStateType thumbstate[3];
+  thumbstate[0]=GTK_STATE_NORMAL;
+  thumbstate[1]=GTK_STATE_NORMAL;
+  thumbstate[2]=GTK_STATE_NORMAL;
+  if(thumb>=0)thumbstate[thumb]=GTK_STATE_PRELIGHT;
+  
+  if(thumbstate[0]!=m->thumbstate[0] ||
+     thumbstate[1]!=m->thumbstate[1] ||
+     thumbstate[2]!=m->thumbstate[2]){
+    m->thumbstate[0]=thumbstate[0];
+    m->thumbstate[1]=thumbstate[1];
+    m->thumbstate[2]=thumbstate[2];
+    
+    draw_and_expose(w);
+  }
+  return TRUE;
 }
 
 static gint multibar_motion(GtkWidget        *w,
 			    GdkEventMotion   *event){
   Multibar *m=MULTIBAR(w);
-
+  
   /* is a thumb already grabbed? */
   if(m->thumbgrab>=0){
     
     int x=event->x+m->thumbx;
     float v;
-
+    
     x=pixel_bound(m,x);
     m->thumbval[m->thumbgrab]=pixel_to_val(m,x);
     vals_bound(m);
     v=m->thumbval[m->thumbgrab];
     x=m->thumbpixel[m->thumbgrab]=val_to_pixel(m,v);
-
+    
     if(m->callback)m->callback(GTK_WIDGET(m),m->callbackp);
     draw_and_expose(w);
-
+    
   }else{
     /* nothing grabbed right now; determine if we're in a a thumb's area */
-    int thumb=determine_thumb(m,event->x-m->xpad,event->y);
-    GtkStateType thumbstate[3];
-    thumbstate[0]=GTK_STATE_NORMAL;
-    thumbstate[1]=GTK_STATE_NORMAL;
-    thumbstate[2]=GTK_STATE_NORMAL;
-    if(thumb>=0)thumbstate[thumb]=GTK_STATE_PRELIGHT;
-
-    if(thumbstate[0]!=m->thumbstate[0] ||
-       thumbstate[1]!=m->thumbstate[1] ||
-       thumbstate[2]!=m->thumbstate[2]){
-      m->thumbstate[0]=thumbstate[0];
-      m->thumbstate[1]=thumbstate[1];
-      m->thumbstate[2]=thumbstate[2];
-
-      draw_and_expose(w);
-    }
+    lightme(w,event->x-m->xpad,event->y);
   }
+
+  return TRUE;
+}
+
+static gint multibar_enter(GtkWidget        *w,
+			   GdkEventCrossing *event){
+  Multibar *m=MULTIBAR(w);
+  lightme(w,event->x-m->xpad,event->y);
   return TRUE;
 }
 
@@ -893,9 +906,9 @@ static gint multibar_leave(GtkWidget        *widget,
   Multibar *m=MULTIBAR(widget);
 
   if(m->thumbgrab<0){
-    if(0!=m->thumbstate[0] ||
-       0!=m->thumbstate[1] ||
-       0!=m->thumbstate[2]){
+    if(m->thumbstate[0] ||
+       m->thumbstate[1] ||
+       m->thumbstate[2]){
       m->thumbstate[0]=0;
       m->thumbstate[1]=0;
       m->thumbstate[2]=0;
@@ -909,17 +922,19 @@ static gint multibar_leave(GtkWidget        *widget,
 static gboolean button_press   (GtkWidget        *widget,
 			    GdkEventButton   *event){
   Multibar *m=MULTIBAR(widget);
-  if(m->thumbstate[0]){
+  int thumb=determine_thumb(m,event->x-m->xpad,event->y);
+
+  if(thumb==0){
     gtk_widget_grab_focus(widget);
-    transition_thumbfocus=m->thumbgrab=m->thumbfocus=0;
+    m->thumbgrab=m->thumbfocus=0;
     m->thumbx=m->thumbpixel[0]-event->x;
-  }else if(m->thumbstate[1]){
+  }else if(thumb==1){
     gtk_widget_grab_focus(widget);
-    transition_thumbfocus=m->thumbgrab=m->thumbfocus=1;
+    m->thumbgrab=m->thumbfocus=1;
     m->thumbx=m->thumbpixel[1]-event->x;
-  }else if(m->thumbstate[2]){
+  }else if(thumb==2){
     gtk_widget_grab_focus(widget);
-    transition_thumbfocus=m->thumbgrab=m->thumbfocus=2;
+    m->thumbgrab=m->thumbfocus=2;
     m->thumbx=m->thumbpixel[2]-event->x;
   }
   draw_and_expose(widget);
@@ -937,8 +952,7 @@ static gboolean button_release   (GtkWidget        *widget,
 static gboolean unfocus(GtkWidget        *widget,
 			GdkEventFocus       *event){
   Multibar *m=MULTIBAR(widget);
-  m->prev_thumbfocus=m->thumbfocus;
-  m->thumbfocus=-1;
+  m->widgetfocus=0;
   draw_and_expose(widget);
   return TRUE;
 }
@@ -946,8 +960,7 @@ static gboolean unfocus(GtkWidget        *widget,
 static gboolean refocus(GtkWidget        *widget,
 			GdkEventFocus       *event){
   Multibar *m=MULTIBAR(widget);
-  transition_thumbfocus=m->thumbfocus=m->prev_thumbfocus;
-  m->thumbgrab=-1;
+  m->widgetfocus=1;
   draw_and_expose(widget);
   return TRUE;
 }
@@ -1036,6 +1049,7 @@ static void multibar_class_init (MultibarClass *class){
   widget_class->key_press_event = key_press;
   widget_class->button_press_event = button_press;
   widget_class->button_release_event = button_release;
+  widget_class->enter_notify_event = multibar_enter;
   widget_class->leave_notify_event = multibar_leave;
   widget_class->motion_notify_event = multibar_motion;
   widget_class->focus_out_event = unfocus;

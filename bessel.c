@@ -196,6 +196,10 @@ void compute_iir_fast_attack2(float *x, int n, iir_state *is,
   int state=is->state;
   int i=0;
 
+  if(zerome(y0) && zerome(y1)){
+    y0=y1=0.;
+  }
+
   if(x[0]>y0)state=0; 
       
   while(i<n){
@@ -253,6 +257,10 @@ void compute_iir_freefall1(float *x, int n, iir_state *is,
   double y0=is->y[0];
   int i=0;
   
+  if(zerome(y0)){
+    y0=0.;
+  }
+
   while(i<n){
     double yd;
 
@@ -280,6 +288,10 @@ void compute_iir_freefall2(float *x, int n, iir_state *is,
   double y0=is->y[0];
   double y1=is->y[1];
   int i=0;
+
+  if(zerome(y0) && zerome(y1)){
+    y0=y1=0.;
+  }
 
   while(i<n){
     double yd;
@@ -314,6 +326,10 @@ void compute_iir_decayonly2(float *x, int n, iir_state *is,
   double y1=is->y[1];
   int i=0;
 
+  if(zerome(y0) && zerome(y1)){
+    y0=y1=0.;
+  }
+
   while(i<n){
     double yd;
 
@@ -345,6 +361,10 @@ void compute_iir_freefall3(float *x, int n, iir_state *is,
   double x1=is->x[1],y1=is->y[1];
   double x2=is->x[2],y2=is->y[2];
   int i=0;
+
+  if(zerome(y0) && zerome(y1) && zerome(y2)){
+    y0=y1=y2=0.;
+  }
 
   while(i<n){
     double yd;
@@ -380,6 +400,10 @@ void compute_iir_freefall4(float *x, int n, iir_state *is,
   double x2=is->x[2],y2=is->y[2];
   double x3=is->x[3],y3=is->y[3];
   int i=0;
+
+  if(zerome(y0) && zerome(y1) && zerome(y2) && zerome(y3)){
+    y0=y1=y2=y3=0.;
+  }
 
   while(i<n){
     double yd;
@@ -419,6 +443,10 @@ void compute_iir_symmetric2(float *x, int n, iir_state *is,
     
   int i=0;
       
+  if(zerome(y0) && zerome(y1)){
+    y0=y1=0.;
+  }
+
   while(i<n){
     double yd= (x[i]+x0*2.+x1)/g + y0*c0+y1*c1;
     x1=x0;x0=x[i];
@@ -446,6 +474,10 @@ void compute_iir_symmetric3(float *x, int n, iir_state *is,
     
   int i=0;
       
+  if(zerome(y0) && zerome(y1) && zerome(y2)){
+    y0=y1=y2=0.;
+  }
+
   while(i<n){
     double yd= (x[i]+(x0+x1)*3.+x2)/g + y0*c0+y1*c1+y2*c2;
     x2=x1;x1=x0;x0=x[i];
@@ -474,6 +506,10 @@ void compute_iir_symmetric4(float *x, int n, iir_state *is,
     
   int i=0;
       
+  if(zerome(y0) && zerome(y1) && zerome(y2) && zerome(y3)){
+    y0=y1=y2=y3=0.;
+  }
+
   while(i<n){
     double yd= (x[i]+(x0+x2)*4.+x1*6.+x3)/g + 
       y0*c0+y1*c1+y2*c2+y3*c3;

@@ -3,6 +3,7 @@
 # and Fuck its little dog Libtool too
 
 
+# Use the below line to build for PowerPC
 # The PPC build *must* use -maltivec, even if the target is a non-altivec machine
 
 #ADD_DEF= -DUGLY_IEEE754_FLOAT32_HACK=1 -maltivec
@@ -36,8 +37,7 @@ OBJ = main.o mainpanel.o multibar.o readout.o input.o output.o clippanel.o \
 	bessel.o suppresspanel.o suppress.o singlecomp.o singlepanel.o \
 	limit.o limitpanel.o mute.o mixpanel.o mix.o reverb.o reverbpanel.o \
 	outpanel.o config.o
-#GCF = -DETCDIR=\\\"$(ETCDIR)\\\" `pkg-config --cflags gtk+-2.0` -DG_DISABLE_DEPRECATED -DGDK_DISABLE_DEPRECATED -DGTK_DISABLE_DEPRECATED -DGDK_PIXBUF_DISABLE_DEPRECATED
-GCF = -DETCDIR=\\\"$(ETCDIR)\\\" `pkg-config --cflags gtk+-2.0` 
+GCF = -DETCDIR=\\\"$(ETCDIR)\\\" `pkg-config --cflags gtk+-2.0` -DG_DISABLE_DEPRECATED -DGDK_DISABLE_DEPRECATED -DGTK_DISABLE_DEPRECATED -DGDK_PIXBUF_DISABLE_DEPRECATED
 
 all:	
 	$(MAKE) target CFLAGS="-O3 -ffast-math -fomit-frame-pointer $(GCF) $(ADD_DEF)"
@@ -76,7 +76,7 @@ endif
 
 target:  $(OBJ) postfish-wisdomrc
 	./touch-version
-	$(LD) $(OBJ) $(CFLAGS) -o postfish $(LIBS) `pkg-config --libs gtk+-2.0` -lpthread -lfftw3f -lm 
+	$(LD) $(OBJ) $(CFLAGS) -o postfish $(LIBS) `pkg-config --libs gtk+-2.0` -lpthread -lfftw3f -lm
 
 install: target
 	$(INSTALL) -d -m 0755 $(BINDIR)

@@ -268,9 +268,13 @@ time_linkage *mix_read(time_linkage *in,
   /* fillstate here is only used for lazy initialization/reset */
   if(ms.fillstate==0){
     /* zero the cache */
-    for(i=0;i<input_ch;i++){  
+    for(i=0;i<input_ch;i++){
       memset(ms.cacheP[i],0,sizeof(**ms.cacheP)*input_size);
       memset(ms.cachePP[i],0,sizeof(**ms.cachePP)*input_size);
+      memset(ms.cachePA[i],0,sizeof(**ms.cachePA)*input_size);
+      memset(ms.cachePPA[i],0,sizeof(**ms.cachePPA)*input_size);
+      memset(ms.cachePB[i],0,sizeof(**ms.cachePB)*input_size);
+      memset(ms.cachePPB[i],0,sizeof(**ms.cachePPB)*input_size);
     }
     memcpy(ms.prev,ms.curr,sizeof(*mix_set)*input_ch);
     ms.fillstate=1;

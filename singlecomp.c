@@ -475,7 +475,7 @@ static void work_and_lapping(singlecomp_state *scs,
       
       if(activeP) reset_filter(scs); /* just became inactive; reset all filters */
 
-      /* feedabck */
+      /* feedback */
       if(scset[i]->panel_visible){
 	int k;
 	float rms=0.;

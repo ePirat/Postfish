@@ -82,10 +82,12 @@ struct _Multibar{
   int    thumbs;
   float  thumbval[3];
   int    thumbpixel[3];
+
   GtkStateType thumbstate[3];
   int    thumbfocus;
-  int    prev_thumbfocus;
   int    thumbgrab;
+  int    widgetfocus;
+
   int    thumbx;
   float  thumblo;
   float  thumbhi;

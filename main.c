@@ -53,10 +53,6 @@ sig_atomic_t main_looping;
 char *configfile="postfish-staterc";
 char *version;
 
-static void cleanup(void){
-  save_state();
-}
-
 void clean_exit(int sig){
   signal(sig,SIG_IGN);
   if(sig!=SIGINT){
@@ -72,18 +68,17 @@ void clean_exit(int sig){
 	    "bug as quickly as possible.\n\n"
 	    "-- monty@xiph.org, Postfish revision %s\n\n",sig,version);
     configfile="postfish-staterc-crashsave";
-    cleanup();
-    exit(0);
-    
+  }else{
+    output_halt_playback();
   }
 
-  /* otherwise we want a clean SIGINT exit */
-  if(main_looping)
+  save_state();
+
+  if(main_looping){
+    main_looping=0;
     gtk_main_quit();
-  else{
-    cleanup();
-    exit(0);
   }
+  exit(0);
 }
 
 const char *optstring = "-c:gh";
@@ -243,9 +238,18 @@ int main(int argc, char **argv){
   /* We do not care about FPEs; rather, underflow is nominal case, and
      its better to ignore other traps in production than to crash the
      app.  Please inform the FPU of this. */
+
+#ifndef DEBUG
+  fedisableexcept(FE_INVALID);
   fedisableexcept(FE_INEXACT);
   fedisableexcept(FE_UNDERFLOW);
   fedisableexcept(FE_OVERFLOW);
+#else
+  feenableexcept(FE_INVALID);
+  feenableexcept(FE_INEXACT);
+  feenableexcept(FE_UNDERFLOW);
+  feenableexcept(FE_OVERFLOW);
+#endif 
 
   /* Linux Altivec support has a very annoying problem; by default,
      math on denormalized floats will simply crash the program.  FFTW3
@@ -317,6 +321,9 @@ int main(int argc, char **argv){
   }
 
   /* probe outputs */
+  if(setvbuf(stdout, NULL, _IONBF , 0))
+    fprintf(stderr,"Unable to remove block buffering on stdout; continuing\n");
+  
   output_probe_stdout(STDOUT_FILENO);
   output_probe_monitor();
 
@@ -355,11 +362,9 @@ int main(int argc, char **argv){
 
   mainpanel_go(argc,argv,input_ch);
 
-  output_halt_playback();
-
-  cleanup();
   return(0);
 }
+
 
 
 

@@ -43,7 +43,8 @@
     Project maintainted by Steve Harris, Southampton UK.
     steve@plugin.org.uk or swh@ecs.soton.ac.uk
     
-    Plugin website at http://plugin.org.uk/" */
+    Plugin website at http://plugin.org.uk/" 
+*/
 
 #include "postfish.h"
 #include "reverb.h"
@@ -136,6 +137,10 @@ static void waveguide_nl_set_delay(waveguide_nl *wg, int delay){
 
   wg->dptr_pending = wg->ptr + wg->delay_pending;
   if(wg->dptr_pending >= wg->size) wg->dptr_pending -= wg->size;
+  if(wg->dptr==-1){
+    wg->delay=wg->delay_pending;
+    wg->dptr=wg->dptr_pending;
+  }
 }
 
 static void waveguide_nl_set_fc(waveguide_nl *wg, float fc){
