@@ -58,23 +58,17 @@ typedef struct {
 
 } suppress_state;
 
-suppress_settings suppress_master_set;
 suppress_settings suppress_channel_set;
-static suppress_state master_state;
 static suppress_state channel_state;
 static subband_window sw;
 
 void suppress_reset(){
   int i,j;
   
-  subband_reset(&master_state.ss);
   subband_reset(&channel_state.ss);
   
   for(i=0;i<suppress_freqs;i++){
     for(j=0;j<input_ch;j++){
-      memset(&master_state.iirS[i][j],0,sizeof(iir_state));
-      memset(&master_state.iirT[i][j],0,sizeof(iir_state));
-      memset(&master_state.iirR[i][j],0,sizeof(iir_state));
       memset(&channel_state.iirS[i][j],0,sizeof(iir_state));
       memset(&channel_state.iirT[i][j],0,sizeof(iir_state));
       memset(&channel_state.iirR[i][j],0,sizeof(iir_state));
@@ -106,21 +100,14 @@ static void filter_set(subband_state *ss,
 int suppress_load(void){
   int i;
   int qblocksize=input_size/16;
-  memset(&master_state,0,sizeof(master_state));
   memset(&channel_state,0,sizeof(channel_state));
 
-  suppress_master_set.active=calloc(input_ch,sizeof(*suppress_master_set.active));
   suppress_channel_set.active=calloc(input_ch,sizeof(*suppress_channel_set.active));
 
-  subband_load(&master_state.ss,suppress_freqs,qblocksize);
   subband_load(&channel_state.ss,suppress_freqs,qblocksize);
-
-  subband_load_freqs(&master_state.ss,&sw,suppress_freq_list,suppress_freqs);
+  subband_load_freqs(&channel_state.ss,&sw,suppress_freq_list,suppress_freqs);
    
   for(i=0;i<suppress_freqs;i++){
-    master_state.iirS[i]=calloc(input_ch,sizeof(iir_state));
-    master_state.iirT[i]=calloc(input_ch,sizeof(iir_state));
-    master_state.iirR[i]=calloc(input_ch,sizeof(iir_state));
     channel_state.iirS[i]=calloc(input_ch,sizeof(iir_state));
     channel_state.iirT[i]=calloc(input_ch,sizeof(iir_state));
     channel_state.iirR[i]=calloc(input_ch,sizeof(iir_state));
@@ -230,28 +217,8 @@ static void suppress_work_helper(void *vs, suppress_settings *sset){
   }
 }
 
-static void suppress_work_master(void *vs){
-  suppress_work_helper(vs,&suppress_master_set);
-}
-
 static void suppress_work_channel(void *vs){
   suppress_work_helper(vs,&suppress_channel_set);
-}
-
-time_linkage *suppress_read_master(time_linkage *in){
-  int visible[input_ch];
-  int active [input_ch];
-  subband_window *w[input_ch];
-  int i;
-  
-  for(i=0;i<input_ch;i++){
-    visible[i]=0;
-    active[i]=suppress_master_set.active[0];
-    w[i]=&sw;
-  }
-  
-  return subband_read(in, &master_state.ss, w, visible, active, 
-		      suppress_work_master, &master_state);
 }
 
 time_linkage *suppress_read_channel(time_linkage *in){

@@ -529,14 +529,19 @@ static void mainpanel_masterentry(postfish_mainpanel *p,
 				   GtkWidget *, GtkWidget *)){  
   
   GtkWidget *ww=windowbutton_new(label);
-  GtkWidget *wa=gtk_toggle_button_new_with_label(shortcut);
+  GtkWidget *wa=(shortcut?
+		 gtk_toggle_button_new_with_label(shortcut):
+		 gtk_frame_new(shortcut));
   
   gtk_table_attach_defaults(GTK_TABLE(table),ww,0,1,i+1,i+2);
   gtk_table_attach_defaults(GTK_TABLE(table),wa,1,2,i+1,i+2);
+  if(shortcut)
+    gtk_widget_add_accelerator (wa, "activate", p->group, key, 0, 0);
+  else{
+    gtk_frame_set_shadow_type(GTK_FRAME(wa),GTK_SHADOW_ETCHED_IN);
+  }
 
-  gtk_widget_add_accelerator (wa, "activate", p->group, key, 0, 0);
-  
-  if(panel_create)(*panel_create)(p,ww,wa);
+  if(panel_create)(*panel_create)(p,ww,(shortcut?wa:0));
 }
 
 #define CHANNEL_EFFECTS 7
@@ -978,11 +983,11 @@ void mainpanel_create(postfish_mainpanel *panel,char **chlabels){
 
   mainpanel_masterentry(panel,mastertable,"_Crossmix "," c ",GDK_c,0,0);
   mainpanel_masterentry(panel,mastertable,"_Multicomp "," m ",GDK_m,1,compandpanel_create_master);
-  mainpanel_masterentry(panel,mastertable,"_Onecomp "," o ",GDK_o,2,singlepanel_create);
-  mainpanel_masterentry(panel,mastertable,"De_verb "," v ",GDK_v,3,suppresspanel_create_master);
-  mainpanel_masterentry(panel,mastertable,"_Reverb "," r ",GDK_r,4,0);
-  mainpanel_masterentry(panel,mastertable,"_EQ "," e ",GDK_e,5,eqpanel_create);
-  mainpanel_masterentry(panel,mastertable,"_Limit "," l ",GDK_l,6,limitpanel_create);
+  mainpanel_masterentry(panel,mastertable,"_Singlecomp "," s ",GDK_s,2,singlepanel_create);
+  mainpanel_masterentry(panel,mastertable,"_Reverb "," r ",GDK_r,3,0);
+  mainpanel_masterentry(panel,mastertable,"_EQ "," e ",GDK_e,4,eqpanel_create);
+  mainpanel_masterentry(panel,mastertable,"_Limit "," l ",GDK_l,5,limitpanel_create);
+  mainpanel_masterentry(panel,mastertable,"_Output ",NULL,GDK_l,6,0);
 
   g_signal_connect (G_OBJECT (panel->toplevel), "delete_event",
 		    G_CALLBACK (shutdown), NULL);

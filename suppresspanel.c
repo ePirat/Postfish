@@ -36,7 +36,6 @@ extern int input_ch;
 extern int input_size;
 extern int input_rate;
 
-extern suppress_settings suppress_master_set;
 extern suppress_settings suppress_channel_set;
 
 typedef struct {
@@ -61,7 +60,6 @@ typedef struct suppress_panel_state{
   tbar             bars[suppress_freqs+1];
 } suppress_panel_state;
 
-static suppress_panel_state *master_panel;
 static suppress_panel_state *channel_panel;
 
 static void compand_change(GtkWidget *w,gpointer in){
@@ -253,21 +251,6 @@ static suppress_panel_state *suppresspanel_create_helper(postfish_mainpanel *mp,
   subpanel_show_all_but_toplevel(panel);
 
   return ps;
-}
-
-void suppresspanel_create_master(postfish_mainpanel *mp,
-                                GtkWidget *windowbutton,
-                                GtkWidget *activebutton){
-
-  char *shortcut[]={" v "};
-  
-  subpanel_generic *panel=subpanel_create(mp,windowbutton,&activebutton,
-					  &suppress_master_set.active[0],
-					  &suppress_master_set.panel_visible,
-					  "De_verberation filter (master)",shortcut,
-					  0,1);
-  
-  master_panel=suppresspanel_create_helper(mp,panel,&suppress_master_set);
 }
 
 void suppresspanel_create_channel(postfish_mainpanel *mp,
