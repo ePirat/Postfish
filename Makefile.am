@@ -17,4 +17,4 @@ debug:
 profile:
 	$(MAKE) all CFLAGS="@PROFILE@"
 
-EXTRA_DIST = COPYING autogen.sh
+EXTRA_DIST = COPYING autogen.sh configure.in Makefile.am

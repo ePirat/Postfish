@@ -1688,7 +1688,7 @@ int main(int argc, char **argv){
     form_init(&editf,120,1);
     form_init(&noneditf,50,0);
     box(stdscr,0,0);
-    mvaddstr(0, 2, " Postfish Filter build 20021120.0 ");
+    mvaddstr(0, 2, " Postfish Filter $Id: postfish.c,v 1.2 2002/11/30 07:30:29 xiphmont Exp $ ");
     mvaddstr(LINES-1, 2, 
 	     " [<]<<   [,]<   [Spc] Play/Pause   [Bksp] Stop   [.]>   [>]>>   [p] Process ");
 
@@ -1714,7 +1714,7 @@ int main(int argc, char **argv){
     signal(SIGINT,SIG_IGN);
 
     while(1){
-      int c=form_handle_char(&editf,getch());
+      int c=form_handle_char(&editf,pgetch());
       if(c=='q')break;
       switch(c){
       case '<':

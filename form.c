@@ -29,6 +29,11 @@
 #include <stdlib.h>
 #include <ncurses.h>
 #include <pthread.h>
+#include <math.h>
+
+static int cursor_active=0;
+static int cursor_x;
+static int cursor_y;
 
 extern pthread_mutex_t master_mutex;
 
@@ -57,6 +62,22 @@ void switch_to_ncurses(){
 int mgetch(){
   while(1){
     int ret=getch();
+    if(ret>0)return(ret);
+  }
+}
+
+int pgetch(){
+  while(1){
+    int ret;
+
+    if(cursor_active){
+      move(cursor_y,cursor_x);
+      curs_set(1);
+    }else{
+      curs_set(0);
+    }
+    
+    ret=getch();
     if(ret>0)return(ret);
   }
 }
@@ -156,24 +177,23 @@ void draw_field(formfield *f){
       /* cursor? */
       if(focus){
 	int val=f->editwidth-f->cursor-1;
-	curs_set(1);
+	cursor_active=1;
+	cursor_y=f->y;
 	switch(val){
 	case 0:case 1:
-	  move(f->y,f->x+f->width-val-1);
+	  cursor_x=f->x+f->width-val-1;
 	  break;
 	case 2:case 3:
-	  move(f->y,f->x+f->width-val-2);
+	  cursor_x=f->x+f->width-val-2;
 	  break;
 	case 4:case 5:
-	  move(f->y,f->x+f->width-val-3);
+	  cursor_x=f->x+f->width-val-3;
 	  break;
 	default:
-	  move(f->y,f->x+f->width-val-4);
+	  cursor_x=f->x+f->width-val-4;
 	  break;
 	}
-      }else{
-	curs_set(0);
-      } 
+      }
     }
     break;
   case FORM_P2:
@@ -181,7 +201,7 @@ void draw_field(formfield *f){
       char buf[80];
       snprintf(buf,80,"%*ld",f->width,lval);
       addstr(buf);
-      curs_set(0);
+      if(focus)cursor_active=0;
     }
     break;
   default:
@@ -192,12 +212,13 @@ void draw_field(formfield *f){
       else
 	snprintf(buf,80,"%+*ld",f->width,lval);
       addstr(buf);
-      curs_set(0);
+      if(focus)cursor_active=0;
     }
     break;
   }
   
   attrset(0);
+
 }
 
 void form_redraw(form *f){
