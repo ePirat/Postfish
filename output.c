@@ -191,15 +191,16 @@ void *playback_thread(void *dummy){
     }
   }
 
-  if(isachr(playback_fd)){
-    int fd=fileno(playback_fd);
-    ioctl(fd,SNDCTL_DSP_RESET);
-  }else{
-    if(ch>-1)
-      WriteWav(playback_fd,ch,rate,16,count);
+  if(playback_fd){
+    if(isachr(playback_fd)){
+      int fd=fileno(playback_fd);
+      ioctl(fd,SNDCTL_DSP_RESET);
+    }else{
+      if(ch>-1)
+	WriteWav(playback_fd,ch,rate,16,count);
+    } 
+    fclose(playback_fd);
   }
-  
-  fclose(playback_fd);
   playback_active=0;
   playback_exit=0;
   if(audiobuf)free(audiobuf);
