@@ -79,8 +79,11 @@ void outpanel_state_from_config(int bank){
 				 outset.monitor.source[i]);
 
   config_get_sigat("output_monitor_set",bank,0,0,0,0,&outset.monitor.device);
-  if(state.monitor.device)
+
+  /* don't set a device that doesn't exist */
+  if(state.monitor.device && outset.monitor.device<monitor_entries)
     gtk_combo_box_set_active(GTK_COMBO_BOX(state.monitor.device),outset.monitor.device);
+
   config_get_sigat("output_monitor_set",bank,0,0,0,1,&outset.monitor.bytes);
   if(state.monitor.depth)
     gtk_combo_box_set_active(GTK_COMBO_BOX(state.monitor.depth),outset.monitor.bytes);

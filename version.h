@@ -1,2 +1,2 @@
 #define VERSION "$Id$ "
-/* DO NOT EDIT: Automated versioning hack [Sun Oct 10 20:56:54 EDT 2004] */
+/* DO NOT EDIT: Automated versioning hack [Mon Oct 11 22:10:04 EDT 2004] */
