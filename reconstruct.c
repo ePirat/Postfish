@@ -40,6 +40,7 @@ void set_up_filter(int n){
   if(n!=cached_n){
     if(n)drft_clear(&fft);
     drft_init(&fft,n);
+    cached_n=n;
   }
 }
 
