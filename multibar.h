@@ -43,9 +43,10 @@ struct _Multibar{
 
   GdkGC         *boxcolor;
   double         peak;
+  int            peakdelay;
+  double         peakdelta;
 
-  struct timeval cliptimer;
-  struct timeval peaktimer;
+  int            clipdelay;
 
   bartrack *bartrackers;
   int bars;

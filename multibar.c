@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include "multibar.h"
 
+/* call me roughly 10-20fps */
 static void draw(GtkWidget *widget,double *lowvals, double *highvals, int n){
   int i,j;
   Multibar *m=MULTIBAR(widget);
@@ -12,26 +13,18 @@ static void draw(GtkWidget *widget,double *lowvals, double *highvals, int n){
     gdk_gc_copy(m->boxcolor,widget->style->black_gc);
   }
   
-  if(m->cliptimer.tv_sec){
-     struct timeval tv;
-    gettimeofday(&tv,NULL);
-    
-    long val=(tv.tv_sec-m->cliptimer.tv_sec)*1000+(tv.tv_usec-m->cliptimer.tv_usec)/1000;
-    if(val>2000)memset(&m->cliptimer,0,sizeof(m->cliptimer));
-  }
-
   if(m->peaktimer.tv_sec){
     struct timeval tv;
     gettimeofday(&tv,NULL);
     
     long val=(tv.tv_sec-m->peaktimer.tv_sec)*1000+(tv.tv_usec-m->peaktimer.tv_usec)/1000;
 
-    if(val>1500) max = m->peak -= (val-1500)*.01;
+    if(val>2000) max = m->peak -= (val-2000)*.001;
   }
 
   for(i=0;i<n;i++)
     if(highvals[i]>=0.){
-      gettimeofday(&m->cliptimer,NULL);
+      clipdelay=15*10; /* ~ ten second hold */
       break;
     }
   for(i=0;i<n;i++)
@@ -39,7 +32,8 @@ static void draw(GtkWidget *widget,double *lowvals, double *highvals, int n){
 
   if(max>m->peak){
     m->peak=max;
-    gettimeofday(&m->peaktimer,NULL);
+    peakdelay=15*2; /* ~2 second hold */
+    peakdelta=0;
   }
 
   {
@@ -103,28 +97,20 @@ static void draw(GtkWidget *widget,double *lowvals, double *highvals, int n){
       /* hi */
       if(pixhi[i]>trackhi){
 	/* hi attack */
+	if(delhi<0.)delhi=0.;
 	if(m->dampen_flags & HI_ATTACK){
 	  /* damp the attack */
-	  if(delhi<0.)
-	    delhi=1.;
-	  else
-	    delhi+=2;
+	  delhi+=1;
 	  pixhi[i]=trackhi+delhi;
-	}else
-	  if(delhi<0.)delhi=0.;
-	
+	}	
       }else{
 	/* hi decay */
+	if(delhi>0.)delhi=0.;
 	if(m->dampen_flags & HI_DECAY){
 	  /* damp the decay */
-	  if(delhi>0.)
-	    delhi=-1.;
-	  else
-	    delhi-=2;
+	  delhi-=1;
 	  pixhi[i]=trackhi+delhi;
-	}else
-	  if(delhi>0.)delhi=0.;
-
+	}
       }
       m->bartrackers[i].pixelposhi=pixhi[i];
       m->bartrackers[i].pixeldeltahi=delhi;
@@ -132,28 +118,20 @@ static void draw(GtkWidget *widget,double *lowvals, double *highvals, int n){
       /* lo */
       if(pixlo[i]>tracklo){
 	/* lo attack */
+	if(dello<0.)dello=0.;
 	if(m->dampen_flags & LO_ATTACK){
 	  /* damp the attack */
-	  if(dello<0.)
-	    dello=1.;
-	  else
-	    dello+=2;
+	  dello+=1;
 	  pixlo[i]=tracklo+dello;
-	}else
-	  if(dello<0.)dello=0.;
-
+	}
       }else{
 	/* lo decay */
+	if(dello>0.)dello=0.;
 	if(m->dampen_flags & LO_DECAY){
 	  /* damp the decay */
-	  if(dello>0.)
-	    dello=-1.;
-	  else
-	    dello-=2;
+	  dello-=1;
 	  pixlo[i]=tracklo+dello;
-	}else
-	  if(dello>0.)dello=0.;
-
+	}
       }
       m->bartrackers[i].pixelposlo=pixlo[i];
       m->bartrackers[i].pixeldeltalo=dello;
@@ -170,11 +148,6 @@ static void draw(GtkWidget *widget,double *lowvals, double *highvals, int n){
 	if(pixhi[i]>x && pixhi[i]<next)next=pixhi[i];
       }
       
-      if(m->cliptimer.tv_sec!=0){
-	g=0x6000;
-	b=0x6000;
-      }
-
       for(i=0;i<n;i++){
 	if(pixlo[i]<=x && pixhi[i]>=next){
 	  switch(i%8){
@@ -231,14 +204,25 @@ static void draw(GtkWidget *widget,double *lowvals, double *highvals, int n){
     }
   }
 
-  gdk_draw_line (m->backing,
-		 widget->style->white_gc,
-		 0, 0, widget->allocation.width-1, 0);
-
-  gdk_draw_line (m->backing,
-		 widget->style->white_gc,
-		 0, widget->allocation.height-1, 
-		 widget->allocation.width-1, widget->allocation.height-1);
+  if(m->clipdelay){
+    gdk_draw_line (m->backing,
+		   widget->style->fg_gc[1],
+		   0, 0, widget->allocation.width-1, 0);
+    
+    gdk_draw_line (m->backing,
+		   widget->style->fg_gc[1],
+		   0, widget->allocation.height-1, 
+		   widget->allocation.width-1, widget->allocation.height-1);
+  }else{
+    gdk_draw_line (m->backing,
+		   widget->style->white_gc,
+		   0, 0, widget->allocation.width-1, 0);
+    
+    gdk_draw_line (m->backing,
+		   widget->style->white_gc,
+		   0, widget->allocation.height-1, 
+		   widget->allocation.width-1, widget->allocation.height-1);
+  }
 
   /* peak follower */
   {
@@ -262,7 +246,7 @@ static void draw(GtkWidget *widget,double *lowvals, double *highvals, int n){
 			 {x-5,widget->allocation.height}},3);
 
     
-    gdk_draw_line(m->backing,widget->style->fg_gc[1],x,0,x,widget->allocation.height-1);
+    gdk_draw_line(m->backing,widget->style->fg_gc[0],x,0,x,widget->allocation.height-1);
 
   }
 
