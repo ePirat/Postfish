@@ -1,0 +1,300 @@
+This README file covers the 2004-05-29 pre-release of the Postfish by
+Xiph.Org.
+
+>>>> What is the Postfish?
+
+  The Postfish is a digital audio post-processing, restoration,
+  filtering and mixdown tool.  It works as a linear audio filter, much
+  like a rack of analog effects.  The first stage of the filter
+  pipeline provides a bank of configurable per-channel processing
+  filters for up to 32 input channels.  The second stage provides
+  mixdown of the processed input audio into a group of up to eight
+  output channels.  The third stage applies processing filters to the
+  output group post-mixdown.
+
+  The Postfish is a stream filter; feed it audio from a list of files
+  or input stream, and it renders audio to standard out, as well as
+  optionally providing a configurable audio playback monitor via a
+  sound device.  If the input audio is being taken from files,
+  Postfish also provides simple forward/back/cue seeking and A-B
+  looping control.
+
+>>>> What is the Postfish for?
+
+  The Postfish intends to include exactly and only the most useful
+  basic filters needed to produce a good mixdown from audio recorded
+  'in the field'.  The filter set also comprises the fundamentals
+  needed for master mixdown in a small studio.  It is not an editor;
+  for that reason, it's intended to be used with an audio editor, such
+  as Audacity.
+
+  If, for example, you've just multi-track recorded a rehearsal of
+  your troupe's current rock opera and the Director then appears out
+  of nowhere (they always do) and says "Have a mix for my review by
+  morning", the Postfish is all you need.
+
+  Or, as another example, you've recorded for a band who'd like to put
+  out a CD of the live performance...  All the band FX are already in
+  the multi-track, so the Postfish plus Audacity is all you need.
+
+  In a studio situation, tracks usually get recorded dry, so there's
+  generally multiple mixdown stages of adding effects.  Postfish
+  (obviously) does not give you a large array of instrument or
+  situation-specific effects and it never will (dammit).  What it does
+  give you is the effects necessary to take the tracks from earlier
+  mixing and produce intermediate mixes and final masters.  Of course,
+  if you already have $100k of analog rack... you likely won't be
+  using Postfish.  But hey, who knows....
+
+>>>> What effects does the Postfish include?
+
+Declipper:
+
+  The Postfish declipper is a 'build audio from scratch'
+  reconstruction filter. Any section of audio exceeding a configured
+  amplitude threshold is marked 'lost' and the filter builds new
+  audio to fill the gap. In this way it can be used to repair both
+  digital clipping that occurred during sampling, as well as analog
+  clipping that may have happened at an earlier stage.
+
+Single-band compander:
+
+  A single-band compander is used to compress, limit, expand, or gate
+  an input signal, thus providing basic dynamic range manipulation
+  abilities.  
+
+  The Postfish single-band compander provides independent over and
+  under threshold controls for each channel, each providing expansion,
+  compression, attack, release, lookahead and soft-knee configuration
+  for three independent over, mid and under tracking filters.  Each
+  filter may also be configured to track by peak, or track by RMS
+  energy.
+
+Multi band compander:
+
+  The Postfish multi-band compander is similar to the single-band
+  compander above, and provides all of the same controls with an
+  addition: each over/under threshold is configurable by full-octave,
+  half-octave or third-octave bands, for up to 30 bands of independent
+  companding for each of 32 input channels and the group of eight
+  outputs.
+
+  The multi-band compander includes a global 'mid' compand slider,
+  like the single-band compander.  This slider acquires a new use in
+  multi-band mode however, where it can flatten or expand the dynamic
+  range of an entire channel (or the entire recording) without
+  any artifacts.
+
+Equalization:
+
+  30 band -60/+30dB 1/3-octave beat-less EQ per input channel and full
+  output group.
+
+Deverberator:
+
+  Live recordings have a tendency to end up with too much reverb,
+  especially when one is forced to use ambient miking.  The
+  deverberator dries out overly 'wet' live signals. 
+
+Reverberator:
+
+  ...for adding reverb to signals that are too 'dry', especially to
+  even out apparent depth when mixing close miked signals (like
+  vocals) to an ambient-miked signal.
+
+  The Postfish provides a stereo reverb per input channel and a mono
+  reverb per output post-mix.
+
+Limiting:
+
+  Simple, old-fashioned causal output hard-limiter to avoid unexpected
+  digital clipping on the output.  Configurable by threshold, knee
+  depth and release speed.
+
+Mixdown:
+
+  Postfish provides both a master attenuation and delay panel (which
+  places these basic sliders for all channels on one window) as well
+  as per-input mixdown that allows each input channel to be multiply
+  routed to one or all of eight output through an additional cascade
+  of four additional independent attenuation/delay/invert units per
+  input, as well also allowing each input to be mixed through a
+  'crossplacer'.
+
+  The crossplacer is used to place any input into a stereo [or
+  greater] image by altering not only the relative attenuation across
+  channels (the 'cross attenuate' control), but also by adjusting
+  phase and delay across channels (the 'cross delay' control).  The
+  A-B slider then controls how far the input apparently images toward
+  the A output bank or the B output bank.  
+
+  The mixdown blocks can also be configured to take as input not only
+  the input channel, but also each channel's left (A) or right (B)
+  reverb output.  For example, reverb left can be mixed to the left
+  output, the reverb right mixed to the right channel and the original
+  input crossplaced somewhere between left or right.  The input
+  placement can be altered on the fly thus apparently moving the
+  input's location while the impression of space the reverb creates
+  holds still. For even more realism, adding an additional delay of 10
+  ms or so to the reverb (sound travels roughly one meter in 3 ms) can
+  pull the original image closer without losing the impression of
+  reverberation in a medium-to-large hall.  A reverb delay also allows
+  the use of a faster/tighter reverb time without losing the
+  the impression of size.
+
+  Of course, with eight channels, one can begin imaging/mastering for
+  more than just stereo...
+
+>>>> Don't we already have several free apps that do this sort of thing?
+
+  The short/wrong answer is maybe. The complicated answer is no.
+
+  .) I needed a specific set of filters
+  .) I needed them in one place working together 
+  .) I needed to hear changes I made to settings as I made them
+  .) I needed to be able to absolutely trust the filters would function 
+     as expected 
+  .) I needed it all to be convenient to use
+
+  Given my specific requirements, nothing else came close to filling
+  the niche and I didn't want to cobble together a 90% solution out of
+  multiple other apps when this functionality was the very core of
+  what I needed for mixdown.
+
+  Both the Postfish UI and the filter functionality are intended to be
+  the most usable day-to-day set, rather than sporting the maximum
+  number of buttons in the smallest space or more features than the
+  next app (or the slickest skin).  
+
+  Postfish is the way it is because I need it, and I use it for the
+  core basics of mixing that I absolutely cannot afford to screw up.
+  Some filters (like the declipper and deverberator) are unique.  Even
+  among those that aren't, Postfish as implemented deliberately sets
+  speed/quality tradeoff much higher than most existing apps.
+
+  The multiband compander is a case in point; other free apps do
+  implement this effect. To my knowledge, all use the simplest/fastest
+  method, operating directly on the FFT of a windowed block.  An
+  FFT-based multicompander is fast, but the aliasing and frequency
+  multiplication artifacts (you eventually end up multiplying the
+  input by the transfer function of the window shape; most noticeably,
+  they tend to cause odd pitch changes in raw vocals) render them
+  unsuitable for professional-quality work.
+
+>>>> What does the Postfish require?
+
+  .) Linux 2.x (ports come later) with OSS or ALSA OSS emulation
+  .) Libraries: FFTW3, pthreads, Gtk2
+  .) Gcc and gmake
+  .) A sound card or external USB/Firewire A/D/A
+  .) A video card, preferrably one with fast AGP
+  .) Alot of CPU.  Really.  As much as you can throw at it.  Dual Xeon 3GHZ?  
+     Yup, you can use all of it.
+
+  Seriously, this is a very CPU hungry app because of the
+  aforementioned speed/quality tradeoff.  I can do simple mixdown of 8
+  channels to stereo with a few effects in realtime on my G3-400, but
+  the machine is crying.  The dual Athlon 2600 keeps up much better,
+  but it's still possible to overwhelm it by lighting up all the
+  effects and feeding it enough input channels.  The declipper,
+  especially, eats CPU on heavily damaged audio.  The multiband
+  compander is runner up in 'absurd levels of CPU usage'.
+
+  Postfish, BTW, is designed to scale to dual CPUs.  A dual
+  Athlon/Pentium/UltraSparc/PowerPC runs Postfish much better than a
+  single processor.
+
+>>>> Why is this a pre-release?
+
+  Because it's not finished.  A few things are more obvious than others:
+
+  1) The 'cue sheet' and 'settings list' panels are still
+     unimplemented.  These are the only inactive features on the UI,
+     but they're right on the main panel.
+
+  2) Postfish *should* be a JACK-able app, but isn't.  That too should
+     be done for a real release.
+
+  3) Although the whole thing is designed as a rendering engine
+     wrapped up in a neat async-safe library that's then used by an
+     asynchronous UI, the source isn't entirely arranged that way.  It
+     should be.  It will be for final release.
+
+  4) The stereo reverb code used by Postfish is Steve Harris's GPL
+     plate reverb from LADSPA.  Although this is a solid, reliable
+     reverb implementation, it's also a bit thinner on final output
+     results than I'd like.  Don't get me wrong, this reverb is
+     excellent code, but it places emphasis more toward 'fast' rather
+     than my desired 'best possible results given unlimited CPU'.  I'm
+     evaluating other reverb implementations; this is a case where
+     others have achieved clearly better results than I would, and
+     thus I plan to use the best available to me.
+
+  5) This code is just now seeing light of day.  It is probably *full*
+     of simple bugs.  I'm confident in the audio pipeline itself (I've
+     hammered on it mercilessly) but there's certainly many UI
+     interconnection bugs left to find.
+
+  6) Everyone knows a release requires documentation.  There is no
+     documentation.
+
+>>>> There's no documentation!?
+
+  Not yet; good documentation requires effort and time.  
+
+  That said, if read the list of effects, knew what they were, and
+  knew basically how to use them, you should be able to pick up the
+  Postfish and do useful work in a few minutes of playing around. 
+
+  I took care to establish and follow conventions in the UI: If you're
+  using the shipped postfish-gtkrc theme, square blue buttons turn
+  things on.  Triangular blue buttons pop configuration windows.
+ 
+  The grid of buttons on the right in the 'channel' frame are the
+  effects for the input channels.  The square blue buttons turn a
+  specific effect on for a specific channel.  A triangle pops the
+  configuration for that effect.  Mixing controls are labelled
+  "Atten/Mix" in the lowest row in the "channel" panel.
+
+  Further right is the "master" panel; these controls work the same
+  way for effects on the output channels after mixdown.
+
+  Finally, postfish -h will tell you how to get audio in and read
+  audio out.
+
+  Only two things are probably impossible to figure out just from
+  an afternoon of playing around:
+
+  1) Output from a reverb effect in the "channel" panel is sent to a
+     separate internal stereo bus.  The reverb has to be explicitly
+     mixed into the output on a 'mix' panel.  When postfish starts for
+     the first time, the default setup mixes one side of the reverb
+     pair back into left or right.
+ 
+  2) Turning "Atten/Mix" off for any channel will mute it completely
+     in all input effects, not just in the mixdown (this obviously
+     doesn't affect output, but it also silences all the VU meters for
+     that input channel, and that can be disconcerting if you don't
+     expect it).
+
+>>>> How do I get, build and install it?
+
+  Postfish is in Xiph.Org's Subversion repository.  Get the source using:
+
+    svn co http://svn.xiph.org/trunk/postfish postfish
+
+  Edit the Makefile to select the proper 'ADD_DEF' line.  LinuxPPC
+  users want the first, almost everyone else wants the second.  It
+  should be self explanatory given text in the Makefile.
+
+    cd postfish
+    make
+
+  and as root,
+
+    make install
+
+Happy hacking (and mixing),
+
+Monty
+TD, Xiph.Org
