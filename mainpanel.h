@@ -33,7 +33,6 @@ struct postfish_mainpanel{
   GtkWidget *masterdB_s;
   GtkWidget *masterdB_a;
 
-  GtkWidget *buttonwindow[7];
   GtkWidget *buttonactive[7];
 
   GtkWidget *cue_set[2];
@@ -50,7 +49,6 @@ struct postfish_mainpanel{
   GtkWidget *entry_a;
   GtkWidget *entry_b;
 
-  postfish_clippanel clippanel;
 
   /* ui state */
   int fishframe;
@@ -59,3 +57,4 @@ struct postfish_mainpanel{
  
 };
 
+extern gboolean slider_keymodify(GtkWidget *w,GdkEventKey *event,gpointer in);

@@ -343,7 +343,7 @@ static void size_request (GtkWidget *widget,GtkRequisition *requisition){
     if(y>maxy)maxy=y;
   }
 
-  requisition->width = (maxx*2)*m->labels;
+  requisition->width = (maxx*1.5+2)*m->labels;
   requisition->height = maxy;
 }
 

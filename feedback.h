@@ -21,10 +21,21 @@
  * 
  */
 
-extern int declip_load(void);
-extern int declip_setblock(int n);
-extern int declip_settrigger(double trigger,int ch);
-extern int declip_setiterations(double x);
-extern int declip_setconvergence(double x);
-extern int declip_reset(void);
-extern time_linkage *declip_read(time_linkage *in);
+typedef struct feedback_generic{
+  struct feedback_generic *next;
+} feedback_generic;
+
+typedef struct feedback_generic_pool{
+  feedback_generic *feedback_list_head;
+  feedback_generic *feedback_list_tail;
+  feedback_generic *feedback_pool;
+} feedback_generic_pool;
+
+extern feedback_generic *feedback_new(feedback_generic_pool *pool,
+				      feedback_generic *(*constructor)(void));
+extern void feedback_push(feedback_generic_pool *pool,
+			  feedback_generic *f);
+extern feedback_generic *feedback_pull(feedback_generic_pool *pool);
+extern void feedback_old(feedback_generic_pool *pool,
+			 feedback_generic *f);
+

@@ -25,7 +25,10 @@
 #include <linux/soundcard.h>
 #include <sys/ioctl.h>
 #include "postfish.h"
+#include "feedback.h"
 #include "input.h"
+#include "output.h"
+#include "declip.h"
 
 sig_atomic_t playback_active=0;
 sig_atomic_t playback_exit=0;
@@ -33,7 +36,7 @@ sig_atomic_t playback_seeking=0;
 
 void output_reset(void){
   /* empty feedback queues */
-  while(pull_output_feedback(NULL,NULL,NULL));
+  while(pull_output_feedback(NULL,NULL));
   return;
 }
 
@@ -47,84 +50,42 @@ void pipeline_reset(){
   fcntl(eventpipe[0],F_SETFL,flags);
 
   input_reset();  /* clear any persistent lapping state */
+  declip_reset();  /* clear any persistent lapping state */
   output_reset(); /* clear any persistent lapping state */
 }
 
 typedef struct output_feedback{
+  feedback_generic parent_class;
   double *rms;
   double *peak;
-
-  struct output_feedback *next;
 } output_feedback;
 
-static output_feedback *feedback_list_head;
-static output_feedback *feedback_list_tail;
-static output_feedback *feedback_pool;
+static feedback_generic_pool feedpool;
 
-static output_feedback *new_output_feedback(void){
-  output_feedback *ret;
-  
-  pthread_mutex_lock(&master_mutex);
-  if(feedback_pool){
-    ret=feedback_pool;
-    feedback_pool=feedback_pool->next;
-    pthread_mutex_unlock(&master_mutex);
-    return ret;
-  }
-  pthread_mutex_unlock(&master_mutex);
-  ret=malloc(sizeof(*ret));
+static feedback_generic *new_output_feedback(void){
+  output_feedback *ret=malloc(sizeof(*ret));
   ret->rms=malloc((input_ch+2)*sizeof(*ret->rms));
   ret->peak=malloc((input_ch+2)*sizeof(*ret->peak));
-  
-  return ret;
+  return (feedback_generic *)ret;
 }
 
 static void push_output_feedback(double *peak,double *rms){
   int i,n=input_ch+2;
-  output_feedback *f=new_output_feedback();
-
+  output_feedback *f=(output_feedback *)
+    feedback_new(&feedpool,new_output_feedback);
+  
   memcpy(f->rms,rms,n*sizeof(*rms));
   memcpy(f->peak,peak,n*sizeof(*peak));
-  f->next=NULL;
-
-  pthread_mutex_lock(&master_mutex);
-  if(!feedback_list_tail){
-    feedback_list_tail=f;
-    feedback_list_head=f;
-  }else{
-    feedback_list_head->next=f;
-    feedback_list_head=f;
-  }
-  pthread_mutex_unlock(&master_mutex);
+  feedback_push(&feedpool,(feedback_generic *)f);
 }
 
-int pull_output_feedback(double *peak,double *rms,int *nn){
-  output_feedback *f;
+int pull_output_feedback(double *peak,double *rms){
+  output_feedback *f=(output_feedback *)feedback_pull(&feedpool);
   int i,j,n=input_ch+2;
-  if(nn)*nn=n;
-
-  pthread_mutex_lock(&master_mutex);
-  if(feedback_list_tail){
-    
-    f=feedback_list_tail;
-    feedback_list_tail=feedback_list_tail->next;
-    if(!feedback_list_tail)feedback_list_head=0;
-
-  }else{
-    pthread_mutex_unlock(&master_mutex);
-    return 0;
-  }
-  pthread_mutex_unlock(&master_mutex);
-
-  if(rms)
-    memcpy(rms,f->rms,sizeof(*rms)*n);
-  if(peak)
-    memcpy(peak,f->peak,sizeof(*peak)*n);
-
-  pthread_mutex_lock(&master_mutex);
-  f->next=feedback_pool;
-  feedback_pool=f;
-  pthread_mutex_unlock(&master_mutex);
+  if(!f)return 0;
+  if(rms)memcpy(rms,f->rms,sizeof(*rms)*n);
+  if(peak)memcpy(peak,f->peak,sizeof(*peak)*n);
+  feedback_old(&feedpool,(feedback_generic *)f);
   return 1;
 }
 
@@ -240,6 +201,7 @@ void *playback_thread(void *dummy){
 
     /* get data */
     if(!(ret=input_read()))break;
+    //!(ret=declip_read()))break;
 
     /************/
 

@@ -2,7 +2,7 @@
  *
  *  postfish
  *    
- *      Copyright (C) 2002-2004 Monty and Xiph.Org
+ *      Copyright (C) 2002-2004 Monty
  *
  *  Postfish is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -21,10 +21,20 @@
  * 
  */
 
-extern int declip_load(void);
-extern int declip_setblock(int n);
-extern int declip_settrigger(double trigger,int ch);
-extern int declip_setiterations(double x);
-extern int declip_setconvergence(double x);
-extern int declip_reset(void);
-extern time_linkage *declip_read(time_linkage *in);
+typedef struct{
+  GtkWidget *mainpanel_windowbutton;
+  GtkWidget *mainpanel_activebutton;
+  GtkWidget *subpanel_windowbutton;
+  GtkWidget *subpanel_activebutton;
+  GtkWidget *subpanel_toplevel;
+  GtkWidget *subpanel_box;
+  sig_atomic_t *activevar;
+
+  postfish_mainpanel *mainpanel;
+} subpanel_generic;
+
+extern subpanel_generic *subpanel_create(postfish_mainpanel *mp,
+					 GtkWidget *windowbutton,
+					 GtkWidget *activebutton,
+					 sig_atomic_t *activevar,
+					 char *prompt,char *shortcut);

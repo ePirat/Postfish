@@ -41,6 +41,8 @@ int main(int argc, char **argv){
 
   /* parse command line and open all the input files */
   if(input_load(argc-1,argv+1))exit(1);
+  /* set up filter chains */
+  if(declip_load())exit(1);
 
   /* look at stdout... do we have a file or device? */
   if(!isatty(STDOUT_FILENO)){

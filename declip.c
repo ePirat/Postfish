@@ -26,6 +26,7 @@
 #include <sys/types.h>
 #include "smallft.h"
 #include "reconstruct.h"
+#include "feedback.h"
 #include <stdio.h>
 
 extern int input_rate;
@@ -76,25 +77,61 @@ static int cache_samples;
 static int fillstate=0; /* 0: uninitialized
 			   1: normal
 			   2: eof processed */
-
 static time_linkage out;
 
 /* accessed across threads */
-static sig_atomic_t declip_active=0;
-static sig_atomic_t declip_converge=2; /* 0=over, 1=full, 2=half, 3=partial, 4=approx */
-static sig_atomic_t *chtrigger=0;
-static sig_atomic_t *chactive=0;
+sig_atomic_t declip_active=0;
+sig_atomic_t declip_converge=2; /* 0=over, 1=full, 2=half, 3=partial, 4=approx */
+
+static double *chtrigger=0;
 static sig_atomic_t pending_blocksize=0;
+static double convergence=0.;
+static double iterations=0.;
+
+
+/* feedback! */
+typedef struct declip_feedback{
+  feedback_generic parent_class;
+  int *clipcount;
+  int total;
+} declip_feedback;
+
+static feedback_generic_pool feedpool;
+
+static feedback_generic *new_declip_feedback(void){
+  declip_feedback *ret=malloc(sizeof(*ret));
+  ret->clipcount=malloc((input_ch)*sizeof(*ret->clipcount));
+  return (feedback_generic *)ret;
+}
+
+static void push_declip_feedback(int *clip,int total){
+  int i,n=input_ch;
+  declip_feedback *f=(declip_feedback *)
+    feedback_new(&feedpool,new_declip_feedback);
+  memcpy(f->clipcount,clip,n*sizeof(*clip));
+  f->total=total;
+  feedback_push(&feedpool,(feedback_generic *)f);
+}
+
+int pull_declip_feedback(int *clip,int *total){
+  declip_feedback *f=(declip_feedback *)feedback_pull(&feedpool);
+  int i,j;
+
+  if(!f)return 0;
+
+  if(clip)memcpy(clip,f->clipcount,sizeof(*clip)*input_ch);
+  if(total)*total=f->total;
+
+  feedback_old(&feedpool,(feedback_generic *)f);
+  return 1;
+}
 
 /* called only by initial setup */
 int declip_load(void){
   int i;
   chtrigger=malloc(input_ch*sizeof(*chtrigger));
-  chactive=malloc(input_ch*sizeof(*chactive));
-  for(i=0;i<input_ch;i++){
-    chtrigger[i]=0x80000000UL;
-    chactive[i]=1;
-  }
+  for(i=0;i<input_ch;i++)
+    chtrigger[i]=1.;
   
   out.size=input_size;
   out.channels=input_ch;
@@ -121,22 +158,31 @@ int declip_setblock(int n){
   return 0;
 }
 
-int declip_setactive(int activep,int ch){
+int declip_settrigger(double trigger,int ch){
   if(ch<0 || ch>=input_ch)return -1;
-  chactive[ch]=activep;
+  pthread_mutex_lock(&master_mutex);
+  chtrigger[ch]=trigger;
+  pthread_mutex_unlock(&master_mutex);
   return 0;
 }
 
-int declip_settrigger(double trigger,int ch){
-  if(ch<0 || ch>=input_ch)return -1;
-  chtrigger[ch]=rint(trigger*(1.*0x80000000UL));
-  return 0;
+int declip_setiterations(double it){
+  pthread_mutex_lock(&master_mutex);
+  iterations=it;
+  pthread_mutex_unlock(&master_mutex);
+}
+
+int declip_setconvergence(double c){
+  pthread_mutex_lock(&master_mutex);
+  convergence=c;
+  pthread_mutex_unlock(&master_mutex);
 }
 
 /* called only in playback thread */
 int declip_reset(void){
   /* reset cached pipe state */
   fillstate=0;
+  while(pull_declip_feedback(NULL,NULL));
   return 0;
 }
 
@@ -199,12 +245,12 @@ static void sliding_bark_average(double *f,double *w, int n,double width){
 }
 
 static void declip(double *data,double *lap,double *out,
-		   int blocksize,unsigned long trigger){
+		   int blocksize,double trigger,
+		   double epsilon, double iteration,
+		   int *runningtotal, int *runningcount){
   double freq[blocksize];
   int    flag[blocksize];
-  double triggerlevel=trigger*(1./0x80000000UL);
-  double epsilon=1e-12;
-  int    iterbound=blocksize,i,j,count=0;
+  int    iterbound,i,j,count=0;
   
   for(i=0;i<blocksize/8;i++)flag[i]=0;
   for(;i<blocksize*7/8;i++){
@@ -212,52 +258,67 @@ static void declip(double *data,double *lap,double *out,
     if(data[i]>=trigger || data[i]<=-trigger){
       flag[i]=1;
       count++;
+      *runningcount++;
     }
   }
-  for(;i<blocksize;i++)flag[i]=0;
-  for(i=0;i<blocksize;i++)data[i]*=window[i];
-  memcpy(freq,data,sizeof(freq));
-  drft_forward(&fft,freq);
-  sliding_bark_average(freq,freq,blocksize,width);
   
-  switch(declip_converge){
-  case 0:
-    epsilon=1e-12;
-    iterbound=blocksize*2;
-    break;
-  case 1:
-    epsilon=1e-8;
-    iterbound=count;
-    break;
-  case 2:
-    epsilon=1e-6;
-    iterbound=count/2;
-    break;
-  case 3:
-    epsilon=1e-5;
-    iterbound=count/4;
-    break;
-  case 4:
-    epsilon=1e-3;
-    iterbound=count/8;
-    break;
+  *runningtotal+=blocksize*3/4;
+
+  if(declip_active){
+
+    for(;i<blocksize;i++)flag[i]=0;
+    for(i=0;i<blocksize;i++)data[i]*=window[i];
+    memcpy(freq,data,sizeof(freq));
+    drft_forward(&fft,freq);
+    sliding_bark_average(freq,freq,blocksize,width);
+    
+    if(iteration<1.){
+      iterbound=count*iteration;
+    }else{
+      iterbound=count+blocksize*(iteration-1.);
+    }
+    if(iterbound<20)iterbound=20;
+    
+    reconstruct(&fft,data,freq,flag,epsilon*count,iterbound,blocksize);
+
+    if(out)
+      for(i=0;i<blocksize/2;i++)
+	out[i]=lap[i]+data[i]*window[i];
+    
+    for(i=blocksize/2,j=0;i<blocksize;i++)
+      lap[j]=data[i]*window[i];
+
+  }else{
+
+    if(out)
+      for(i=0;i<blocksize/2;i++)
+	out[i]=data[i];
+  
+    for(i=blocksize/2,j=0;i<blocksize;i++)
+      lap[j]=data[i]*window[i]*window[i];
+
   }
-  if(iterbound<20)iterbound=20;
-
-  reconstruct(&fft,data,freq,flag,epsilon*count,iterbound,blocksize);
-
-  if(out)
-    for(i=0;i<blocksize/2;i++)
-      out[i]=lap[i]+data[i]*window[i];
-
-  for(i=blocksize/2,j=0;i<blocksize;i++)
-    lap[j]=data[i]*window[i];
 }
 
 /* called only by playback thread */
 time_linkage *declip_read(time_linkage *in){
   int i;
   double work[blocksize];
+  double local_trigger[input_ch];
+  int total=0;
+  int count[input_ch];
+  time_linkage dummy;
+
+  double local_convergence;
+  double local_iterations;
+  
+  pthread_mutex_lock(&master_mutex);
+  local_convergence=convergence;
+  local_iterations=iterations;
+  memcpy(local_trigger,chtrigger,sizeof(local_trigger));
+  pthread_mutex_unlock(&master_mutex);
+
+  memset(count,0,sizeof(count));
 
   if(pending_blocksize!=blocksize){
     if(blocksize){
@@ -292,19 +353,19 @@ time_linkage *declip_read(time_linkage *in){
 
   }
 
+
   switch(fillstate){
   case 0: /* prime the lapping and cache */
     for(i=0;i<input_ch;i++){
       int j;
       double *temp=in->data[i];
-      if(chactive[i] && declip_active){
-	memset(work,0,sizeof(*work)*blocksize/2);
-	memcpy(work+blocksize/2,temp,sizeof(*work)*blocksize/2);
-	declip(work,lap[i],0,blocksize,chtrigger[i]);
-      }else{
-	for(j=0;j<blocksize/2;j++)
-	  lap[i][j]=window[j+blocksize/2]*temp[j];
-      }
+      total=0;
+      memset(work,0,sizeof(*work)*blocksize/2);
+      memcpy(work+blocksize/2,temp,sizeof(*work)*blocksize/2);
+      declip(work,lap[i],0,blocksize,
+	     local_trigger[i],local_convergence,local_iterations,
+	     &total,count+i);
+
       memset(cache[i],0,sizeof(**cache)*input_size);
       in->data[i]=cache[i];
       cache[i]=temp;
@@ -317,20 +378,19 @@ time_linkage *declip_read(time_linkage *in){
   case 1: /* nominal processing */
     for(i=0;i<input_ch;i++){
       double *temp=cache[i];
-	int j;
-      if(chactive[i] && declip_active){
-	for(j=0;j+blocksize<out.size;j+=blocksize/2){
-	  memcpy(work,temp+j,sizeof(*work)*blocksize);
-	  declip(work,lap[i],out.data[i]+j,blocksize,chtrigger[i]);
-	}
-	memcpy(work,temp+j,sizeof(*work)*blocksize/2);
-	memcpy(work+blocksize/2,in->data[i],sizeof(*work)*blocksize/2);
-	declip(work,lap[i],out.data[i]+j,blocksize,chtrigger[i]);
-      }else{
-	memcpy(out.data[i],temp,out.size*sizeof(*temp));
-	for(j=0;j<blocksize/2;j++)
-	  lap[i][j]=window[j+blocksize/2]*temp[j];
+      int j;
+      total=0;
+      for(j=0;j+blocksize<out.size;j+=blocksize/2){
+	memcpy(work,temp+j,sizeof(*work)*blocksize);
+	declip(work,lap[i],out.data[i]+j,blocksize,
+	       local_trigger[i],local_convergence,local_iterations,
+	       &total,count+i);
       }
+      memcpy(work,temp+j,sizeof(*work)*blocksize/2);
+      memcpy(work+blocksize/2,in->data[i],sizeof(*work)*blocksize/2);
+      declip(work,lap[i],out.data[i]+j,blocksize,
+	     local_trigger[i],local_convergence,local_iterations,
+	     &total,count+i);
       
       in->data[i]=cache[i];
       cache[i]=temp;
@@ -342,5 +402,9 @@ time_linkage *declip_read(time_linkage *in){
   case 2: /* we've pushed out EOF already */
     return 0;
   }
+
+  /* we're returning data, push feedback */
+  push_declip_feedback(count,total);
+
   return &out;
 }

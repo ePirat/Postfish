@@ -1,73 +1,287 @@
+/*
+ *
+ *  postfish
+ *    
+ *      Copyright (C) 2002-2004 Monty
+ *
+ *  Postfish is free software; you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation; either version 2, or (at your option)
+ *  any later version.
+ *   
+ *  Postfish is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *   
+ *  You should have received a copy of the GNU General Public License
+ *  along with Postfish; see the file COPYING.  If not, write to the
+ *  Free Software Foundation, 675 Mass Ave, Cambridge, MA 02139, USA.
+ *
+ * 
+ */
 
 #include "postfish.h"
 #include <gtk/gtk.h>
 #include <gdk/gdkkeysyms.h>
 #include "readout.h"
+#include "multibar.h"
 #include "mainpanel.h"
+#include "subpanel.h"
+#include "declip.h"
 
-void clippanel_show(postfish_clippanel *p){
-  gtk_widget_show_all(p->toplevel);
-}
-void clippanel_hide(postfish_clippanel *p){
-  gtk_widget_hide_all(p->toplevel);
-}
+extern sig_atomic_t declip_active;
+extern int input_ch;
+extern int input_size;
+extern int input_rate;
+extern sig_atomic_t declip_converge;
 
-static gboolean forward_events(GtkWidget *widget,
-			       GdkEvent *event,
-			       gpointer in){
-  postfish_clippanel *p=in;
-  GdkEvent copy=*(GdkEvent *)event;
-  copy.any.window=p->mainpanel->toplevel->window;
-  gtk_main_do_event((GdkEvent *)(&copy));
-  return TRUE;
-}
+GtkWidget **feedback_bars;
 
-void clippanel_create(postfish_clippanel *panel,postfish_mainpanel *mp){
-  GdkWindow *root=gdk_get_default_root_window();
-  GtkWidget *topframe=gtk_frame_new (NULL);
-  GtkWidget *toplabel=gtk_label_new (NULL);
-  GtkWidget *topvbox=gtk_vbox_new (0,0);
+GtkWidget *samplereadout;
+GtkWidget *msreadout;
+GtkWidget *hzreadout;
+GtkWidget *creadout;
+GtkWidget *ireadout;
 
-  GtkWidget *indframe=gtk_frame_new (NULL);
-  GtkWidget *allframe=gtk_frame_new (NULL);
-  GtkWidget *indcheck=
-    gtk_radio_button_new_with_label (NULL, 
-				     "individual channels ");
-  GtkWidget *allcheck=
-    gtk_radio_button_new_with_label_from_widget (GTK_RADIO_BUTTON(indcheck), 
-						 "all channels ");
+typedef struct {
+  GtkWidget *slider;
+  GtkWidget *readout;
+  GtkWidget *readoutdB;
+  int number;
+} clipslider;
 
-  gtk_label_set_markup(GTK_LABEL(toplabel),
-		       "<span weight=\"bold\" "
-		       "style=\"italic\">"
-		       " declipping filter </span>");
-
-  gtk_frame_set_label_widget(GTK_FRAME(indframe),indcheck);
-  gtk_frame_set_label_widget(GTK_FRAME(allframe),allcheck);
-
-  gtk_box_pack_end(GTK_BOX(topvbox),allframe,0,1,4);
-  gtk_box_pack_end(GTK_BOX(topvbox),indframe,0,1,4);
-
-  panel->toplevel=gtk_window_new (GTK_WINDOW_TOPLEVEL);
-  panel->mainpanel=mp;
-    
-  gtk_container_add (GTK_CONTAINER (panel->toplevel), topframe);
-  gtk_container_add (GTK_CONTAINER (topframe), topvbox);
-  gtk_container_set_border_width (GTK_CONTAINER (topframe), 3);
-  gtk_container_set_border_width (GTK_CONTAINER (topvbox), 5);
-  gtk_frame_set_shadow_type(GTK_FRAME(topframe),GTK_SHADOW_ETCHED_IN);
-  gtk_frame_set_label_widget(GTK_FRAME(topframe),toplabel);
-
-    
-
-
-
-  /* forward unhandled events to the main window */
-  g_signal_connect_after (G_OBJECT (panel->toplevel), "key-press-event",
-			  G_CALLBACK (forward_events), 
-			  panel);
-
-
-  gtk_window_set_resizable(GTK_WINDOW(panel->toplevel),0);
+static void trigger_slider_change(GtkWidget *w,gpointer in){
+  char buffer[80];
+  clipslider *p=(clipslider *)in;
+  gdouble linear=gtk_range_get_value(GTK_RANGE(p->slider));
   
+  sprintf(buffer,"%1.2f",linear);
+  readout_set(READOUT(p->readout),buffer);
+
+  sprintf(buffer,"%3.0f dB",todB(linear));
+  readout_set(READOUT(p->readoutdB),buffer);
+
+  declip_settrigger(linear,p->number);
+
+}
+
+static void blocksize_slider_change(GtkWidget *w,gpointer in){
+  char buffer[80];
+  int choice=rint(gtk_range_get_value(GTK_RANGE(w)));
+  int blocksize=64<<choice;
+
+  sprintf(buffer,"%5d   ",blocksize*3/4);
+  readout_set(READOUT(samplereadout),buffer);
+
+  sprintf(buffer,"%3.1f ms",blocksize*3000./4/input_rate);
+  readout_set(READOUT(msreadout),buffer);
+
+  sprintf(buffer,"%5d Hz",(int)rint(input_rate*2./blocksize));
+  readout_set(READOUT(hzreadout),buffer);
+  
+  declip_setblock(blocksize);
+}
+
+static void converge_slider_change(GtkWidget *w,gpointer in){
+  char buffer[80];
+  double percent=gtk_range_get_value(GTK_RANGE(w));
+  double sigfigs=percent*.05+2.8;
+  double epsilon=pow(1.,-sigfigs);
+
+  sprintf(buffer,"%3.1f",sigfigs);
+  readout_set(READOUT(creadout),buffer);
+
+  sprintf(buffer,"%3.0f%%",percent);
+  readout_set(READOUT(ireadout),buffer);
+
+  declip_setconvergence(epsilon);
+  declip_setiterations(percent);
+}
+
+void clippanel_create(postfish_mainpanel *mp,
+		      GtkWidget *windowbutton,
+		      GtkWidget *activebutton){
+  int i;
+  char *labels[3]={"1%","10%","100%"};
+  double levels[4]={0.,1.,10.,100.};
+  int block_choices=0;
+
+  subpanel_generic *panel=subpanel_create(mp,windowbutton,activebutton,
+					  &declip_active,
+					  "_Declipping filter setup"," [d] ");
+  
+  GtkWidget *framebox=gtk_hbox_new(1,0);
+  GtkWidget *blocksize_box=gtk_vbox_new(0,0);
+  GtkWidget *blocksize_frame=gtk_frame_new (" filter width / approx. lowest response ");
+  GtkWidget *converge_frame=gtk_frame_new (" filter convergence ");
+  GtkWidget *converge_box=gtk_vbox_new(0,0);
+  GtkWidget *channel_table=gtk_table_new(input_ch,4,0);
+
+  gtk_widget_set_name(blocksize_box,"choiceframe");
+  gtk_widget_set_name(converge_box,"choiceframe");
+  gtk_container_set_border_width(GTK_CONTAINER(blocksize_box),2);
+  gtk_container_set_border_width(GTK_CONTAINER(converge_box),2);
+
+  feedback_bars=calloc(input_ch,sizeof(*feedback_bars));
+
+  /* set up blocksize config */
+  for(i=64;i<=input_size*2;i*=2)block_choices++;
+  {
+    GtkWidget *table=gtk_table_new(4,2,0);
+    GtkWidget *sliderbox=gtk_hbox_new(0,0);
+    GtkWidget *fastlabel=gtk_label_new("fastest");
+    GtkWidget *qualitylabel=gtk_label_new("best");
+    GtkWidget *slider=gtk_hscale_new_with_range(0,block_choices-1,1);
+    GtkWidget *samplelabel=gtk_label_new("window sample width");
+    GtkWidget *mslabel=gtk_label_new("window time width");
+    GtkWidget *hzlabel=gtk_label_new("approx. lowest response");
+    samplereadout=readout_new("00000   ");
+    msreadout=readout_new("00000 ms");
+    hzreadout=readout_new("00000 Hz");
+
+    gtk_scale_set_draw_value(GTK_SCALE(slider),FALSE);
+    gtk_misc_set_alignment(GTK_MISC(samplelabel),1,.5);
+    gtk_misc_set_alignment(GTK_MISC(mslabel),1,.5);
+    gtk_misc_set_alignment(GTK_MISC(hzlabel),1,.5);
+
+    gtk_box_pack_start(GTK_BOX(sliderbox),fastlabel,0,0,4);
+    gtk_box_pack_start(GTK_BOX(sliderbox),slider,1,1,0);
+    gtk_box_pack_start(GTK_BOX(sliderbox),qualitylabel,0,0,4);
+    gtk_table_attach(GTK_TABLE(table),sliderbox,0,2,0,1,GTK_FILL|GTK_EXPAND,0,0,8);
+    gtk_table_attach(GTK_TABLE(table),samplelabel,0,1,1,2,GTK_FILL|GTK_EXPAND,GTK_FILL,0,0);
+    gtk_table_attach(GTK_TABLE(table),mslabel,0,1,2,3,GTK_FILL|GTK_EXPAND,GTK_FILL,0,0);
+    gtk_table_attach(GTK_TABLE(table),hzlabel,0,1,3,4,GTK_FILL|GTK_EXPAND,GTK_FILL,0,0);
+
+    gtk_table_attach(GTK_TABLE(table),samplereadout,1,2,1,2,GTK_FILL,0,5,0);
+    gtk_table_attach(GTK_TABLE(table),msreadout,1,2,2,3,GTK_FILL,0,5,0);
+    gtk_table_attach(GTK_TABLE(table),hzreadout,1,2,3,4,GTK_FILL,0,5,0);
+    gtk_container_add(GTK_CONTAINER(blocksize_box),table);
+
+
+    g_signal_connect (G_OBJECT (slider), "key-press-event",
+		      G_CALLBACK (slider_keymodify), NULL);
+    g_signal_connect_after (G_OBJECT(slider), "value-changed",
+			    G_CALLBACK(blocksize_slider_change), 0);
+    gtk_range_set_value(GTK_RANGE(slider),3.);
+    
+  }
+  gtk_container_add(GTK_CONTAINER(blocksize_frame),blocksize_box);
+
+  /* set up convergence config */
+  {
+    GtkWidget *table=gtk_table_new(3,2,0);
+    GtkWidget *sliderbox=gtk_hbox_new(0,0);
+    GtkWidget *fastlabel=gtk_label_new("fastest");
+    GtkWidget *qualitylabel=gtk_label_new("best");
+    GtkWidget *slider=gtk_hscale_new_with_range(10,200,1);
+    GtkWidget *clabel=gtk_label_new("significant figure target");
+    GtkWidget *ilabel=gtk_label_new("iteration bound");
+    creadout=readout_new("000 ");
+    ireadout=readout_new("000%");
+
+    gtk_scale_set_draw_value(GTK_SCALE(slider),FALSE);
+    gtk_misc_set_alignment(GTK_MISC(clabel),1,.5);
+    gtk_misc_set_alignment(GTK_MISC(ilabel),1,.5);
+
+    gtk_box_pack_start(GTK_BOX(sliderbox),fastlabel,0,0,4);
+    gtk_box_pack_start(GTK_BOX(sliderbox),slider,1,1,0);
+    gtk_box_pack_start(GTK_BOX(sliderbox),qualitylabel,0,0,4);
+    gtk_table_attach(GTK_TABLE(table),sliderbox,0,2,0,1,GTK_FILL|GTK_EXPAND,0,0,8);
+    gtk_table_attach(GTK_TABLE(table),clabel,0,1,1,2,GTK_FILL|GTK_EXPAND,GTK_FILL,0,0);
+    gtk_table_attach(GTK_TABLE(table),ilabel,0,1,2,3,GTK_FILL|GTK_EXPAND,GTK_FILL,0,0);
+
+    gtk_table_attach(GTK_TABLE(table),creadout,1,2,1,2,GTK_FILL,0,5,0);
+    gtk_table_attach(GTK_TABLE(table),ireadout,1,2,2,3,GTK_FILL,0,5,0);
+    gtk_container_add(GTK_CONTAINER(converge_box),table);
+
+    g_signal_connect (G_OBJECT (slider), "key-press-event",
+		      G_CALLBACK (slider_keymodify), NULL);
+    g_signal_connect_after (G_OBJECT(slider), "value-changed",
+			    G_CALLBACK(converge_slider_change), 0);
+    gtk_range_set_value(GTK_RANGE(slider),25.);
+  }
+  gtk_container_add(GTK_CONTAINER(converge_frame),converge_box);
+
+  gtk_box_pack_start(GTK_BOX(framebox),blocksize_frame,0,1,4);
+  gtk_box_pack_start(GTK_BOX(framebox),converge_frame,0,1,4);
+
+  gtk_box_pack_start(GTK_BOX(panel->subpanel_box),framebox,0,1,4);
+  gtk_box_pack_start(GTK_BOX(panel->subpanel_box),channel_table,0,1,4);
+
+  for(i=0;i<input_ch;i++){
+    char buffer[80];
+    clipslider *cs=calloc(1,sizeof(*cs));
+    GtkWidget *label;
+    GtkWidget *slider=gtk_hscale_new_with_range(.01,1.,.01);
+    GtkWidget *readout=readout_new("0.00");
+    GtkWidget *readoutdB=readout_new("-40 dB");
+    GtkWidget *barframe=gtk_frame_new(NULL);
+    GtkWidget *bar=multibar_new(3,labels,levels,0);
+
+    cs->slider=slider;
+    cs->readout=readout;
+    cs->readoutdB=readoutdB;
+    cs->number=i;
+    feedback_bars[i]=bar;
+
+    gtk_widget_set_size_request (slider,200,-1);
+    gtk_widget_set_name(bar,"clipbar");
+    gtk_scale_set_draw_value(GTK_SCALE(slider),FALSE);
+    gtk_range_set_value(GTK_RANGE(slider),1.);
+    gtk_frame_set_shadow_type(GTK_FRAME(barframe),GTK_SHADOW_ETCHED_IN);
+
+    switch(input_ch){
+    case 1:
+      sprintf(buffer,"trigger level:");
+      break;
+    case 2:
+      switch(i){
+      case 0:
+	sprintf(buffer,"left trigger level:");
+	break;
+      case 1:
+	sprintf(buffer,"right trigger level:");
+	break;
+      }
+      break;
+    default:
+      sprintf(buffer,"%d trigger level:",i+1);
+    }
+    label=gtk_label_new(buffer);
+    gtk_misc_set_alignment(GTK_MISC(label),1,.5);
+
+    gtk_table_attach(GTK_TABLE(channel_table),label,0,1,i,i+1,GTK_FILL,GTK_FILL,2,0);
+    gtk_table_attach(GTK_TABLE(channel_table),readout,1,2,i,i+1,GTK_FILL,GTK_FILL,0,0);
+    gtk_table_attach(GTK_TABLE(channel_table),readoutdB,2,3,i,i+1,GTK_FILL,GTK_FILL,0,0);
+    gtk_table_attach_defaults(GTK_TABLE(channel_table),slider,3,4,i,i+1);
+    gtk_table_attach(GTK_TABLE(channel_table),barframe,4,5,i,i+1,GTK_FILL,GTK_FILL,0,0);
+    gtk_container_add(GTK_CONTAINER(barframe),bar);
+
+
+    g_signal_connect_after (G_OBJECT(slider), "value-changed",
+			    G_CALLBACK(trigger_slider_change), (gpointer)cs);
+    g_signal_connect (G_OBJECT (slider), "key-press-event",
+		      G_CALLBACK (slider_keymodify), NULL);
+    
+    trigger_slider_change(NULL,cs);
+  }
+  
+}
+
+void clippanel_feedback(void){
+  int clip[input_ch],count;
+  if(pull_declip_feedback(clip,&count)){
+    int i;
+    for(i=0;i<input_ch;i++){
+      double val=clip[i]*100./count,zero=0;
+      multibar_set(MULTIBAR(feedback_bars[i]),&zero,&val,1);
+    }
+  }
+}
+
+void clippanel_reset(void){
+  int i;
+  for(i=0;i<input_ch;i++)
+    multibar_reset(MULTIBAR(feedback_bars[i]));
 }

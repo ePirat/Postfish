@@ -2,7 +2,7 @@
  *
  *  postfish
  *    
- *      Copyright (C) 2002-2003 Monty
+ *      Copyright (C) 2002-2004 Monty
  *
  *  Postfish is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -22,6 +22,7 @@
  */
 
 #include "postfish.h"
+#include "feedback.h"
 #include "input.h"
 
 static off_t        Acursor=0;
@@ -47,16 +48,13 @@ typedef struct {
 } file_entry;
 
 typedef struct input_feedback{
+  feedback_generic parent_class;
   off_t   cursor;
   double *rms;
   double *peak;
-
-  struct input_feedback *next;
 } input_feedback;
 
-static input_feedback *feedback_list_head;
-static input_feedback *feedback_list_tail;
-static input_feedback *feedback_pool;
+static feedback_generic_pool feedpool;
 
 static file_entry *file_list=NULL;
 static int file_entries=0;
@@ -163,7 +161,7 @@ void input_cursor_to_time(off_t cursor,char *t){
 
 int input_load(int n,char *list[]){
   char *fname="stdin";
-  int stdinp=0,i,j,ch,rate;
+  int stdinp=0,i,j,ch=0,rate=0;
   off_t total=0;
 
   if(n==0){
@@ -309,7 +307,38 @@ int input_load(int n,char *list[]){
     }
   }
 
-  input_size=out.size=2048;
+
+  /* 192000: 8192
+
+      96000: 4096
+      88200: 4096
+      64000: 4096
+
+      48000: 2048
+      44100: 2048
+      32000: 1024
+
+      22050: 1024
+      16000: 1024
+
+      11025:  512
+       8000:  512
+
+       4000:  256 */
+
+  if(rate<6000){
+    input_size=out.size=256;
+  }else if(rate<15000){
+    input_size=out.size=512;
+  }else if(rate<25000){
+    input_size=out.size=1024;
+  }else if(rate<50000){
+    input_size=out.size=2048;
+  }else if(rate<100000){
+    input_size=out.size=4096;
+  }else
+    input_size=out.size=8192;
+
   input_ch=out.channels=ch;
   input_rate=out.rate=rate;
   out.data=malloc(sizeof(*out.data)*ch);
@@ -364,73 +393,31 @@ off_t input_time_seek_rel(double s){
   return ret;
 }
 
-static input_feedback *new_input_feedback(void){
-  input_feedback *ret;
-  
-  pthread_mutex_lock(&master_mutex);
-  if(feedback_pool){
-    ret=feedback_pool;
-    feedback_pool=feedback_pool->next;
-    pthread_mutex_unlock(&master_mutex);
-    return ret;
-  }
-  pthread_mutex_unlock(&master_mutex);
-  ret=malloc(sizeof(*ret));
+static feedback_generic *new_input_feedback(void){
+  input_feedback *ret=malloc(sizeof(*ret));
   ret->rms=malloc((input_ch+2)*sizeof(*ret->rms));
   ret->peak=malloc((input_ch+2)*sizeof(*ret->peak));
-  
-  return ret;
+  return (feedback_generic *)ret;
 }
 
 static void push_input_feedback(double *peak,double *rms, off_t cursor){
   int i,n=input_ch+2;
-  input_feedback *f=new_input_feedback();
-
+  input_feedback *f=(input_feedback *)
+    feedback_new(&feedpool,new_input_feedback);
   f->cursor=cursor;
   memcpy(f->rms,rms,n*sizeof(*rms));
   memcpy(f->peak,peak,n*sizeof(*peak));
-  f->next=NULL;
-
-  pthread_mutex_lock(&master_mutex);
-  if(!feedback_list_tail){
-    feedback_list_tail=f;
-    feedback_list_head=f;
-  }else{
-    feedback_list_head->next=f;
-    feedback_list_head=f;
-  }
-  pthread_mutex_unlock(&master_mutex);
+  feedback_push(&feedpool,(feedback_generic *)f);
 }
 
-int pull_input_feedback(double *peak,double *rms,off_t *cursor,int *nn){
-  input_feedback *f;
+int pull_input_feedback(double *peak,double *rms,off_t *cursor){
+  input_feedback *f=(input_feedback *)feedback_pull(&feedpool);
   int i,j,n=input_ch+2;
-  if(nn)*nn=n;
-
-  pthread_mutex_lock(&master_mutex);
-  if(feedback_list_tail){
-    
-    f=feedback_list_tail;
-    feedback_list_tail=feedback_list_tail->next;
-    if(!feedback_list_tail)feedback_list_head=0;
-
-  }else{
-    pthread_mutex_unlock(&master_mutex);
-    return 0;
-  }
-  pthread_mutex_unlock(&master_mutex);
-
-  if(rms)
-    memcpy(rms,f->rms,sizeof(*rms)*n);
-  if(peak)
-    memcpy(peak,f->peak,sizeof(*peak)*n);
-  if(cursor)
-    *cursor=f->cursor;
-
-  pthread_mutex_lock(&master_mutex);
-  f->next=feedback_pool;
-  feedback_pool=f;
-  pthread_mutex_unlock(&master_mutex);
+  if(!f)return 0;
+  if(rms)memcpy(rms,f->rms,sizeof(*rms)*n);
+  if(peak)memcpy(peak,f->peak,sizeof(*peak)*n);
+  if(cursor)*cursor=f->cursor;
+  feedback_old(&feedpool,(feedback_generic *)f);
   return 1;
 }
 
@@ -567,7 +554,7 @@ time_linkage *input_read(void){
 }
 
 void input_reset(void){
-  while(pull_input_feedback(NULL,NULL,NULL,NULL));
+  while(pull_input_feedback(NULL,NULL,NULL));
   return;
 }
 
