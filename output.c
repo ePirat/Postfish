@@ -240,13 +240,20 @@ void *playback_thread(void *dummy){
     result|=link->samples;
     link=multicompand_read_channel(link);
     result|=link->samples;
+    link=singlecomp_read_channel(link);
+    result|=link->samples;
     link=suppress_read_channel(link);
     result|=link->samples;
 
     link=multicompand_read_master(link);
     result|=link->samples;
-    link=singlecomp_read(link);
+    link=singlecomp_read_master(link);
     result|=link->samples;
+
+    for(i=0;i<input_ch;i++)
+      if(mute_channel_muted(link->active,i))
+	memset(link->data[i],0,sizeof(**link->data)*input_size);
+
     link=eq_read(link);
     result|=link->samples;
     

@@ -46,9 +46,13 @@ typedef struct {
   sig_atomic_t b_ratio;
   sig_atomic_t b_mode;
 
+  sig_atomic_t panel_visible;
+  sig_atomic_t panel_active;
 } singlecomp_settings;
 
-extern int pull_singlecomp_feedback(float *peak,float *rms);
+extern int pull_singlecomp_feedback_master(float *peak,float *rms);
+extern int pull_singlecomp_feedback_channel(float *peak,float *rms);
 extern int singlecomp_load(void);
 extern int singlecomp_reset(void);
-extern time_linkage *singlecomp_read(time_linkage *in);
+extern time_linkage *singlecomp_read_master(time_linkage *in);
+extern time_linkage *singlecomp_read_channel(time_linkage *in);
