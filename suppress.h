@@ -38,9 +38,13 @@ typedef struct {
   sig_atomic_t trigger;
   sig_atomic_t release;
   sig_atomic_t linkp;
+
+  sig_atomic_t *active;
+  sig_atomic_t panel_visible;
 } suppress_settings;
 
 extern void suppress_reset();
 extern int suppress_load(void);
-extern time_linkage *suppress_read(time_linkage *in);
+extern time_linkage *suppress_read_master(time_linkage *in);
+extern time_linkage *suppress_read_channel(time_linkage *in);
 

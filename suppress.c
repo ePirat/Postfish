@@ -47,7 +47,6 @@ extern int input_ch;
 
 typedef struct {
   subband_state ss;
-  subband_window sw;
   
   iir_filter smooth;
   iir_filter trigger;
@@ -59,27 +58,32 @@ typedef struct {
 
 } suppress_state;
 
-sig_atomic_t suppress_visible;
-sig_atomic_t suppress_active;
-
-suppress_settings sset;
-static suppress_state sss;
+suppress_settings suppress_master_set;
+suppress_settings suppress_channel_set;
+static suppress_state master_state;
+static suppress_state channel_state;
+static subband_window sw;
 
 void suppress_reset(){
   int i,j;
   
-  subband_reset(&sss.ss);
+  subband_reset(&master_state.ss);
+  subband_reset(&channel_state.ss);
   
   for(i=0;i<suppress_freqs;i++){
     for(j=0;j<input_ch;j++){
-      memset(&sss.iirS[i][j],0,sizeof(iir_state));
-      memset(&sss.iirT[i][j],0,sizeof(iir_state));
-      memset(&sss.iirR[i][j],0,sizeof(iir_state));
+      memset(&master_state.iirS[i][j],0,sizeof(iir_state));
+      memset(&master_state.iirT[i][j],0,sizeof(iir_state));
+      memset(&master_state.iirR[i][j],0,sizeof(iir_state));
+      memset(&channel_state.iirS[i][j],0,sizeof(iir_state));
+      memset(&channel_state.iirT[i][j],0,sizeof(iir_state));
+      memset(&channel_state.iirR[i][j],0,sizeof(iir_state));
     }
   }
 }
 
-static void filter_set(float msec,
+static void filter_set(subband_state *ss,
+		       float msec,
 		       iir_filter *filter,
 		       int attackp,
 		       int order){
@@ -88,9 +92,9 @@ static void filter_set(float msec,
   
   /* make sure the chosen frequency doesn't require a lookahead
      greater than what's available */
-  if(impulse_freq4(input_size*2-sss.ss.qblocksize*3)*1.01>corner_freq && 
+  if(impulse_freq4(input_size*2-ss->qblocksize*3)*1.01>corner_freq && 
      attackp)
-    corner_freq=impulse_freq4(input_size*2-sss.ss.qblocksize*3);
+    corner_freq=impulse_freq4(input_size*2-ss->qblocksize*3);
   
   alpha=corner_freq/input_rate;
   filter->g=mkbessel(alpha,order,filter->c);
@@ -102,34 +106,43 @@ static void filter_set(float msec,
 int suppress_load(void){
   int i;
   int qblocksize=input_size/16;
-  memset(&sss,0,sizeof(sss));
+  memset(&master_state,0,sizeof(master_state));
+  memset(&channel_state,0,sizeof(channel_state));
 
-  subband_load(&sss.ss,suppress_freqs,qblocksize);
-  subband_load_freqs(&sss.ss,&sss.sw,suppress_freq_list,suppress_freqs);
+  suppress_master_set.active=calloc(input_ch,sizeof(*suppress_master_set.active));
+  suppress_channel_set.active=calloc(input_ch,sizeof(*suppress_channel_set.active));
+
+  subband_load(&master_state.ss,suppress_freqs,qblocksize);
+  subband_load(&channel_state.ss,suppress_freqs,qblocksize);
+
+  subband_load_freqs(&master_state.ss,&sw,suppress_freq_list,suppress_freqs);
    
   for(i=0;i<suppress_freqs;i++){
-    sss.iirS[i]=calloc(input_ch,sizeof(iir_state));
-    sss.iirT[i]=calloc(input_ch,sizeof(iir_state));
-    sss.iirR[i]=calloc(input_ch,sizeof(iir_state));
+    master_state.iirS[i]=calloc(input_ch,sizeof(iir_state));
+    master_state.iirT[i]=calloc(input_ch,sizeof(iir_state));
+    master_state.iirR[i]=calloc(input_ch,sizeof(iir_state));
+    channel_state.iirS[i]=calloc(input_ch,sizeof(iir_state));
+    channel_state.iirT[i]=calloc(input_ch,sizeof(iir_state));
+    channel_state.iirR[i]=calloc(input_ch,sizeof(iir_state));
   }
   return 0;
 }
 
-static void suppress_work(void *vs){
+static void suppress_work_helper(void *vs, suppress_settings *sset){
   suppress_state *sss=(suppress_state *)vs;
   subband_state *ss=&sss->ss;
   int i,j,k,l;
-  float smoothms=sset.smooth*.1;
-  float triggerms=sset.trigger*.1;
-  float releasems=sset.release*.1;
+  float smoothms=sset->smooth*.1;
+  float triggerms=sset->trigger*.1;
+  float releasems=sset->release*.1;
   iir_filter *trigger=&sss->trigger;
   iir_filter *smooth=&sss->smooth;
   iir_filter *release=&sss->release;
   int ahead;
 
-  if(smoothms!=smooth->ms)filter_set(smoothms,smooth,1,4);
-  if(triggerms!=trigger->ms)filter_set(triggerms,trigger,0,1);
-  if(releasems!=release->ms)filter_set(releasems,release,0,1);
+  if(smoothms!=smooth->ms)filter_set(ss,smoothms,smooth,1,4);
+  if(triggerms!=trigger->ms)filter_set(ss,triggerms,trigger,0,1);
+  if(releasems!=release->ms)filter_set(ss,releasems,release,0,1);
 
   ahead=impulse_ahead4(smooth->alpha);
   
@@ -137,7 +150,7 @@ static void suppress_work(void *vs){
     int firstlink=0;
     float fast[input_size];
     float slow[input_size];
-    float multiplier = 1.-1000./sset.ratio[i];
+    float multiplier = 1.-1000./sset->ratio[i];
     
     for(j=0;j<input_ch;j++){
       int active=(ss->effect_active1[j] || 
@@ -145,7 +158,7 @@ static void suppress_work(void *vs){
 		  ss->effect_activeC[j]);
       
       if(active){
-	if(sset.linkp){
+	if(sset->linkp){
 	  if(!firstlink){
 	    firstlink++;
 	    memset(fast,0,sizeof(fast));
@@ -167,7 +180,7 @@ static void suppress_work(void *vs){
 	}
 	
 	
-	if(sset.linkp==0 || firstlink==1){
+	if(sset->linkp==0 || firstlink==1){
 	  
 	  compute_iir_symmetric4(fast, input_size, &sss->iirS[i][j],
 				 smooth);
@@ -186,7 +199,7 @@ static void suppress_work(void *vs){
 	    fast[k]=fromdB_a((todB_a(slow+k)-todB_a(fast+k))*.5*multiplier);
 	  //_analysis("adj",i,fast,input_size,1,offset);
 
-	  if(sset.linkp && firstlink==1){
+	  if(sset->linkp && firstlink==1){
 
 	    for(l=0;l<input_ch;l++){
 	      if(l!=j){
@@ -217,19 +230,42 @@ static void suppress_work(void *vs){
   }
 }
 
-time_linkage *suppress_read(time_linkage *in){
-  int visible[input_ch];
-  int active[input_ch];
-  subband_window *w[input_ch];
-  int i;
-
-  for(i=0;i<input_ch;i++){
-    visible[i]=0;
-    active[i]=suppress_active;
-    w[i]=&sss.sw;
-  }
-  
-  return subband_read(in, &sss.ss, w, visible, active, suppress_work, &sss);
+static void suppress_work_master(void *vs){
+  suppress_work_helper(vs,&suppress_master_set);
 }
 
+static void suppress_work_channel(void *vs){
+  suppress_work_helper(vs,&suppress_channel_set);
+}
 
+time_linkage *suppress_read_master(time_linkage *in){
+  int visible[input_ch];
+  int active [input_ch];
+  subband_window *w[input_ch];
+  int i;
+  
+  for(i=0;i<input_ch;i++){
+    visible[i]=0;
+    active[i]=suppress_master_set.active[0];
+    w[i]=&sw;
+  }
+  
+  return subband_read(in, &master_state.ss, w, visible, active, 
+		      suppress_work_master, &master_state);
+}
+
+time_linkage *suppress_read_channel(time_linkage *in){
+  int visible[input_ch];
+  int active [input_ch];
+  subband_window *w[input_ch];
+  int i;
+  
+  for(i=0;i<input_ch;i++){
+    visible[i]=0;
+    active[i]=suppress_channel_set.active[i];
+    w[i]=&sw;
+  }
+  
+  return subband_read(in, &channel_state.ss, w, visible, active, 
+		      suppress_work_channel, &channel_state);
+}

@@ -21,6 +21,10 @@
  * 
  */
 
-extern void suppresspanel_create(postfish_mainpanel *mp,
-				 GtkWidget *windowbutton,
-				 GtkWidget *activebutton);
+extern void suppresspanel_create_master(postfish_mainpanel *mp,
+					GtkWidget *windowbutton,
+					GtkWidget *activebutton);
+
+extern void suppresspanel_create_channel(postfish_mainpanel *mp,
+					 GtkWidget **windowbutton,
+					 GtkWidget **activebutton);

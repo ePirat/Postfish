@@ -89,8 +89,8 @@ typedef struct multi_panel_state{
 
 } multi_panel_state;
 
-multi_panel_state *master_panel;
-multi_panel_state **channel_panel;
+static multi_panel_state *master_panel;
+static multi_panel_state **channel_panel;
 
 static void compand_change(GtkWidget *w,gpointer in){
   callback_arg_rv *ca=(callback_arg_rv *)in;
