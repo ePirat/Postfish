@@ -36,6 +36,7 @@
 #include "limit.h"
 #include "mute.h"
 #include "mix.h"
+#include "reverb.h"
 
 extern int input_size;
 extern int input_rate;
@@ -67,6 +68,7 @@ void pipeline_reset(){
   limit_reset(); /* clear any persistent lapping state */
   output_reset(); /* clear any persistent lapping state */
   mix_reset();
+  plate_reset();
 }
 
 typedef struct output_feedback{
@@ -250,8 +252,16 @@ void *playback_thread(void *dummy){
     link=eq_read_channel(link);
     result|=link->samples;
 
-    link=mix_read(link,0,0);
-    result|=link->samples;
+    /* per-channel plate reverb generates more channels than it takes;
+       these are swallowed and mixed immediately by mixdown */
+    {
+      time_linkage *reverbA;
+      time_linkage *reverbB;
+      link=plate_read_channel(link,&reverbA,&reverbB);
+
+      link=mix_read(link,reverbA,reverbB);
+      result|=link->samples;
+    }
 
     link=multicompand_read_master(link);
     result|=link->samples;
@@ -259,10 +269,11 @@ void *playback_thread(void *dummy){
     result|=link->samples;
     link=eq_read_master(link);
     result|=link->samples;
+    link=plate_read_master(link);
+    result|=link->samples;
     
     if(!result)break;
     /************/
-    
     
     /* master att */
     if(link->samples>0){

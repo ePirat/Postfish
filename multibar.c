@@ -604,7 +604,7 @@ static void size_request (GtkWidget *widget,GtkRequisition *requisition){
   int i,maxx=0,maxy=0,x,y,xpad;
   Multibar *m=MULTIBAR(widget);
 
-  for(i=0;i<m->labels;i++){
+  for(i=0;i<=m->labels;i++){
     pango_layout_get_pixel_size(m->layout[i],&x,&y);
 
     if(x>maxx)maxx=x;

@@ -279,12 +279,17 @@ time_linkage *mix_read(time_linkage *in,
   /* eliminate asynch change possibility */
   memcpy(ms.curr,mix_set,sizeof(*mix_set)*input_ch);
 
-  /* a bit of laziness that may actually save time by avoiding
+  /* a bit of laziness that may actually save CPU time by avoiding
      special-cases later */
-  for(i=0;i<input_ch;i++)
+  for(i=0;i<input_ch;i++){
     if(mute_channel_muted(in->active,i))
       memset(in->data[i],0,sizeof(**in->data)*input_size);
-    
+    if(mute_channel_muted(inA->active,i))
+      memset(inA->data[i],0,sizeof(**inA->data)*input_size);
+    if(mute_channel_muted(inB->active,i))
+      memset(inB->data[i],0,sizeof(**inB->data)*input_size);
+  }
+
     /* input-by-input */
   for(i=0;i<input_ch;i++){
     int feedit=mixpanel_visible[i] && mixpanel_active[i];
@@ -310,10 +315,10 @@ time_linkage *mix_read(time_linkage *in,
 	  acc+=val;
 	}
 	
-	peak[0][i]=peak[0][i];
 	rms[0][i]=acc/input_size;
       }
 
+      acc=0.;
       if(inA && !mute_channel_muted(inA->active,i)){
 	memset(mix,0,sizeof(mix));
 	mixwork(inA->data[i],ms.cacheP[i],ms.cachePP[i],
@@ -322,14 +327,14 @@ time_linkage *mix_read(time_linkage *in,
 	bypass=0;
 	for(j=0;j<input_size;j++){
 	  float val=mix[j]*mix[j];
-	  if(val>peak[0][i])peak[0][i]=val;
+	  if(val>peak[1][i])peak[1][i]=val;
 	  acc+=val;
 	}
 	
-	peak[1][i]=peak[0][i];
 	rms[1][i]=acc/input_size;
       }
 
+      acc=0.;
       if(inB && !mute_channel_muted(inB->active,i)){
 	memset(mix,0,sizeof(mix));
 	mixwork(inB->data[i],ms.cacheP[i],ms.cachePP[i],
@@ -338,11 +343,10 @@ time_linkage *mix_read(time_linkage *in,
 	bypass=0;
 	for(j=0;j<input_size;j++){
 	  float val=mix[j]*mix[j];
-	  if(val>peak[0][i])peak[0][i]=val;
+	  if(val>peak[2][i])peak[2][i]=val;
 	  acc+=val;
 	}
 	
-	peak[2][i]=peak[0][i];
 	rms[2][i]=acc/input_size;
       }
     }

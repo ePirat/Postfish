@@ -120,7 +120,8 @@ static float levels_del[6]={-50,-20,-10,-5,-1,0};
 
 static mix_panelsave *mixpanel_create_helper(postfish_mainpanel *mp,
 					     subpanel_generic *panel,
-					     mix_settings *m){
+					     mix_settings *m,
+					     int thisch){
 
   int i,j;
 
@@ -177,9 +178,9 @@ static mix_panelsave *mixpanel_create_helper(postfish_mainpanel *mp,
     multibar_callback(MULTIBAR(AB->s),AB_slider_change,AB);
     multibar_thumb_set(MULTIBAR(AB->s),100,0);
     multibar_callback(MULTIBAR(att->s),dB_slider_change,att);
-    multibar_thumb_set(MULTIBAR(att->s),0,0);
+    multibar_thumb_set(MULTIBAR(att->s),-3,0);
     multibar_callback(MULTIBAR(del->s),ms_slider_change,del);
-    multibar_thumb_set(MULTIBAR(del->s),0,0);
+    multibar_thumb_set(MULTIBAR(del->s),-1,0);
 
     ps->place[0]=multibar_new(6,labels_dBn,levels_dBn,0,
 			      LO_ATTACK|LO_DECAY|HI_DECAY);
@@ -316,7 +317,10 @@ static mix_panelsave *mixpanel_create_helper(postfish_mainpanel *mp,
 		      G_CALLBACK (toggle_callback), 
 		      (gpointer)&m->insert_source[i][2]);
 
-    
+    if(i==0){
+      gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(bM),1);
+      gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(bA),1);
+    }
 
     for(j=0;j<OUTPUT_CHANNELS;j++){
       char buffer[80];
@@ -328,6 +332,9 @@ static mix_panelsave *mixpanel_create_helper(postfish_mainpanel *mp,
       g_signal_connect (G_OBJECT (b), "clicked",
 			G_CALLBACK (toggle_callback), 
 			(gpointer)&m->insert_dest[i][j]);
+
+      if(thisch%2 == j && i == 0)
+	gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(b),1);
 
       gtk_box_pack_start(GTK_BOX(boxB),b,1,1,0);
     }
@@ -385,7 +392,7 @@ void mixpanel_create_channel(postfish_mainpanel *mp,
 			  &mixpanel_visible[i],
 			  buffer,0,i,1);
   
-    mix_panels[i]=mixpanel_create_helper(mp,panel,mix_set+i);
+    mix_panels[i]=mixpanel_create_helper(mp,panel,mix_set+i,i);
   }
 }
 
@@ -463,6 +470,8 @@ void attenpanel_create(postfish_mainpanel *mp,
 		     GTK_FILL|GTK_EXPAND,0,0,0);
     gtk_table_attach(GTK_TABLE(table),del->r,3,4,1+i*3,2+i*3,
 		     GTK_FILL|GTK_EXPAND,0,0,0);
+    
+    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(activebutton[i]),1);
   }
 
   gtk_box_pack_start(GTK_BOX(panel->subpanel_box),table,1,1,4);
@@ -488,8 +497,8 @@ void mixpanel_feedback(int displayit){
   if(pull_mix_feedback(peakfeed,rmsfeed)==1){
     for(j=0;j<input_ch;j++){
       for(i=0;i<(MIX_BLOCKS+3);i++){
-	float rms[input_ch];
-	float peak[input_ch];
+	float rms[input_ch+4];
+	float peak[input_ch+4];
 	
 	memset(rms,0,sizeof(rms));
         memset(peak,0,sizeof(peak));
@@ -506,7 +515,7 @@ void mixpanel_feedback(int displayit){
 	  peak[3]=todB(peakfeed[2][j])*.5;
 
 	  multibar_set(MULTIBAR(atten_panel.master[j]),rms,peak,
-		       3,(displayit && atten_visible));
+		       4,(displayit && atten_visible));
 	  break;
 
 	case 2:

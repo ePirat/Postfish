@@ -40,6 +40,7 @@
 #include "limit.h"
 #include "mute.h"
 #include "mix.h"
+#include "reverb.h"
 
 pthread_mutex_t master_mutex=PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
 
@@ -149,6 +150,7 @@ int main(int argc, char **argv){
   if(limit_load(OUTPUT_CHANNELS))exit(1);
   if(mute_load())exit(1);
   if(mix_load(OUTPUT_CHANNELS))exit(1);
+  if(plate_load(OUTPUT_CHANNELS))exit(1);
 
   /* look at stdout... do we have a file or device? */
   if(!isatty(STDOUT_FILENO)){

@@ -962,7 +962,7 @@ void mainpanel_create(postfish_mainpanel *panel,char **chlabels){
   mainpanel_chentry(panel,channeltable,"_Singlecomp ",2,0,singlepanel_create_channel);
   mainpanel_chentry(panel,channeltable,"De_verb ",3,suppresspanel_create_channel,0);
   mainpanel_chentry(panel,channeltable,"_EQ ",4,0,eqpanel_create_channel);
-  mainpanel_chentry(panel,channeltable,"_Reverb ",5,0,0);
+  mainpanel_chentry(panel,channeltable,"_Reverb ",5,0,reverbpanel_create_channel);
   mainpanel_chentry(panel,channeltable,"Atten/Mi_x ",6,attenpanel_create,
 		    mixpanel_create_channel);
 
@@ -989,17 +989,16 @@ void mainpanel_create(postfish_mainpanel *panel,char **chlabels){
 
   mainpanel_masterentry(panel,mastertable,"_Multicomp "," m ",GDK_m,0,compandpanel_create_master);
   mainpanel_masterentry(panel,mastertable,"_Singlecomp "," s ",GDK_s,1,singlepanel_create_master);
-  mainpanel_masterentry(panel,mastertable,"_Reverb "," r ",GDK_r,2,0);
-  mainpanel_masterentry(panel,mastertable,"_EQ "," e ",GDK_e,3,eqpanel_create_master);
+  mainpanel_masterentry(panel,mastertable,"_EQ "," e ",GDK_e,2,eqpanel_create_master);
+  mainpanel_masterentry(panel,mastertable,"_Reverb "," r ",GDK_r,3,reverbpanel_create_master);
   mainpanel_masterentry(panel,mastertable,"_Limit "," l ",GDK_l,4,limitpanel_create);
 
   /* output has three activity buttons not in the main grid */
   {
     GtkWidget *ww=windowbutton_new("_Output ");
 
-    GtkWidget *std=gtk_toggle_button_new_with_label("o");
-    GtkWidget *ply=gtk_toggle_button_new_with_label("p");
-    GtkWidget *fil=gtk_toggle_button_new_with_label("f");
+    GtkWidget *std=gtk_toggle_button_new_with_label(" o ");
+    GtkWidget *ply=gtk_toggle_button_new_with_label("play");
     GtkWidget *box=gtk_hbox_new(0,0);
     GtkWidget *box2=gtk_hbox_new(1,0);
 
@@ -1011,12 +1010,10 @@ void mainpanel_create(postfish_mainpanel *panel,char **chlabels){
       
     gtk_widget_add_accelerator (std, "activate", panel->group, GDK_o, 0, 0);
     gtk_widget_add_accelerator (ply, "activate", panel->group, GDK_p, 0, 0);
-    gtk_widget_add_accelerator (fil, "activate", panel->group, GDK_f, 0, 0);
       
     gtk_box_pack_start(GTK_BOX(box),ww,0,0,0);
     gtk_box_pack_start(GTK_BOX(box),box2,1,1,2);
     gtk_box_pack_start(GTK_BOX(box2),ply,1,1,0);
-    gtk_box_pack_start(GTK_BOX(box2),fil,1,1,0);
     
 
     gtk_table_attach_defaults(GTK_TABLE(mastertable),fw,0,1,6,7);
