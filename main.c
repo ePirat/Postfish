@@ -66,7 +66,6 @@ static int signp=0;
 typedef struct time_linkage {
   int samples;
   int channels;
-  int rate;
   double **data;
 } time_linkage;
 
