@@ -6,11 +6,11 @@
 # Use the below line to build for PowerPC
 # The PPC build *must* use -maltivec, even if the target is a non-altivec machine
 
-ADD_DEF= -DUGLY_IEEE754_FLOAT32_HACK=1 -maltivec -mcpu=7400
+#ADD_DEF= -DUGLY_IEEE754_FLOAT32_HACK=1 -maltivec -mcpu=7400
 
 # use the below for x86 and most other platforms where 'float' is 32 bit IEEE754
 
-#ADD_DEF= -DUGLY_IEEE754_FLOAT32_HACK=1 
+ADD_DEF= -DUGLY_IEEE754_FLOAT32_HACK=1 
 
 # use the below for anything without IEE754 floats (eg, VAX)
 

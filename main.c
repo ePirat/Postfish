@@ -68,17 +68,20 @@ void clean_exit(int sig){
 	    "bug as quickly as possible.\n\n"
 	    "-- monty@xiph.org, Postfish revision %s\n\n",sig,version);
     configfile="postfish-staterc-crashsave";
-  }else{
-    output_halt_playback();
+
+    save_state();
+    
+    if(main_looping){
+      main_looping=0;
+      gtk_main_quit();
+    }
+    exit(0);
+
   }
 
-  save_state();
+  /* otherwise inform the UI thread that we've requested shutdown */
+  write(eventpipe[1],"\001",1);
 
-  if(main_looping){
-    main_looping=0;
-    gtk_main_quit();
-  }
-  exit(0);
 }
 
 const char *optstring = "-c:gh";

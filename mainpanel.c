@@ -1225,7 +1225,15 @@ static gboolean async_event_handle(GIOChannel *channel,
   char buf[1];
   read(eventpipe[0],buf,1);
 
-  feedback_process(panel);
+  switch(buf[0]){
+  case 0:
+    feedback_process(panel);
+    break;
+  case 1:
+    shutdown();
+    break;
+  }
+  
   return TRUE;
 }
 
