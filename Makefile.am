@@ -7,6 +7,7 @@ INCLUDES = -I$(top_srcdir)/include
 LDADD = -lm -lpthread -lncurses
 
 bin_PROGRAMS = postfish
+man_MANS = postfish.1
 
 postfish_SOURCES = postfish.c smallft.c form.c smallft.h form.h
 postfish_LDADD = $(LDADD)
@@ -17,4 +18,4 @@ debug:
 profile:
 	$(MAKE) all CFLAGS="@PROFILE@"
 
-EXTRA_DIST = COPYING autogen.sh configure.in Makefile.am
+EXTRA_DIST = COPYING postfish.1
