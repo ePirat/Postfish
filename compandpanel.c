@@ -203,12 +203,12 @@ static void static_compressor_change(GtkWidget *w,gpointer in){
   float val=-multibar_get_value(MULTIBAR(w),0);
 
   if(rint(1./val)>=10.)
-    sprintf(buffer,"%3.0f:1",1./val);
-  else
     sprintf(buffer,"%3.1f:1",1./val);
+  else
+    sprintf(buffer,"%3.2f:1",1./val);
 
   if(val==1.)
-    sprintf(buffer,"  off");
+    sprintf(buffer,"   off");
 
   readout_set(r,buffer);
   c.static_c_ratio=rint(100./val);
@@ -220,12 +220,12 @@ static void static_expander_change(GtkWidget *w,gpointer in){
   float val=-multibar_get_value(MULTIBAR(w),0);
 
   if(rint(1./val)>=10.)
-    sprintf(buffer,"%3.0f:1",1./val);
+    sprintf(buffer,"%3.1f:1",1./val);
   else
-  sprintf(buffer,"%3.1f:1",1./val);
+  sprintf(buffer,"%3.2f:1",1./val);
 
   if(val==1.)
-    sprintf(buffer,"  off");
+    sprintf(buffer,"   off");
 
   readout_set(r,buffer);
   c.static_e_ratio=rint(100./val);
@@ -247,7 +247,7 @@ static void static_decay_change(GtkWidget *w,gpointer in,sig_atomic_t *v){
   else
     sprintf(buffer,"%4.1f",ms/1000);
 
-  if(ms<=1)
+  if(ms<=10)
     sprintf(buffer," fast");
 
   if(ms>99999.)
@@ -350,7 +350,7 @@ static void suppress_decay_change(GtkWidget *w,gpointer in){
   else
     sprintf(buffer,"%4.1f",ms/1000);
 
-  if(ms<=1)
+  if(ms<=10)
     sprintf(buffer," fast");
 
   if(ms>99999.)
@@ -366,12 +366,12 @@ static void suppress_ratio_change(GtkWidget *w,gpointer in){
   float val=-multibar_get_value(MULTIBAR(w),0);
 
   if(rint(1./val)>=10.)
-    sprintf(buffer,"%3.0f:1",1./val);
-  else
     sprintf(buffer,"%3.1f:1",1./val);
+  else
+    sprintf(buffer,"%3.2f:1",1./val);
 
   if(val==1.)
-    sprintf(buffer,"  off");
+    sprintf(buffer,"   off");
 
   readout_set(r,buffer);
   c.suppress_ratio=rint(100./val);
@@ -413,11 +413,11 @@ void compandpanel_create(postfish_mainpanel *mp,
   float levels[15]={-140,-130,-120,-110,-100,-90,-80,-70,-60,-50,-40,
 		     -30,-20,-10,0};
 
-  float ratio_levels[7]={-1.,-.67,-.5,-.33,-.25,-.17,-.1};
-  char  *ratio_labels[6]={"1.5:1","2:1","3:1","4:1","6:1","10:1"};
+  float ratio_levels[7]={-1.,-.833,-.667,-.5,-.33,-.2,-.1};
+  char  *ratio_labels[6]={"1.2:1","1.5:1","2:1","3:1","5:1","10:1"};
 
-  float decay_levels[7]={-100000,-10000,-1000,-100,-10,-3,-1};
-  char  *decay_labels[6]={".01",".1","1","10","30","slow"};
+  float decay_levels[7]={-10000,-1000,-100,-30,-10,-3,-1};
+  char  *decay_labels[6]={".1","1","3","10","30","slow"};
     
   float bias_levels[7]={-30,-20,-10,0,10,20,30};
   char  *bias_labels[6]={"20","10","0","10","20","30"};
@@ -438,7 +438,7 @@ void compandpanel_create(postfish_mainpanel *mp,
   GtkWidget *staticframe=gtk_frame_new(NULL);
   GtkWidget *slidertable=gtk_table_new(multicomp_freqs_max+1,5,0);
 
-  GtkWidget *envelopeframe=gtk_frame_new(" Envelope Compander ");
+  GtkWidget *envelopeframe=gtk_frame_new(" Dynamic Range ");
   GtkWidget *suppressframe=gtk_frame_new(" Reverberation Suppressor ");
 
   GtkWidget *envelopetable=gtk_table_new(3,3,0);
@@ -528,8 +528,8 @@ void compandpanel_create(postfish_mainpanel *mp,
     GtkWidget *labelR=gtk_label_new("Ratio");
     GtkWidget *labelR1=gtk_label_new("cmpr:");
     GtkWidget *labelR2=gtk_label_new("expd:");
-    GtkWidget *readoutR1=readout_new("1.5:1");
-    GtkWidget *readoutR2=readout_new("1.5:1");
+    GtkWidget *readoutR1=readout_new("1.50:1");
+    GtkWidget *readoutR2=readout_new("1.50:1");
     GtkWidget *sliderR1=multibar_slider_new(6,ratio_labels,ratio_levels,1);
     GtkWidget *sliderR2=multibar_slider_new(6,ratio_labels,ratio_levels,1);
 
@@ -722,7 +722,7 @@ void compandpanel_create(postfish_mainpanel *mp,
     GtkWidget *suppress_ratio_slider=multibar_slider_new(6,ratio_labels,ratio_levels,1);
     GtkWidget *suppress_depth_slider=multibar_slider_new(6,depth_labels,depth_levels,1);
     GtkWidget *suppress_decay_readout=readout_new("fast");
-    GtkWidget *suppress_ratio_readout=readout_new("1.5:1");
+    GtkWidget *suppress_ratio_readout=readout_new("1.50:1");
     GtkWidget *suppress_depth_readout=readout_new("gate");
 
     //GtkWidget *label1=gtk_label_new("mode:");

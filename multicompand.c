@@ -222,15 +222,6 @@ int multicompand_load(void){
 	     j<=ms.attack[h][i])
 	    break;
 	}
-      
-      fprintf(stderr,"band %d: filter %d/%d/%d, corner frequency %f, %f-%f\n",i,
-	      ms.rmschoice[h][i],
-	      ms.attack[h][i],
-	      ms.decay[h][i],
-	      iir_corner_list[ms.rmschoice[h][i]],
-	      iir_corner_list[ms.attack[h][i]],
-	      iir_corner_list[ms.decay[h][i]]);
-      
     }
   }
   
@@ -460,6 +451,68 @@ static void range_compand(float *peak, float *rms, float *gain){
   }
 }
 
+static void suppress(float *peak, float *rms, float *gain,
+		     envelope_state *e){
+  /* (since this one is kinda unique) The Suppressor....
+
+     Reverberation in a measurably live environment displays
+     log-amplitute decay with time (linear decay when plotted on a dB
+     scale).
+
+     In its simplest form, the suppressor follows actual {RMS|peak}
+     amplitude attacks but chooses a slower-than-actual decay, then
+     expands according to the dB distance between the slow and actual
+     decay.
+
+     The 'depth' setting is used to limit the expanded distance
+     between actual and slow decy; it's also used to drag the slow
+     decay down with the actual decay once the expansion has hit the
+     depth limit.
+
+     Thus, the suppressor can be used to 'dry out' a very 'wet'
+     reverberative track. */
+
+  int ii;
+  float *envelope; 
+  float ratio=1.+c.suppress_ratio/1000.;
+  float decay=c.suppress_decay/(float)(1024*1024);
+  float depth=-c.suppress_depth/10.;
+  float chase=e->suppress_decay_chase;
+  float undepth=depth/ratio;
+
+  switch(c.suppress_mode){
+  case 0:
+    envelope=rms;
+    break;
+  default:
+    envelope=peak;
+    break;
+  }
+
+  for(ii=0;ii<input_size;ii++){
+    float current=envelope[ii];
+
+    chase+=decay;
+    if(current>chase){
+      chase=current;
+    }else{
+      /* yes, need to expand */
+      float difference = chase - current;
+      float expanded = difference * ratio;
+
+      if(expanded>depth){
+	chase=current+undepth;
+	gain[ii]-=depth-undepth;
+      }else{
+	gain[ii]-=expanded-difference;
+
+      }
+    }
+  }
+
+  e->suppress_decay_chase=chase;
+}
+
 static void final_followers(float *gain,envelope_state *e,int attack,int decay){
   float iirx0,iirx1;
   float iiry0,iiry1;
@@ -483,7 +536,8 @@ static void final_followers(float *gain,envelope_state *e,int attack,int decay){
   iirx1=e->env1_x[1];
   iiry0=e->env1_y[0];
   iiry1=e->env1_y[1];
-  
+
+  /* assymetrical filter; in general, fast attack, slow decay */
   for(k=0;k<input_size;k+=2){
     if(iiry0>iiry1){
       /* decay */
@@ -613,6 +667,7 @@ static void multicompand_work(float **peakfeed,float **rmsfeed){
 	range_compand(peak,rms,gain);
 	
 	/* run the suppressor */
+	suppress(peak,rms,gain,ms.e[j]);
 	
 	//_analysis_append("peak",j,gain,input_size,offset);
 
