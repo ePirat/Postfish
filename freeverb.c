@@ -24,7 +24,8 @@
 /* Derived from the Freeverb3 public domain reverb code by Jezar at
    Dreampoint. This C version of the original C++ assumes reverb to be
    a solved problem and so is not structured for tinkering; it removes
-   much of the pretty OO to make it a monolithic black box. */
+   much of the pretty OO to make it a monolithic black box. It also
+   adds predelay and control over early-reflection timings. */
 
 #include "postfish.h"
 #include "internal.h"
