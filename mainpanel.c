@@ -592,11 +592,9 @@ void mainpanel_create(postfish_mainpanel *panel,char **chlabels){
     GtkWidget *in=gtk_label_new("in:");
     GtkWidget *out=gtk_label_new("out:");
     GtkWidget *show=gtk_label_new("show:");
-    GtkWidget *inframe=gtk_frame_new(NULL);
-    GtkWidget *outframe=gtk_frame_new(NULL);
 
-    panel->inbar=multibar_new(12,labels,levels, LO_ATTACK|LO_DECAY|HI_DECAY );
-    panel->outbar=multibar_new(12,labels,levels, LO_ATTACK|LO_DECAY|HI_DECAY );
+    panel->inbar=multibar_new(12,labels,levels, LO_ATTACK|LO_DECAY|HI_DECAY|PEAK_FOLLOW );
+    panel->outbar=multibar_new(12,labels,levels, LO_ATTACK|LO_DECAY|HI_DECAY|PEAK_FOLLOW );
 
     gtk_container_set_border_width(GTK_CONTAINER (ttable), 3);
     gtk_table_set_col_spacings(GTK_TABLE(ttable),5);
@@ -619,17 +617,12 @@ void mainpanel_create(postfish_mainpanel *panel,char **chlabels){
       panel->channelshow[i]=button;
     }
 
-    gtk_frame_set_shadow_type(GTK_FRAME(inframe),GTK_SHADOW_ETCHED_IN);
-    gtk_frame_set_shadow_type(GTK_FRAME(outframe),GTK_SHADOW_ETCHED_IN);
-    gtk_container_add(GTK_CONTAINER(inframe),panel->inbar);
-    gtk_container_add(GTK_CONTAINER(outframe),panel->outbar);
-    
     gtk_table_attach_defaults(GTK_TABLE(ttable),togglebox,1,3,0,1);
     gtk_table_attach(GTK_TABLE(ttable),show,0,1,0,1,GTK_FILL|GTK_SHRINK,GTK_FILL|GTK_SHRINK,0,0);
     gtk_table_attach(GTK_TABLE(ttable),in,0,1,1,2,GTK_FILL|GTK_SHRINK,GTK_FILL|GTK_SHRINK,0,0);
     gtk_table_attach(GTK_TABLE(ttable),out,0,1,2,3,GTK_FILL|GTK_SHRINK,GTK_FILL|GTK_SHRINK,0,0);
-    gtk_table_attach_defaults(GTK_TABLE(ttable),inframe,1,3,1,2);
-    gtk_table_attach_defaults(GTK_TABLE(ttable),outframe,1,3,2,3);
+    gtk_table_attach_defaults(GTK_TABLE(ttable),panel->inbar,1,3,1,2);
+    gtk_table_attach_defaults(GTK_TABLE(ttable),panel->outbar,1,3,2,3);
 
 
     /* master dB slider */

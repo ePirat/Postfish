@@ -56,7 +56,7 @@ typedef struct {
 static void trigger_slider_change(GtkWidget *w,gpointer in){
   char buffer[80];
   clipslider *p=(clipslider *)in;
-  gdouble linear=gtk_range_get_value(GTK_RANGE(p->slider))*.01;
+  gdouble linear=multibar_get_value(MULTIBAR(p->slider),0);
   
   sprintf(buffer,"%1.2f",linear);
   readout_set(READOUT(p->readout),buffer);
@@ -125,7 +125,7 @@ void clippanel_create(postfish_mainpanel *mp,
   GtkWidget *limit_frame=gtk_frame_new (" filter CPU throttle ");
   GtkWidget *converge_box=gtk_vbox_new(0,0);
   GtkWidget *limit_box=gtk_vbox_new(0,0);
-  GtkWidget *channel_table=gtk_table_new(input_ch,4,0);
+  GtkWidget *channel_table=gtk_table_new(input_ch,5,0);
 
   gtk_widget_set_name(blocksize_box,"choiceframe");
   gtk_widget_set_name(converge_box,"choiceframe");
@@ -240,28 +240,19 @@ void clippanel_create(postfish_mainpanel *mp,
     gtk_range_set_value(GTK_RANGE(slider),100.);
   }
 
-
-  gtk_container_add(GTK_CONTAINER(converge_frame),converge_box);
-  gtk_container_add(GTK_CONTAINER(limit_frame),limit_box);
-
-  gtk_box_pack_start(GTK_BOX(framebox),blocksize_frame,1,1,4);
-  gtk_box_pack_start(GTK_BOX(framebox),framebox_right,1,1,4);
-
-  gtk_box_pack_start(GTK_BOX(framebox_right),converge_frame,1,1,0);
-  gtk_box_pack_start(GTK_BOX(framebox_right),limit_frame,1,1,0);
-
-  gtk_box_pack_start(GTK_BOX(panel->subpanel_box),framebox,0,1,4);
-  gtk_box_pack_start(GTK_BOX(panel->subpanel_box),channel_table,0,1,4);
-
   for(i=0;i<input_ch;i++){
+    char *slabels[8]={".05",".1",".2",".3",".4",
+		      ".6",".8","1."};
+    double slevels[9]={.01,.05,.1,.2,.3,.4,.6,
+                       .8,1.};
+
     char buffer[80];
     clipslider *cs=calloc(1,sizeof(*cs));
     GtkWidget *label;
-    GtkWidget *slider=gtk_hscale_new_with_range(1,100,1);
+    GtkWidget *slider=multibar_new(8,slabels,slevels,HI_DECAY|ZERO_DAMP|PEAK_FOLLOW);
     GtkWidget *readout=readout_new("0.00");
     GtkWidget *readoutdB=readout_new("-40 dB");
-    GtkWidget *barframe=gtk_frame_new(NULL);
-    GtkWidget *bar=multibar_new(2,labels,levels,HI_DECAY|ZERO_DAMP);
+    GtkWidget *bar=multibar_new(2,labels,levels,HI_DECAY|ZERO_DAMP|PEAK_FOLLOW);
 
     cs->slider=slider;
     cs->readout=readout;
@@ -269,11 +260,9 @@ void clippanel_create(postfish_mainpanel *mp,
     cs->number=i;
     feedback_bars[i]=bar;
 
-    gtk_widget_set_size_request (slider,200,-1);
     gtk_widget_set_name(bar,"clipbar");
-    gtk_scale_set_draw_value(GTK_SCALE(slider),FALSE);
-    gtk_range_set_value(GTK_RANGE(slider),100.);
-    gtk_frame_set_shadow_type(GTK_FRAME(barframe),GTK_SHADOW_ETCHED_IN);
+    multibar_thumb_set(MULTIBAR(slider),1.,0);
+    multibar_thumb_bounds(MULTIBAR(slider),.01,1.);
 
     switch(input_ch){
     case 1:
@@ -298,18 +287,26 @@ void clippanel_create(postfish_mainpanel *mp,
     gtk_table_attach(GTK_TABLE(channel_table),label,0,1,i,i+1,GTK_FILL,GTK_FILL,2,0);
     gtk_table_attach(GTK_TABLE(channel_table),readout,1,2,i,i+1,GTK_FILL,GTK_FILL,0,0);
     gtk_table_attach(GTK_TABLE(channel_table),readoutdB,2,3,i,i+1,GTK_FILL,GTK_FILL,0,0);
-    gtk_table_attach_defaults(GTK_TABLE(channel_table),slider,3,4,i,i+1);
-    gtk_table_attach(GTK_TABLE(channel_table),barframe,4,5,i,i+1,GTK_FILL,GTK_FILL,0,0);
-    gtk_container_add(GTK_CONTAINER(barframe),bar);
+    gtk_table_attach(GTK_TABLE(channel_table),slider,3,4,i,i+1,GTK_FILL|GTK_EXPAND,GTK_FILL,0,0);
+    gtk_table_attach(GTK_TABLE(channel_table),bar,4,5,i,i+1,GTK_FILL,GTK_FILL,0,0);
 
+    multibar_callback(MULTIBAR(slider),trigger_slider_change,(gpointer)cs);
 
-    g_signal_connect_after (G_OBJECT(slider), "value-changed",
-			    G_CALLBACK(trigger_slider_change), (gpointer)cs);
-    g_signal_connect (G_OBJECT (slider), "key-press-event",
-		      G_CALLBACK (slider_keymodify), NULL);
-    
     trigger_slider_change(NULL,cs);
   }
+
+  gtk_container_add(GTK_CONTAINER(converge_frame),converge_box);
+  gtk_container_add(GTK_CONTAINER(limit_frame),limit_box);
+
+  gtk_box_pack_start(GTK_BOX(framebox),blocksize_frame,1,1,4);
+  gtk_box_pack_start(GTK_BOX(framebox),framebox_right,1,1,4);
+
+  gtk_box_pack_start(GTK_BOX(framebox_right),converge_frame,1,1,0);
+  gtk_box_pack_start(GTK_BOX(framebox_right),limit_frame,1,1,0);
+
+  gtk_box_pack_start(GTK_BOX(panel->subpanel_box),framebox,1,1,4);
+  gtk_box_pack_start(GTK_BOX(panel->subpanel_box),channel_table,1,1,4);
+
 
   mainpanel_inbar=mp->inbar;
 

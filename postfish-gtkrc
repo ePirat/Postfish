@@ -33,17 +33,24 @@ style "check-poppy" {
 
 style "slider" {
 	bg[NORMAL]="#80a0ff" 
+	bg[PRELIGHT]="#c0f0ff" 
 	GtkWidget::focus-padding = 0
 	GtkWidget::focus-line-width = 1
 	GtkWidget::interior-focus = 0
 }
 
 style "multibar" {
-	fg[NORMAL]="#404040" 
-	fg[ACTIVE]="#ff8080" 
-	text[NORMAL]="#c0c0d0" 
-	text[ACTIVE]="#ffb0b0" 
-	font_name = "sans 8"	
+        bg[NORMAL]="#80a0ff" 
+        bg[ACTIVE]="#c0f0ff" 
+        bg[PRELIGHT]="#c0f0ff" 
+
+        fg[NORMAL]="#000000" 
+        fg[ACTIVE]="#ff8080" 
+        fg[PRELIGHT]="#f0f080" 
+
+        text[NORMAL]="#c0c0d0" 
+        text[ACTIVE]="#ffb0b0" 
+        font_name = "sans 8"    
 }
 
 style "clipbar" {

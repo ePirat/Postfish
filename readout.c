@@ -36,7 +36,6 @@ static void readout_init (Readout *r){
   gtk_widget_show(box);
   gtk_widget_show(r->label);
   gtk_widget_show(r->sizelabel);
-
 }
 
 GType readout_get_type (void){
