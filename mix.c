@@ -349,43 +349,6 @@ time_linkage *mix_read(time_linkage *in,
     int placer=ms.curr[i].placer_place;
     int placerP=ms.prev[i].placer_place;
 
-    float relA=(placer>100 ? placer*.01-1. : 0.);
-    float relB=(placer<100 ? 1.-placer*.01 : 0.);
-    float relAP=(placerP>100 ? placerP*.01-1. : 0.);
-    float relBP=(placerP<100 ? 1.-placerP*.01 : 0.);
-
-    float attA=
-      fromdB((ms.curr[i].master_att +
-	      ms.curr[i].placer_att * relA)*.1);
-    
-    float attB=
-      fromdB((ms.curr[i].master_att +
-	      ms.curr[i].placer_att * relB)*.1);
-    
-    int delA=
-      rint((ms.curr[i].master_delay +
-	    ms.curr[i].placer_delay * relA)*.00001*input_rate);
-
-    int delB=
-      rint((ms.curr[i].master_delay +
-	    ms.curr[i].placer_delay * relB)*.00001*input_rate);
-
-    float attAP=
-      fromdB((ms.prev[i].master_att +
-	      ms.prev[i].placer_att * relAP)*.1);
-    
-    float attBP=
-      fromdB((ms.prev[i].master_att +
-	      ms.prev[i].placer_att * relBP)*.1);
-    
-    int delAP=
-      rint((ms.prev[i].master_delay +
-	    ms.prev[i].placer_delay * relAP)*.00001*input_rate);
-
-    int delBP=
-      rint((ms.prev[i].master_delay +
-	    ms.prev[i].placer_delay * relBP)*.00001*input_rate);
-
     /* place mix */
     {
       int mixedA=0,mixedB=0;
@@ -401,10 +364,26 @@ time_linkage *mix_read(time_linkage *in,
 	  outactive[j]=1;
 	  
 	  if(!mixedA){
+	    float relA=(placer>100 ? placer*.01-1. : 0.);
+	    float relAP=(placerP>100 ? placerP*.01-1. : 0.);
+
+	    float attA=fromdB((ms.curr[i].master_att + ms.curr[i].placer_att * relA)*.1);
+	    float attAP=fromdB((ms.prev[i].master_att + ms.prev[i].placer_att * relAP)*.1);
+	    int delA=rint((ms.curr[i].master_delay + ms.curr[i].placer_delay * relA)*.00001*input_rate);
+	    int delAP=rint((ms.prev[i].master_delay + ms.prev[i].placer_delay * relAP)*.00001*input_rate);
+
+	    float attA_r=fromdB(ms.curr[i].master_att*.1);
+	    float attAP_r=fromdB(ms.prev[i].master_att*.1);
+	    int delA_r=rint(ms.curr[i].master_delay*.00001*input_rate);
+	    int delAP_r=rint(ms.prev[i].master_delay*.00001*input_rate);
+
 	    memset(mixA,0,sizeof(mixA));
 	    mixwork(in->data[i],ms.cacheP[i],ms.cachePP[i],
 		    mixA,attA,delA,0,attAP,delAP,0);
+	    mixwork(inA->data[i],ms.cachePA[i],ms.cachePPA[i],
+		    mixA,attA_r,delA_r,0,attAP_r,delAP_r,0);
 	    mixedA=1;
+
 	  }
 	  mixadd(mixA,ms.out.data[j],destA,destAP);
 	}
@@ -412,9 +391,24 @@ time_linkage *mix_read(time_linkage *in,
 	  outactive[j]=1;
 	  
 	  if(!mixedB){
+	    float relB=(placer<100 ? 1.-placer*.01 : 0.);
+	    float relBP=(placerP<100 ? 1.-placerP*.01 : 0.);
+
+	    float attB=fromdB((ms.curr[i].master_att + ms.curr[i].placer_att * relB)*.1);
+	    float attBP=fromdB((ms.prev[i].master_att + ms.prev[i].placer_att * relBP)*.1);
+	    int delB=rint((ms.curr[i].master_delay + ms.curr[i].placer_delay * relB)*.00001*input_rate);
+	    int delBP= rint((ms.prev[i].master_delay + ms.prev[i].placer_delay * relBP)*.00001*input_rate);
+
+	    float attB_r=fromdB(ms.curr[i].master_att*.1);
+	    float attBP_r=fromdB(ms.prev[i].master_att*.1);
+	    int delB_r=rint(ms.curr[i].master_delay*.00001*input_rate);
+	    int delBP_r= rint(ms.prev[i].master_delay*.00001*input_rate);
+	    
 	    memset(mixB,0,sizeof(mixB));
 	    mixwork(in->data[i],ms.cacheP[i],ms.cachePP[i],
 		    mixB,attB,delB,0,attBP,delBP,0);
+	    mixwork(inB->data[i],ms.cachePB[i],ms.cachePPB[i],
+		    mixB,attB_r,delB_r,0,attBP_r,delBP_r,0);
 	    mixedB=1;
 	  }
 	  mixadd(mixB,ms.out.data[j],destB,destBP);

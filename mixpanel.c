@@ -351,6 +351,9 @@ static mix_panelsave *mixpanel_create_helper(postfish_mainpanel *mp,
       ps->destA[i]=bA;
       ps->destB[i]=bB;
     }
+
+    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(ps->destA[0]),1);
+    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(ps->destB[1]),1);
     
     gtk_table_attach(GTK_TABLE(table),lA,0,2,6,7,
 		     0,0,0,0);
@@ -469,11 +472,6 @@ static mix_panelsave *mixpanel_create_helper(postfish_mainpanel *mp,
 		      G_CALLBACK (toggle_callback), 
 		      (gpointer)&m->insert_source[i][2]);
 
-    if(i==0){
-      gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(bM),1);
-      gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(bA),1);
-    }
-
     for(j=0;j<OUTPUT_CHANNELS;j++){
       char buffer[80];
       GtkWidget *b;
@@ -484,9 +482,6 @@ static mix_panelsave *mixpanel_create_helper(postfish_mainpanel *mp,
       g_signal_connect (G_OBJECT (b), "clicked",
 			G_CALLBACK (toggle_callback), 
 			(gpointer)&m->insert_dest[i][j]);
-
-      if(thisch%2 == j && i == 0)
-	gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(b),1);
 
       ps->insert_dest[i][j]=b;
 

@@ -131,22 +131,12 @@ Mixdown:
   A-B slider then controls how far the input apparently images toward
   the A output bank or the B output bank.  
 
-  The mixdown blocks can also be configured to take as input not only
-  the input channel, but also each channel's left (A) or right (B)
-  reverb output.  For example, reverb left can be mixed to the left
-  output, the reverb right mixed to the right channel and the original
-  input crossplaced somewhere between left or right.  The input
-  placement can be altered on the fly thus apparently moving the
-  input's location while the impression of space the reverb creates
-  holds still. For even more realism, adding an additional delay of 10
-  ms or so to the reverb (sound travels roughly one meter in 3 ms) can
-  pull the original image closer without losing the impression of
-  reverberation in a medium-to-large hall.  A reverb delay also allows
-  the use of a faster/tighter reverb time without losing the
-  the impression of size.
+  The direct mixdown blocks allow additional manual control over the
+  input->output matrix; the direct mixdown blocks run in parallel with
+  the crossplacer and all may be active simultaneously.
 
-  Of course, with eight channels, one can begin imaging/mastering for
-  more than just stereo...
+  Of course, with eight output channels, one can begin
+  imaging/mastering for more than just stereo...
 
 >>>> Don't we already have several free apps that do this sort of thing?
 
@@ -270,11 +260,13 @@ Mixdown:
   Only two things are probably impossible to figure out just from
   an afternoon of playing around:
 
-  1) Output from a reverb effect in the "channel" panel is sent to a
-     separate internal stereo bus.  The reverb has to be explicitly
-     mixed into the output on a 'mix' panel.  When postfish starts for
-     the first time, the default setup mixes one side of the reverb
-     pair back into left or right.
+  1) When Postfish starts for the first time, all input channels are
+     mixed into the center of a two channel output.  If, for example,
+     the input is already two stereo channels and the output should be
+     the same, the proper mixdown configuration is to go to the
+     mixdown panels for channel 1 and channel 2 and then set input
+     channel 1 to mix only into output channel 1 and input channel 2
+     to only output channel 2.
  
   2) Turning "Atten/Mix" off for any channel will mute it completely
      in all input effects, not just in the mixdown (this obviously
