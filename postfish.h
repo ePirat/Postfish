@@ -2,7 +2,7 @@
  *
  *  postfish
  *    
- *      Copyright (C) 2002-2003 Monty
+ *      Copyright (C) 2002-2005 Monty
  *
  *  Postfish is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -95,8 +95,12 @@ static inline float todB_a2(float x){
 }
 
 static inline float fromdB_a(float x){
-  int y=(x < -300 ? 0 : 1.39331762961e+06f*(x+764.6161886f));
+  int y=(x < -300.f ? 0 : 1.39331762961e+06f*(x+764.6161886f));
   return *(float *)&y;
+}
+
+static inline void underguard(float *x){
+  if(((*(int32_t *) &x) & 0x7f800000)==0) *x=0.0f;
 }
 
 #else
@@ -107,6 +111,10 @@ static inline float todB_a(const float *x){
 
 static inline float fromdB_a(float x){
   return fromdB(x);
+}
+
+static inline void underguard(float *x){
+  if(*x<1e-30f && *x>-1e-30f) x=0.0f;
 }
 
 #endif
@@ -121,12 +129,19 @@ static inline float fromdB_a(float x){
 #define toBark(n)   (13.1f*atan(.00074f*(n))+2.24f*atan((n)*(n)*1.85e-8f)+1e-4f*(n))
 #define fromBark(z) (102.f*(z)-2.f*pow(z,2.f)+.4f*pow(z,3.f)+pow(1.46f,z)-1.f)
 
+typedef struct postfish_instance {
+  int blocksize;
+  int rate;
+} postfish_instance;
+
 typedef struct time_linkage {
+  int alias;
   int samples;  /* normally same as size; exception is EOF */
   int channels;
   float **data;
   u_int32_t active; /* active channel bitmask */
 } time_linkage;
+
 
 extern sig_atomic_t loop_active;
 extern sig_atomic_t playback_active;

@@ -2,7 +2,7 @@
  *
  *  postfish
  *    
- *      Copyright (C) 2002-2003 Monty
+ *      Copyright (C) 2002-2005 Monty
  *
  *  Postfish is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -36,7 +36,7 @@
 #include "limit.h"
 #include "mute.h"
 #include "mix.h"
-#include "reverb.h"
+#include "freeverb.h"
 
 output_settings outset;
 
@@ -71,7 +71,7 @@ void pipeline_reset(){
   limit_reset(); /* clear any persistent lapping state */
   output_reset(); /* clear any persistent lapping state */
   mix_reset();
-  plate_reset();
+  p_reverb_reset();
 }
 
 typedef struct output_feedback{
@@ -847,7 +847,7 @@ void *playback_thread(void *dummy){
     {
       time_linkage *reverbA;
       time_linkage *reverbB;
-      link=plate_read_channel(link,&reverbA,&reverbB);
+      link=p_reverb_read_channel(link,&reverbA,&reverbB);
 
       link=mix_read(link,reverbA,reverbB);
       result|=link->samples;
@@ -860,7 +860,7 @@ void *playback_thread(void *dummy){
     result|=link->samples;
     link=eq_read_master(link);
     result|=link->samples;
-    link=plate_read_master(link);
+    link=p_reverb_read_master(link);
     result|=link->samples;
 
     if(!result)break;

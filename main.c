@@ -2,7 +2,7 @@
  *
  *  postfish
  *    
- *      Copyright (C) 2002-2003 Monty
+ *      Copyright (C) 2002-2005 Monty
  *
  *  Postfish is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -43,7 +43,7 @@
 #include "limit.h"
 #include "mute.h"
 #include "mix.h"
-#include "reverb.h"
+#include "freeverb.h"
 #include "version.h"
 #include "config.h"
 #include "mainpanel.h"
@@ -342,7 +342,7 @@ int main(int argc, char **argv){
   if(limit_load(OUTPUT_CHANNELS))exit(1);
   if(mute_load())exit(1);
   if(mix_load(OUTPUT_CHANNELS))exit(1);
-  if(plate_load(OUTPUT_CHANNELS))exit(1);
+  if(p_reverb_load())exit(1);
 
   /* easiest way to inform gtk of changes and not deal with locking
      issues around the UI */

@@ -1,4 +1,4 @@
-This README file covers the 2004-05-29 pre-release of the Postfish by
+This README file covers the 2005-01-01 pre-release of the Postfish by
 Xiph.Org.
 
 >>>> What is the Postfish?
@@ -17,7 +17,9 @@ Xiph.Org.
   optionally providing a configurable audio playback monitor via a
   sound device.  If the input audio is being taken from files,
   Postfish also provides simple forward/back/cue seeking and A-B
-  looping control.
+  looping control.  The next major update of Postfish will also
+  include automation to allow mixdown settings to be 'recorded' and
+  applied automatically during rendering.
 
 >>>> What is the Postfish for?
 
@@ -25,26 +27,26 @@ Xiph.Org.
   basic filters needed to produce a good mixdown from audio recorded
   'in the field'.  The filter set also comprises the fundamentals
   needed for master mixdown in a small studio.  It is not an editor;
-  for that reason, it's intended to be used with an audio editor, such
+  for that reason, it is intended to be used with an audio editor such
   as Audacity.
 
-  If, for example, you've just multi-track recorded a rehearsal of
-  your troupe's current rock opera and the Director then appears out
-  of nowhere (they always do) and says "Have a mix for my review by
+  If, for example, you've just multi-tracked a rehearsal of your
+  troupe's current rock opera and the Director then appears out of
+  nowhere (they always do) and says "Have a mix ready for my review by
   morning", the Postfish is all you need.
 
   Or, as another example, you've recorded for a band who'd like to put
   out a CD of the live performance...  All the band FX are already in
   the multi-track, so the Postfish plus Audacity is all you need.
 
-  In a studio situation, tracks usually get recorded dry, so there's
-  generally multiple mixdown stages of adding effects.  Postfish
-  (obviously) does not give you a large array of instrument or
-  situation-specific effects and it never will (dammit).  What it does
-  give you is the effects necessary to take the tracks from earlier
-  mixing and produce intermediate mixes and final masters.  Of course,
-  if you already have $100k of analog rack... you likely won't be
-  using Postfish.  But hey, who knows....
+  In a studio, tracks usually get recorded dry, so there's generally
+  multiple mixdown stages of adding effects.  Postfish (obviously)
+  does not give you a large array of instrument or situation-specific
+  effects and it never will.  What it does give you is the effects
+  necessary to take the tracks from earlier mixing and produce preview
+  mixes and final masters.  Of course, if you already have $100k of
+  analog rack... you likely won't be using Postfish.  If you don't
+  have that rack already, Postfish means you won't need it.
 
 >>>> What effects does the Postfish include?
 
@@ -94,12 +96,13 @@ Deverberator:
 
   Live recordings have a tendency to end up with too much reverb,
   especially when one is forced to use ambient miking.  The
-  deverberator dries out overly 'wet' live signals. 
+  deverberator dries out overly 'wet' live signals.  Also good for
+  taking unwanted room echo out of speech recordings.
 
 Reverberator:
 
   ...for adding reverb to signals that are too 'dry', especially to
-  even out apparent depth when mixing close miked signals (like
+  even out apparent stage depth when mixing close miked signals (like
   vocals) to an ambient-miked signal.
 
   The Postfish provides a stereo reverb per input channel and a mono
@@ -150,10 +153,9 @@ Mixdown:
   The short/wrong answer is maybe. The complicated answer is no.
 
   .) I needed a specific set of filters
-  .) I needed them in one place working together 
-  .) I needed to hear changes I made to settings as I made them
-  .) I needed to be able to absolutely trust the filters would function 
-     as expected 
+  .) I needed them in one place working together 'out of the box' 
+  .) I needed to instantly hear changes I made to settings as I made them
+  .) I needed to be able to absolutely trust the filters 
   .) I needed it all to be convenient to use
 
   Given my specific requirements, nothing else came close to filling
@@ -163,16 +165,16 @@ Mixdown:
 
   Both the Postfish UI and the filter functionality are intended to be
   the most usable day-to-day set, rather than sporting the maximum
-  number of buttons in the smallest space or more features than the
-  next app (or the slickest skin).  
+  number of buttons in the smallest space, pack in more features than
+  the next app, or sport the slickest 'skin'.
 
   Postfish is the way it is because I need it, and I use it for the
   core basics of mixing that I absolutely cannot afford to screw up.
   Some filters (like the declipper and deverberator) are unique.  Even
-  among those that aren't, Postfish as implemented deliberately sets
-  speed/quality tradeoff much higher than most existing apps.
+  among those that aren't, Postfish deliberately sets speed/quality
+  tradeoff much higher than most existing apps.
 
-  The multiband compander is a case in point; other free apps do
+  The multiband compander is a case in point; other free apps
   implement this effect. To my knowledge, all use the simplest/fastest
   method, operating directly on the FFT of a windowed block.  An
   FFT-based multicompander is fast, but the aliasing and frequency
@@ -194,13 +196,15 @@ Mixdown:
   Seriously, this is a very CPU hungry app because of the
   aforementioned speed/quality tradeoff.  I can do simple mixdown of 8
   channels to stereo with a few effects in realtime on my G3-400, but
-  the machine is crying.  The dual Athlon 2600 keeps up much better,
+  the machine is crying.  My dual Athlon 2600 keeps up much better,
   but it's still possible to overwhelm it by lighting up all the
   effects and feeding it enough input channels.  The declipper,
   especially, eats CPU on heavily damaged audio.  The multiband
-  compander is runner up in 'absurd levels of CPU usage'.
+  compander is runner up in 'absurd levels of CPU usage'.  If you
+  don't have fast AGP video, the EQ panel alone will probably kill
+  your machine.
 
-  Postfish, BTW, is designed to scale to dual CPUs.  A dual
+  Postfish, BTW, is designed to scale to multiple CPUs.  A dual
   Athlon/Pentium/UltraSparc/PowerPC runs Postfish much better than a
   single processor.
 
@@ -208,9 +212,8 @@ Mixdown:
 
   Because it's not finished.  A few things are more obvious than others:
 
-  1) The 'cue sheet' and 'settings list' panels are still
-     unimplemented.  These are the only inactive features on the UI,
-     but they're right on the main panel.
+  1) A number of panels are still unimplemented.  These are the only
+     inactive features on the UI, but they're right on the main panel.
 
   2) Postfish *should* be a JACK-able app, but isn't.  That too should
      be done for a real release.
@@ -220,20 +223,15 @@ Mixdown:
      asynchronous UI, the source isn't entirely arranged that way.  It
      should be.  It will be for final release.
 
-  4) The stereo reverb code used by Postfish is Steve Harris's GPL
-     plate reverb from LADSPA.  Although this is a solid, reliable
-     reverb implementation, it's also a bit thinner on final output
-     results than I'd like.  Don't get me wrong, this reverb is
-     excellent code, but it places emphasis more toward 'fast' rather
-     than my desired 'best possible results given unlimited CPU'.  I'm
-     evaluating other reverb implementations; this is a case where
-     others have achieved clearly better results than I would, and
-     thus I plan to use the best available to me.
-
-  5) This code is just now seeing light of day.  It is probably *full*
+  4) This code is just now seeing light of day.  It is probably *full*
      of simple bugs.  I'm confident in the audio pipeline itself (I've
      hammered on it mercilessly) but there's certainly many UI
      interconnection bugs left to find.
+
+  5) The automation robot isn't there yet.  Right now a user has to
+     frob knobs in realtime to make settings adjustments during a
+     render.  That's not really acceptible.  All teh setttings changes
+     must be preprogrammable; they will be.
 
   6) Everyone knows a release requires documentation.  There is no
      documentation.
@@ -242,13 +240,20 @@ Mixdown:
 
   Not yet; good documentation requires effort and time.  
 
-  That said, if read the list of effects, knew what they were, and
+  That said, if you read the list of effects, knew what they were, and
   knew basically how to use them, you should be able to pick up the
-  Postfish and do useful work in a few minutes of playing around. 
+  Postfish and do useful work in a few minutes of playing around.
 
   I took care to establish and follow conventions in the UI: If you're
   using the shipped postfish-gtkrc theme, square blue buttons turn
-  things on.  Triangular blue buttons pop configuration windows.
+  things on.  Triangular blue buttons pop configuration windows.  
+
+  (If you're running a nonstandard system-wide Gtk2 'theme' that skins
+  a set of custom widget renderers into Gtk, well, I'll let you deal
+  with figuring the convention out as I use a number of custom widgets
+  subclassed from 'stock' Gtk and so you'll see a mixmash of classic
+  Gtk and your skin.  Sorry, no way around it other than to purpousely
+  defeat your 'theme' which you probably won't like either.)
  
   The grid of buttons on the right in the 'channel' frame are the
   effects for the input channels.  The square blue buttons turn a
@@ -259,7 +264,7 @@ Mixdown:
   Further right is the "master" panel; these controls work the same
   way for effects on the output channels after mixdown.
 
-  Finally, postfish -h will tell you how to get audio in and read
+  Finally, postfish -h will tell you how to get audio in and reroute
   audio out.
 
   Only two things are probably impossible to figure out just from
