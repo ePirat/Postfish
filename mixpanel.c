@@ -45,6 +45,8 @@ typedef struct {
   slider_readout_pair **del;
 
   GtkWidget **master;
+
+  GtkWidget *average;
 } atten_panelsave;
 
 typedef struct {
@@ -159,6 +161,36 @@ void mixpanel_state_from_config(int bank){
   }
 }
 
+
+static int av_callback_enter=1;
+
+static float determine_average(void){
+  int i;
+  float acc=0;
+  for(i=0;i<input_ch;i++)
+    acc+=multibar_get_value(MULTIBAR(atten_panel.att[i]->s),0);
+  return acc/input_ch;
+}
+
+static void av_slider_change(GtkWidget *w,gpointer in){
+  if(!av_callback_enter){
+    char buffer[80];
+    atten_panelsave *p=(atten_panelsave *)in;
+    
+    float av=multibar_get_value(MULTIBAR(p->average),0);
+    float actual=determine_average();
+    int i;
+
+    av_callback_enter=1;
+    for(i=0;i<input_ch;i++){
+      float val=multibar_get_value(MULTIBAR(atten_panel.att[i]->s),0) + av - actual;
+      multibar_thumb_set(MULTIBAR(atten_panel.att[i]->s),val,0);
+    }
+    
+    av_callback_enter=0;
+  }
+}
+
 static void dB_slider_change(GtkWidget *w,gpointer in){
   char buffer[80];
   slider_readout_pair *p=(slider_readout_pair *)in;
@@ -168,6 +200,13 @@ static void dB_slider_change(GtkWidget *w,gpointer in){
   readout_set(READOUT(p->r),buffer);
   
   *p->val=rint(val*10);
+
+  if(!av_callback_enter){
+    av_callback_enter=1;
+    float actual=determine_average();
+    multibar_thumb_set(MULTIBAR(atten_panel.average),actual,0);
+    av_callback_enter=0;
+  }
 }
 
 static void ms_slider_change(GtkWidget *w,gpointer in){
@@ -523,8 +562,7 @@ void attenpanel_create(postfish_mainpanel *mp,
 					  "Mi_x Input Delay / Attenuation",
 					  0,0,input_ch);
 
-  GtkWidget *table=gtk_table_new(MIX_BLOCKS*3,5,0);
-  mix_panelsave *ps=calloc(1,sizeof(*ps));
+  GtkWidget *table=gtk_table_new(input_ch*3+2,5,0);
   atten_panel.master=calloc(input_ch,sizeof(*atten_panel.master));  
   atten_panel.att=calloc(input_ch,sizeof(*atten_panel.att));
   atten_panel.del=calloc(input_ch,sizeof(*atten_panel.del));
@@ -593,6 +631,35 @@ void attenpanel_create(postfish_mainpanel *mp,
     gtk_table_attach(GTK_TABLE(table),del->r,3,4,1+i*3,2+i*3,
 		     GTK_FILL|GTK_EXPAND,0,0,0);
     
+  }
+
+  /* average attenuation slider */
+  {
+    
+    GtkWidget *l1=gtk_label_new("attenuation ");
+    GtkWidget *lN=gtk_label_new("Avg");
+    gtk_widget_set_name(lN,"framelabel");
+
+    atten_panel.average=multibar_slider_new(11,labels_dB,levels_dB,1);
+
+    multibar_callback(MULTIBAR(atten_panel.average),av_slider_change,&atten_panel);
+
+    multibar_thumb_set(MULTIBAR(atten_panel.average),0,0);
+    gtk_misc_set_alignment(GTK_MISC(lN),1,.5);
+    gtk_misc_set_alignment(GTK_MISC(l1),1,.5);
+
+    gtk_table_attach(GTK_TABLE(table),lN,0,1,0+i*3,1+i*3,
+		     0,0,15,0);
+    gtk_table_attach(GTK_TABLE(table),l1,1,2,0+i*3,1+i*3,
+		     GTK_FILL|GTK_EXPAND,0,0,0);
+    gtk_table_attach(GTK_TABLE(table),atten_panel.average,2,3,0+i*3,1+i*3,
+		     GTK_FILL|GTK_EXPAND,0,0,0);
+
+
+    gtk_table_set_row_spacing(GTK_TABLE(table),i*3-1,10);
+
+    av_callback_enter=0; /* enable updates; not done earlier as
+			    uncreated widgets would cause a segfualt */
   }
 
   gtk_box_pack_start(GTK_BOX(panel->subpanel_box),table,1,1,4);
