@@ -8,6 +8,7 @@
 #include "readout.h"
 #include "version.h"
 #include "input.h"
+#include "output.h"
 
 typedef struct {
   GtkWidget *topframe;
@@ -58,10 +59,6 @@ typedef struct {
  
 } postfish_mainpanel;
 
-extern sig_atomic_t playback_active;
-extern sig_atomic_t playback_exit;
-extern void *playback_thread(void *dummy);
-
 static void action_play(GtkWidget *widget,postfish_mainpanel *p){
   if(gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(widget))){
     if(!playback_active){
@@ -84,7 +81,6 @@ static void action_play(GtkWidget *widget,postfish_mainpanel *p){
   }
 }
 
-extern sig_atomic_t loop_active;
 static void action_b(GtkWidget *widget,postfish_mainpanel *p){
   if(gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(widget)))
     loop_active=1;
@@ -162,6 +158,8 @@ static void masterdB_change(GtkRange *r, gpointer in){
   gdouble val=gtk_range_get_value(r);
   sprintf(buf,"%.1f dB",val);
   readout_set(READOUT(p->masterdB_r),buf);
+
+  master_att=rint(val*10);
 }
 
 static gboolean timeevent_unselect(GtkWidget *widget,
@@ -732,6 +730,21 @@ static gboolean async_event_handle(GIOChannel *channel,
       multibar_set(MULTIBAR(panel->inbar),rms,peak,n);
       input_cursor_to_time(time_cursor,buffer);
       readout_set(panel->cue,buffer);
+
+      if(pull_output_feedback(peak,rms,&n)){
+	for(i=0;i<n;i++){
+	  if(gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(panel->channelshow[i]))){
+	    peak[i]=todB(peak[i]);
+	    rms[i]=todB(rms[i]);
+	  }else{
+	    peak[i]=-400;
+	    rms[i]=-400;
+	  }
+	}
+	
+	multibar_set(MULTIBAR(panel->outbar),rms,peak,n);
+      }
+
 
     }
   }

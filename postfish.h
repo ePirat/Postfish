@@ -65,6 +65,7 @@ extern pthread_mutex_t master_mutex;
 extern sig_atomic_t loop_active;
 extern sig_atomic_t playback_active;
 extern sig_atomic_t playback_exit;
+extern sig_atomic_t master_att;
 extern int outfileno;
 extern int seekable;
 extern int eventpipe[2];

@@ -30,6 +30,83 @@
 sig_atomic_t playback_active=0;
 sig_atomic_t playback_exit=0;
 
+typedef struct output_feedback{
+  double *rms;
+  double *peak;
+
+  struct output_feedback *next;
+} output_feedback;
+
+static output_feedback *feedback_list_head;
+static output_feedback *feedback_list_tail;
+static output_feedback *feedback_pool;
+
+static output_feedback *new_output_feedback(void){
+  output_feedback *ret;
+  
+  pthread_mutex_lock(&master_mutex);
+  if(feedback_pool){
+    ret=feedback_pool;
+    feedback_pool=feedback_pool->next;
+    pthread_mutex_unlock(&master_mutex);
+    return ret;
+  }
+  pthread_mutex_unlock(&master_mutex);
+  ret=malloc(sizeof(*ret));
+  ret->rms=malloc((input_ch+2)*sizeof(*ret->rms));
+  ret->peak=malloc((input_ch+2)*sizeof(*ret->peak));
+  
+  return ret;
+}
+
+static void push_output_feedback(double *peak,double *rms){
+  int i,n=input_ch+2;
+  output_feedback *f=new_output_feedback();
+
+  memcpy(f->rms,rms,n*sizeof(*rms));
+  memcpy(f->peak,peak,n*sizeof(*peak));
+  f->next=NULL;
+
+  pthread_mutex_lock(&master_mutex);
+  if(!feedback_list_tail){
+    feedback_list_tail=f;
+    feedback_list_head=f;
+  }else{
+    feedback_list_head->next=f;
+    feedback_list_head=f;
+  }
+  pthread_mutex_unlock(&master_mutex);
+}
+
+int pull_output_feedback(double *peak,double *rms,int *n){
+  output_feedback *f;
+  int i,j;
+  *n=input_ch+2;
+
+  pthread_mutex_lock(&master_mutex);
+  if(feedback_list_tail){
+    
+    f=feedback_list_tail;
+    feedback_list_tail=feedback_list_tail->next;
+    if(!feedback_list_tail)feedback_list_head=0;
+
+  }else{
+    pthread_mutex_unlock(&master_mutex);
+    return 0;
+  }
+  pthread_mutex_unlock(&master_mutex);
+
+  memcpy(rms,f->rms,sizeof(*rms)* *n);
+  memcpy(peak,f->peak,sizeof(*peak)* *n);
+
+  pthread_mutex_lock(&master_mutex);
+  f->next=feedback_pool;
+  feedback_pool=f;
+  pthread_mutex_unlock(&master_mutex);
+  return 1;
+}
+
+
 static void PutNumLE(long num,FILE *f,int bytes){
   int i=0;
   while(bytes--){
@@ -127,6 +204,10 @@ void *playback_thread(void *dummy){
   int ch=-1;
   long rate=-1;
 
+  /* for output feedback */
+  double *rms=alloca(sizeof(*rms)*(input_ch+2));
+  double *peak=alloca(sizeof(*peak)*(input_ch+2));
+
   while(1){
     if(playback_exit)break;
 
@@ -137,10 +218,20 @@ void *playback_thread(void *dummy){
 
 
 
+    /* temporary; this would be frequency domain in the finished postfish */
+    if(ret && ret->samples>0){
+      double scale=fromdB(master_att/10.);
+      for(i=0;i<ret->samples;i++)
+	for(j=0;j<ret->channels;j++)
+	  ret->data[j][i]*=scale;
+    }    
+
 
     /************/
 
     if(ret && ret->samples>0){
+      memset(rms,0,sizeof(*rms)*(input_ch+2));
+      memset(peak,0,sizeof(*peak)*(input_ch+2));
       ch=ret->channels;
       rate=ret->rate;
 
@@ -164,8 +255,13 @@ void *playback_thread(void *dummy){
       /* final limiting and conversion */
       
       for(k=0,i=0;i<ret->samples;i++){
+	double mean=0.;
+	double div=0.;
+	double divrms=0.;
+
 	for(j=0;j<ret->channels;j++){
-	  int val=rint(ret->data[j][i]*32767.);
+	  double dval=ret->data[j][i];
+	  int val=rint(dval*32767.);
 	  if(val>32767)val=32767;
 	  if(val<-32768)val=-32768;
 	  if(bigendianp){
@@ -175,12 +271,37 @@ void *playback_thread(void *dummy){
 	    audiobuf[k++]=val;
 	    audiobuf[k++]=val>>8;
 	  }
+
+	  if(fabs(dval)>peak[j])peak[j]=fabs(dval);
+	  rms[j]+= dval*dval;
+	  mean+=dval;
+
 	}
+
+	/* mean */
+	mean/=j;
+	if(fabs(mean)>peak[input_ch])peak[input_ch]=fabs(mean);
+	rms[input_ch]+= mean*mean;
+
+	/* div */
+	for(j=0;j<ret->channels;j++){
+	  double dval=mean-ret->data[j][i];
+	  if(fabs(dval)>peak[input_ch+1])peak[input_ch+1]=fabs(dval);
+	  divrms+=dval*dval;
+	}
+	rms[input_ch+1]+=divrms/ret->channels;
+
+      }
+
+      for(j=0;j<input_ch+2;j++){
+	rms[j]/=ret->samples;
+	rms[j]=sqrt(rms[j]);
       }
       
       count+=fwrite(audiobuf,1,ret->channels*ret->samples*2,playback_fd);
 
       /* inform Lord Vader his shuttle is ready */
+      push_output_feedback(peak,rms);
       write(eventpipe[1],"",1);
 
     }else
