@@ -5,13 +5,13 @@
 static void draw(GtkWidget *widget,float *lowvals, float *highvals, int n){
   int i,j;
   Multibar *m=MULTIBAR(widget);
-  float max=lowvals[0];
+  float max=m->peak;
 
   if(!m->boxcolor){
     m->boxcolor=gdk_gc_new(m->backing);
     gdk_gc_copy(m->boxcolor,widget->style->black_gc);
   }
-
+  
   if(m->cliptimer.tv_sec){
     struct timeval tv;
     gettimeofday(&tv,NULL);
@@ -205,11 +205,7 @@ static gboolean configure(GtkWidget *widget, GdkEventConfigure *event){
   gdk_draw_rectangle(m->backing,widget->style->white_gc,1,0,0,widget->allocation.width,
 		     widget->allocation.height);
   
-  {
-    float lo[]={-24,-72};
-    float hi[]={-7,-10};
-    draw(widget,lo,hi,2);
-  }
+  draw(widget,0,0,0);
   return TRUE;
 }
 
@@ -239,9 +235,13 @@ static void size_request (GtkWidget *widget,GtkRequisition *requisition){
   requisition->height = maxy;
 }
 
+static GtkDrawingAreaClass *parent_class = NULL;
+
 static void multibar_class_init (MultibarClass *class){
   GtkWidgetClass *widget_class;
   widget_class = (GtkWidgetClass*) class;
+
+  parent_class = g_type_class_peek_parent (class);
 
   widget_class->expose_event = expose;
   widget_class->configure_event = configure;

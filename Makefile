@@ -5,9 +5,9 @@
 CC=gcc
 LD=gcc
 
-SRC = mainpanel.c multibar.c
-OBJ = mainpanel.o multibar.o
-GCF = `pkg-config --cflags gtk+-2.0` 
+SRC = mainpanel.c multibar.c readout.c
+OBJ = mainpanel.o multibar.o readout.o
+GCF = `pkg-config --cflags gtk+-2.0`
 
 all:	
 	$(MAKE) target CFLAGS="-W -O2 $(GCF)"
