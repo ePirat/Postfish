@@ -23,6 +23,7 @@
 
 #include "postfish.h"
 #include "feedback.h"
+#include "window.h"
 #include "bessel.h"
 #include "singlecomp.h"
 
@@ -166,11 +167,7 @@ int singlecomp_load(int outch){
   singlecomp_load_helper(&master_state,outch);
   singlecomp_load_helper(&channel_state,input_ch);
 
-  window=malloc(input_size/2*sizeof(*window));
-  for(i=0;i<input_size/2;i++){
-    window[i]=sin( (i+.5)/input_size*M_PIl);
-    window[i]*=window[i];
-  }
+  window=window_get(1,input_size/2);
 
   singlecomp_channel_set=calloc(input_ch,sizeof(*singlecomp_channel_set));
   master_set_bundle=malloc(outch*sizeof(*master_set_bundle));
@@ -208,6 +205,15 @@ static void reset_filter(singlecomp_state *scs){
   memset(scs->o_iir,0,scs->ch*sizeof(*scs->o_iir));
   memset(scs->u_iir,0,scs->ch*sizeof(*scs->u_iir));
   memset(scs->b_iir,0,scs->ch*sizeof(*scs->b_iir));
+}
+
+static void reset_onech_filter(singlecomp_state *scs,int i){
+  memset(scs->o_peak+i,0,sizeof(*scs->o_peak));
+  memset(scs->u_peak+i,0,sizeof(*scs->u_peak));
+  memset(scs->b_peak+i,0,sizeof(*scs->b_peak));
+  memset(scs->o_iir+i,0,sizeof(*scs->o_iir));
+  memset(scs->u_iir+i,0,sizeof(*scs->u_iir));
+  memset(scs->b_iir+i,0,sizeof(*scs->b_iir));
 }
 
 /* called only in playback thread */
@@ -473,8 +479,8 @@ static void work_and_lapping(singlecomp_state *scs,
     
     if(!active0 && !activeC){
       
-      if(activeP) reset_filter(scs); /* just became inactive; reset all filters */
-
+      if(activeP) reset_onech_filter(scs,i); /* just became inactive; reset all filters for this channel */
+      
       /* feedback */
       if(scset[i]->panel_visible){
 	int k;

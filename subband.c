@@ -23,6 +23,7 @@
 
 #include "postfish.h"
 #include <fftw3.h>
+#include "window.h"
 #include "subband.h"
 #include "lpc.h"
 
@@ -77,11 +78,7 @@ int subband_load(subband_state *f,int bands,int qblocksize,int ch){
   for(i=0;i<ch;i++)
     f->out.data[i]=malloc(input_size*sizeof(**f->out.data));
 
-  /* fill in time window */
-  f->window=malloc(f->qblocksize*2*sizeof(*f->window)); 
-  /* we need a smooth-edged, symmetric window */
-  for(i=0;i<f->qblocksize*2;i++)f->window[i]=sin(M_PIl*i/(f->qblocksize*2));
-  for(i=0;i<f->qblocksize*2;i++)f->window[i]*=f->window[i]*.25/f->qblocksize;
+  f->window=window_get(1,f->qblocksize);
 
   f->fftwf_forward_out  = fftwf_malloc(sizeof(*f->fftwf_forward_out) * 
 				       (f->qblocksize*4+2));
@@ -235,7 +232,9 @@ static void subband_work(subband_state *f,
 
   for(i=0;i<ch;i++){
 
-    int content_p=  f->lap_activeC[i]= (visible[i]||active[i]) && !mute_channel_muted(mutemask,i);
+    int content_p=  
+      f->lap_activeC[i]= 
+      (visible[i]||active[i]) && !mute_channel_muted(mutemask,i);
     int content_p0= f->lap_active0[i];
     int content_p1= f->lap_active1[i];
 
@@ -294,8 +293,20 @@ static void subband_work(subband_state *f,
 	  break;
 	}
 	
+
 	/* window; assume the edges are already zeroed */
-	for(k=0;k<f->qblocksize*2;k++)workoff[k]*=f->window[k];
+	{
+	  float scale=.25/f->qblocksize;
+	  float *workoff2=workoff+f->qblocksize*2;
+	  /* odd-symmetry window */
+	  workoff[0]*=f->window[0]*scale;
+	  for(k=1;k<f->qblocksize;k++){
+	    float w=f->window[k]*scale;
+	    workoff[k]*=w;
+	    *(--workoff2)*=w;
+	  }
+	  workoff[k]*=f->window[k]*scale;
+	}
 	
 	fftwf_execute(f->fftwf_forward);
 	
@@ -331,7 +342,9 @@ static void subband_work(subband_state *f,
   }
 }
 
-static void unsubband_work(subband_state *f,time_linkage *in, time_linkage *out){
+static void unsubband_work(subband_state *f,time_linkage *in, 
+			   time_linkage *out){
+
   int i,j,k,ch=f->out.channels;
 
   f->lap_samples+=in->samples;
@@ -406,22 +419,19 @@ static void unsubband_work(subband_state *f,time_linkage *in, time_linkage *out)
  	  /* transitioning to active effect, but the lap was already
 	     previously active; window the transition */
 	  float *lo=o+f->qblocksize;
-	  float scale=f->qblocksize*4;
 	  memset(o,0,sizeof(*o)*f->qblocksize);
 	  for(j=0;j<f->qblocksize;j++)
-	    lo[j]*=f->window[j]*scale;
+	    lo[j]*=f->window[j];
 	  
 	}else if (!active_p0 && content_p0){
 
 	  /* transitioning from active effect, but the lap will continue
 	     to be active; window the transition */
 	  float *lo=o+input_size-f->qblocksize*2;
-	  float *lw=f->window+f->qblocksize;
-	  float scale=f->qblocksize*4;
 	  memset(o+input_size-f->qblocksize,0,sizeof(*o)*f->qblocksize);
 	  for(j=0;j<f->qblocksize;j++)
-	    lo[j]*=lw[j]*scale;
-
+	    lo[j]*=f->window[f->qblocksize-j];
+	  
 	} /* else any transitions we need are already windowed as
              above by the lap handling code in subband_work */
 	
@@ -430,28 +440,24 @@ static void unsubband_work(subband_state *f,time_linkage *in, time_linkage *out)
 	  /* beginning transition */
 	  float *lo=o+f->qblocksize;
 	  float *lc=f->cache1[i]+f->qblocksize;
-	  float *lw=f->window+f->qblocksize;
-	  float scale=f->qblocksize*4;
 
 	  memcpy(o,f->cache1[i],sizeof(*o)*f->qblocksize);
 	  for(j=0;j<f->qblocksize;j++)
-	    lo[j]+=lc[j]*lw[j]*scale;
+	    lo[j]+=lc[j]*f->window[f->qblocksize-j];
 	  
 	}else if (!active_p0 && !muted_p0){
 	  /* end transition */
 	  float *lo=o+input_size-f->qblocksize*2;
 	  float *lc=f->cache1[i]+input_size-f->qblocksize*2;
-	  float scale=f->qblocksize*4;
 
 	  memcpy(o+input_size-f->qblocksize,
 		 f->cache1[i]+input_size-f->qblocksize,
 		 sizeof(*o)*f->qblocksize);
 	  for(j=0;j<f->qblocksize;j++)
-	    lo[j]+=lc[j]*f->window[j]*scale;
+	    lo[j]+=lc[j]*f->window[j];
 	  
 	}
       }
-
     }
     
     /* out is done for this channel */
