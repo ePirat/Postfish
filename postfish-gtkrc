@@ -109,6 +109,7 @@ style "small-readout" {
 
 style "darkpanel" {
 	bg[NORMAL]="#b0b0b0" 
+	bg[INSENSITIVE]="#b0b0b0" 
 }
 
 style "quitbutton" {
@@ -161,7 +162,7 @@ widget "*.color2" style "mid"
 widget "*.color3" style "side"
 
 widget "*.panelbox*" style "darkpanel"
-widget "*.winpanel" style "darkpanel"
+widget "*.winpanel*" style "darkpanel"
 
 widget "*.choiceframe.*" style "frame-text"
 widget "*.GtkFrame.GtkLabel" style "frame-label"
@@ -177,6 +178,7 @@ widget "*.reset*" style "quitbutton"
 widget "*.GtkButton*" style "button-poppy"
 widget "*.GtkCheckButton" style "check-poppy"
 widget "*.Windowbutton*" style "button-poppy"
+widget "*.windowbuttonlike" style "button-poppy"
 widget "*.quitbutton" style "quitbutton"
 widget "*.quitbutton.GtkLabel" style "quitbutton"
 

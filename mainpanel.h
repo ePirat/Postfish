@@ -33,22 +33,10 @@ typedef struct postfish_mainpanel postfish_mainpanel;
 #include "limitpanel.h"
 
 struct postfish_mainpanel{
-  GtkWidget *topframe;
-  GtkWidget *toplabel;
-
-  GtkWidget *mainbox;
-  GtkWidget *box1;
-  GtkWidget *leftback;
-  GtkWidget *leftframe;
-  GtkWidget *box2;
-
-  GtkWidget *wintable;
   GtkWidget *twirlimage;
   GdkPixmap *ff[19];
   GdkBitmap *fb[19];
 
-  GtkWidget *quitbutton;
-  
   GtkWidget *playimage;
   GdkPixmap *pf[2];
   GdkBitmap *pb[2];

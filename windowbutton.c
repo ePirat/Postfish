@@ -114,9 +114,10 @@ static void windowbutton_draw_indicator (GtkCheckButton *check_button,
       state_type = GTK_STATE_ACTIVE;
     else if (button->in_button)
       state_type = GTK_STATE_PRELIGHT;
-    else if (!GTK_WIDGET_IS_SENSITIVE (widget))
+    else if (!GTK_WIDGET_IS_SENSITIVE (widget)){
       state_type = GTK_STATE_INSENSITIVE;
-    else
+      shadow_type = GTK_SHADOW_ETCHED_IN;
+    }else
       state_type = GTK_STATE_NORMAL;
     
     if (gtk_widget_get_direction (widget) == GTK_TEXT_DIR_RTL)

@@ -221,7 +221,7 @@ void singlepanel_create(postfish_mainpanel *mp,
   subpanel_generic *panel=subpanel_create(mp,windowbutton,activebutton,
 					  &singlecomp_active,
 					  &singlecomp_visible,
-					  "_Singleband Compand"," [s] ");
+					  "_Oneband Compand"," o ");
   
   GtkWidget *sliderframe=gtk_frame_new(NULL);
   GtkWidget *allbox=gtk_vbox_new(0,0);
