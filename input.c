@@ -432,20 +432,21 @@ time_linkage *input_read(void){
   memset(peak,0,sizeof(*peak)*(out.channels+2));
 
   pthread_mutex_lock(&master_mutex);
+  out.samples=0;
 
   /* the non-streaming case */
   if(!loop_active && 
      cursor>=current_file_entry->end &&
      current_file_entry->end!=-1){
     pthread_mutex_unlock(&master_mutex);
-    return NULL; /* EOF */
+    return &out; /* EOF */
   }
 
   /* the streaming case */
   if(feof(current_file_entry->f) && 
      current_file_entry_number+1>=file_entries){
     pthread_mutex_unlock(&master_mutex);
-    return NULL;
+    return &out;
   }
   pthread_mutex_unlock(&master_mutex);
 

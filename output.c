@@ -183,7 +183,8 @@ void *playback_thread(void *dummy){
       /* inform Lord Vader his shuttle is ready */
       write(eventpipe[1],"",1);
 
-    }
+    }else
+      break; /* eof */
   }
 
   if(playback_fd){
