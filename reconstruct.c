@@ -30,6 +30,7 @@
 
 #include <string.h>
 #include <fftw3.h>
+#include <math.h>
 #include "reconstruct.h"
 
 /* fftw3 requires this kind of static setup */
@@ -39,7 +40,7 @@ static fftwf_plan fftwf_sf;
 static fftwf_plan fftwf_sb;
 static float *q;
 static float *s;
-static blocksize=0;
+static int blocksize=0;
 
 void reconstruct_reinit(int n){
   if(blocksize!=n){

@@ -34,7 +34,6 @@ typedef struct {
   
   int qblocksize;
   int bands;
-  float *frequencies;
 
   float **ho_window;
   float  *ho_area;
@@ -51,7 +50,7 @@ typedef struct {
 
 extern void freq_transform_work(float *work,freq_state *f);
 extern int pull_freq_feedback(freq_state *ff,float **peak,float **rms);
-extern int freq_load(freq_state *f,float *frequencies, int bands);
+extern int freq_load(freq_state *f,const float *frequencies, int bands);
 extern int freq_reset(freq_state *f);
 extern time_linkage *freq_read(time_linkage *in, freq_state *f,
 			       void (*func)(freq_state *f,

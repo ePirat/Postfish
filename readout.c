@@ -103,7 +103,7 @@ static gboolean configure(GtkWidget *widget, GdkEventConfigure *event){
   Readout *r=READOUT(widget);
   
   if (r->backing)
-    gdk_drawable_unref(r->backing);
+    g_object_unref(r->backing);
   
   r->backing = gdk_pixmap_new(widget->window,
                               widget->allocation.width,

@@ -50,8 +50,37 @@
 #include <signal.h>
 #include <fcntl.h>
 
-#define todB(x)   ((x)==0?-400.f:log((x)*(x))*4.34294480f)
-#define fromdB(x) (exp((x)*.11512925f))  
+static inline float todB(float x){
+  return logf((x)*(x)+1e-30f)*4.34294480f;
+}
+
+static inline float fromdB(float x){
+  return expf((x)*.11512925f);
+}
+
+#ifdef UGLY_IEEE754_FLOAT32_HACK
+
+static inline float todB_a(const float *x){
+  return (float)((*(int32_t *)x)&0x7fffffff) * 7.1771144e-7f -764.27118f;
+}
+
+static inline float fromdB_a(float x){
+  int y=1.3933e+06f*(x+764.27118f);
+  return *(float *)&y;
+}
+
+#else
+
+static inline float todB_a(const float *x){
+  return todB(*x);
+}
+
+static inline float fromdB_a(float x){
+  return fromdB(x);
+}
+
+#endif
+
 #define toOC(n)     (log(n)*1.442695f-5.965784f)
 #define fromOC(o)   (exp(((o)+5.965784f)*.693147f))
 #define toBark(n)   (13.1f*atan(.00074f*(n))+2.24f*atan((n)*(n)*1.85e-8f)+1e-4f*(n))

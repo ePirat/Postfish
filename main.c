@@ -31,6 +31,12 @@
 #include <fftw3.h>
 #include "input.h"
 #include "output.h"
+#include "declip.h"
+#include "eq.h"
+#include "suppress.h"
+#include "multicompand.h"
+#include "singlecomp.h"
+#include "limit.h"
 
 pthread_mutex_t master_mutex=PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
 
@@ -45,7 +51,10 @@ int main(int argc, char **argv){
   /* set up filter chains */
   if(declip_load())exit(1);
   if(eq_load())exit(1);
+  if(suppress_load())exit(1);
   if(multicompand_load())exit(1);
+  if(singlecomp_load())exit(1);
+  if(limit_load())exit(1);
 
   /* look at stdout... do we have a file or device? */
   if(!isatty(STDOUT_FILENO)){

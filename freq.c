@@ -41,7 +41,6 @@ typedef struct freq_feedback{
 } freq_feedback;
 
 static feedback_generic *new_freq_feedback(void){
-  int i;
   freq_feedback *ret=malloc(sizeof(*ret));
   ret->peak=calloc(input_ch,sizeof(*ret->peak));
   ret->rms=calloc(input_ch,sizeof(*ret->rms));
@@ -76,14 +75,13 @@ int pull_freq_feedback(freq_state *ff,float **peak,float **rms){
 }
 
 /* called only by initial setup */
-int freq_load(freq_state *f,float *frequencies, int bands){
+int freq_load(freq_state *f,const float *frequencies, int bands){
   int i,j;
   int blocksize=input_size*2;
   memset(f,0,sizeof(*f));
 
   f->qblocksize=input_size;
   f->bands=bands;
-  f->frequencies=frequencies;
 
   f->fillstate=0;
   f->cache_samples=0;
@@ -332,7 +330,7 @@ time_linkage *freq_read(time_linkage *in, freq_state *f,
 			void (*func)(freq_state *f,float **data,
 				     float **peak, float **rms),
 			int bypass){
-  int i,j,k;
+  int i;
 
   float feedback_peak[input_ch][f->bands];
   float feedback_rms[input_ch][f->bands];

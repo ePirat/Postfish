@@ -26,8 +26,8 @@
 #define multicomp_freqs_max 30
 #define multicomp_banks 3
 
-static int multicomp_freqs[multicomp_banks]={10,20,30};
-static float multicomp_freq_list[multicomp_banks][multicomp_freqs_max+1]={
+static const int multicomp_freqs[multicomp_banks]={10,20,30};
+static const float multicomp_freq_list[multicomp_banks][multicomp_freqs_max+1]={
   {31.5,63,125,250,500,1000,2000,4000,8000,16000,9e10},
   {31.5,44,63,88,125,175,250,350,500,700,1000,1400,
      2000,2800,4000,5600,8000,11000,16000,22000},
@@ -36,7 +36,7 @@ static float multicomp_freq_list[multicomp_banks][multicomp_freqs_max+1]={
    8000,10000,12500,16000,20000,9e10}
 };
 
-static char *multicomp_freq_labels[multicomp_banks][multicomp_freqs_max]={
+static char * const multicomp_freq_labels[multicomp_banks][multicomp_freqs_max]={
   {"31.5","63","125","250","500","1k","2k","4k","8k","16k"},
   {"31.5","44","63","88","125","175","250","350","500","700","1k","1.4k",
    "2k","2.8k","4k","5.6k","8k","11k","16k","22k"},
@@ -55,30 +55,23 @@ typedef struct {
   sig_atomic_t over_mode;
   sig_atomic_t over_softknee;
   sig_atomic_t over_ratio;
-  sig_atomic_t over_limit;
-  sig_atomic_t base_ratio;
   sig_atomic_t over_attack;
   sig_atomic_t over_decay;
   sig_atomic_t over_lookahead;
   sig_atomic_t over_trim;
 
+  sig_atomic_t base_mode;
+  sig_atomic_t base_attack;
+  sig_atomic_t base_decay;
+  sig_atomic_t base_ratio;
+
   sig_atomic_t under_mode;
   sig_atomic_t under_softknee;
   sig_atomic_t under_ratio;
-  sig_atomic_t under_limit;
   sig_atomic_t under_attack;
   sig_atomic_t under_decay;
   sig_atomic_t under_lookahead;
   sig_atomic_t under_trim;
-
-  sig_atomic_t suppress_mode;
-  sig_atomic_t suppress_ratio;
-
-  sig_atomic_t suppress_attack;
-  sig_atomic_t suppress_decay;
-  sig_atomic_t suppress_release;
-
-  sig_atomic_t link_mode;
 
 } other_compand_settings;
 
@@ -92,6 +85,5 @@ extern int multicompand_over_attack_set(float msec);
 extern int multicompand_over_decay_set(float msec);
 extern int multicompand_under_attack_set(float msec);
 extern int multicompand_under_decay_set(float msec);
-extern int multicompand_suppress_attack_set(float msec);
-extern int multicompand_suppress_decay_set(float msec);
-extern int multicompand_suppress_release_set(float msec);
+extern int multicompand_base_attack_set(float msec);
+extern int multicompand_base_decay_set(float msec);

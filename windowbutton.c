@@ -57,6 +57,11 @@ static void draw_triangle (GtkStyle      *style,
     } 
     gdk_draw_line(window,light_gc,x,y,x,y+size-2);
     break;
+  case GTK_SHADOW_NONE:
+    break;
+  case GTK_SHADOW_ETCHED_OUT:
+    /* unimplemented, unused */
+    break;
   }
 
 }

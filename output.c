@@ -31,6 +31,9 @@
 #include "declip.h"
 #include "eq.h"
 #include "multicompand.h"
+#include "singlecomp.h"
+#include "suppress.h"
+#include "limit.h"
 
 extern int input_size;
 sig_atomic_t playback_active=0;
@@ -56,6 +59,9 @@ void pipeline_reset(){
   declip_reset();  /* clear any persistent lapping state */
   eq_reset();      /* clear any persistent lapping state */
   multicompand_reset(); /* clear any persistent lapping state */
+  singlecomp_reset(); /* clear any persistent lapping state */
+  suppress_reset(); /* clear any persistent lapping state */
+  limit_reset(); /* clear any persistent lapping state */
   output_reset(); /* clear any persistent lapping state */
 }
 
@@ -75,7 +81,7 @@ static feedback_generic *new_output_feedback(void){
 }
 
 static void push_output_feedback(float *peak,float *rms){
-  int i,n=input_ch+2;
+  int n=input_ch+2;
   output_feedback *f=(output_feedback *)
     feedback_new(&feedpool,new_output_feedback);
   
@@ -86,7 +92,7 @@ static void push_output_feedback(float *peak,float *rms){
 
 int pull_output_feedback(float *peak,float *rms){
   output_feedback *f=(output_feedback *)feedback_pull(&feedpool);
-  int i,j,n=input_ch+2;
+  int n=input_ch+2;
   if(!f)return 0;
   if(rms)memcpy(rms,f->rms,sizeof(*rms)*n);
   if(peak)memcpy(peak,f->peak,sizeof(*peak)*n);
@@ -207,7 +213,6 @@ void *playback_thread(void *dummy){
   time_linkage *link;
   int result;
   off_t count=0;
-  long last=-1;
 
   int ch=-1;
   long rate=-1;
@@ -231,6 +236,10 @@ void *playback_thread(void *dummy){
     result|=link->samples;
     link=multicompand_read(link);
     result|=link->samples;
+    link=singlecomp_read(link);
+    result|=link->samples;
+    link=suppress_read(link);
+    result|=link->samples;
     link=eq_read(link);
     result|=link->samples;
     
@@ -238,8 +247,7 @@ void *playback_thread(void *dummy){
     /************/
     
     
-    
-    /* temporary; this would be frequency domain in the finished postfish */
+    /* master att */
     if(link->samples>0){
       float scale=fromdB(master_att/10.);
       for(i=0;i<link->samples;i++)
@@ -247,6 +255,9 @@ void *playback_thread(void *dummy){
 	  link->data[j][i]*=scale;
     }    
 
+
+    /* the limiter is single-block zero additional latency */
+    link=limit_read(link);
 
     /************/
 
@@ -280,7 +291,6 @@ void *playback_thread(void *dummy){
 
       for(k=0,i=0;i<link->samples;i++){
 	float mean=0.;
-	float div=0.;
 	float divrms=0.;
 	
 	for(j=0;j<link->channels;j++){

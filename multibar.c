@@ -21,9 +21,9 @@
  * 
  */
 
-#include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include <string.h>
 #include <gdk/gdkkeysyms.h>
 #include "multibar.h"
 
@@ -516,9 +516,7 @@ static void draw(GtkWidget *widget,int n){
 	
 	int x=m->thumbpixel[0]+xpad;
 	int x0=x-(y1-y-2);
-	int x1=x+(y1-y-2);
 	int x2=x0-y*3/2;
-	int x3=x1+y*3/2;
 	
 	GdkPoint tp[5]={ {x,y0},{x-yM,y0+yM},{x2,y0+yM},{x2,y1+1},
 			 {x,y1+1}};
@@ -557,9 +555,7 @@ static void draw(GtkWidget *widget,int n){
 	GdkGC *dark_gc=widget->style->dark_gc[m->thumbstate[num]];
 	
 	int x=m->thumbpixel[num]+xpad;
-	int x0=x-(y1-y-2);
 	int x1=x+(y1-y-2);
-	int x2=x0-y*3/2;
 	int x3=x1+y*3/2;
 	
 	GdkPoint tp[5]={ {x,y0},{x+yM,y0+yM},{x3,y0+yM},{x3,y1+1},
@@ -836,7 +832,7 @@ static gboolean configure(GtkWidget *widget, GdkEventConfigure *event){
   int i;
   
   if (m->backing)
-    gdk_drawable_unref(m->backing);
+    g_object_unref(m->backing);
   
   m->backing = gdk_pixmap_new(widget->window,
 			      widget->allocation.width,
@@ -968,7 +964,7 @@ static gint multibar_leave(GtkWidget        *widget,
   return TRUE;
 }
 
-static gint button_press   (GtkWidget        *widget,
+static gboolean button_press   (GtkWidget        *widget,
 			    GdkEventButton   *event){
   Multibar *m=MULTIBAR(widget);
   if(m->thumbstate[0]){
@@ -985,13 +981,15 @@ static gint button_press   (GtkWidget        *widget,
     m->thumbx=m->thumbpixel[2]-event->x;
   }
   draw_and_expose(widget);
+  return TRUE;
 }
 
-static gint button_release   (GtkWidget        *widget,
+static gboolean button_release   (GtkWidget        *widget,
 			    GdkEventButton   *event){
   Multibar *m=MULTIBAR(widget);
   m->thumbgrab=-1;
   draw_and_expose(widget);
+  return TRUE;
 }
 
 static gboolean unfocus(GtkWidget        *widget,
@@ -1000,6 +998,7 @@ static gboolean unfocus(GtkWidget        *widget,
   m->prev_thumbfocus=m->thumbfocus;
   m->thumbfocus=-1;
   draw_and_expose(widget);
+  return TRUE;
 }
 
 static gboolean refocus(GtkWidget        *widget,
@@ -1008,6 +1007,7 @@ static gboolean refocus(GtkWidget        *widget,
   transition_thumbfocus=m->thumbfocus=m->prev_thumbfocus;
   m->thumbgrab=-1;
   draw_and_expose(widget);
+  return TRUE;
 }
 
 gboolean key_press(GtkWidget *w,GdkEventKey *event){
@@ -1175,7 +1175,6 @@ GtkWidget* multibar_new (int n, char **labels, float *levels, int thumbs,
 
 GtkWidget* multibar_slider_new (int n, char **labels, float *levels, 
 				int thumbs){
-  int i;
   GtkWidget *ret= multibar_new(n,labels,levels,thumbs,0);
   Multibar *m=MULTIBAR(ret);
   m->readout=0;

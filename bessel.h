@@ -21,4 +21,71 @@
  * 
  */
 
-extern double mkbessel_2(double raw_alpha,double *ycoeff0,double *ycoeff1);
+#include "postfish.h"
+extern int input_rate;
+
+#define MAXORDER    4
+
+typedef struct {
+  double c[MAXORDER];
+  double g;
+  int   order;
+  float alpha; 
+  float Hz; 
+  float ms; 
+} iir_filter;
+
+static inline long impulse_ahead2(float alpha){
+  return rint(.13f/alpha);
+}
+static inline long impulse_ahead3(float alpha){
+  return rint(.22f/alpha);
+}
+static inline long impulse_ahead4(float alpha){
+  return rint(.32f/alpha);
+}
+
+static inline long step_ahead(float alpha){
+  return rint(.6f/alpha);
+}
+
+static inline float step_freq(long ahead){
+  return input_rate*.6f/ahead;
+}
+
+static inline float impulse_freq2(long ahead){
+  return input_rate*.13f/ahead;
+}
+static inline float impulse_freq3(long ahead){
+  return input_rate*.22f/ahead;
+}
+static inline float impulse_freq4(long ahead){
+  return input_rate*.32f/ahead;
+}
+
+typedef struct {
+  double x[MAXORDER];
+  double y[MAXORDER];
+  int state;
+} iir_state;
+
+extern double mkbessel(double raw_alpha,int order,double *ycoeff);
+extern void compute_iir_fast_attack2(float *x, int n, iir_state *is, 
+				     iir_filter *attack, iir_filter *decay);
+extern void compute_iir_symmetric2(float *x, int n, iir_state *is, 
+				  iir_filter *filter);
+extern void compute_iir_symmetric3(float *x, int n, iir_state *is, 
+				  iir_filter *filter);
+extern void compute_iir_symmetric4(float *x, int n, iir_state *is, 
+				  iir_filter *filter);
+extern void compute_iir2(float *x, int n, iir_state *is, 
+			iir_filter *attack, iir_filter *decay);
+extern void compute_iir_freefall1(float *x, int n, iir_state *is, 
+				 iir_filter *decay);
+extern void compute_iir_freefall2(float *x, int n, iir_state *is, 
+				 iir_filter *decay);
+extern void compute_iir_freefall3(float *x, int n, iir_state *is, 
+				 iir_filter *decay);
+extern void compute_iir_freefall4(float *x, int n, iir_state *is, 
+				 iir_filter *decay);
+

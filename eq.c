@@ -61,7 +61,7 @@ void eq_set(int freq, float value){
 static float *curve_cache=0;
  
 static void workfunc(freq_state *f,float **data,float **peak, float **rms){
-  int h,i,j,k;
+  int h,i,j;
   float sq_mags[f->qblocksize*2+1];
   
   if(curve_dirty || !curve_cache){

@@ -21,12 +21,16 @@
  * 
  */
 
+extern void suppresspanel_create(postfish_mainpanel *mp,
+				 GtkWidget *windowbutton,
+				 GtkWidget *activebutton);
+
 extern void compandpanel_create(postfish_mainpanel *mp,
 				GtkWidget *windowbutton,
 				GtkWidget *activebutton);
 
 extern void compandpanel_feedback(int displayit);
 extern void compandpanel_reset(void);
-extern void compandpanel_set_play(int playp);
+
 
 

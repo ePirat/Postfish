@@ -80,7 +80,7 @@ static feedback_generic *new_declip_feedback(void){
 }
 
 static void push_declip_feedback(int *clip,float *peak,int total){
-  int i,n=input_ch;
+  int n=input_ch;
   declip_feedback *f=(declip_feedback *)
     feedback_new(&feedpool,new_declip_feedback);
   memcpy(f->clipcount,clip,n*sizeof(*clip));
@@ -91,7 +91,6 @@ static void push_declip_feedback(int *clip,float *peak,int total){
 
 int pull_declip_feedback(int *clip,float *peak,int *total){
   declip_feedback *f=(declip_feedback *)feedback_pull(&feedpool);
-  int i,j;
 
   if(!f)return 0;
 
@@ -147,12 +146,14 @@ int declip_setiterations(float it){
   pthread_mutex_lock(&master_mutex);
   iterations=it;
   pthread_mutex_unlock(&master_mutex);
+  return 0;
 }
 
 int declip_setconvergence(float c){
   pthread_mutex_lock(&master_mutex);
   convergence=c;
   pthread_mutex_unlock(&master_mutex);
+  return 0;
 }
 
 /* called only in playback thread */
@@ -164,7 +165,7 @@ int declip_reset(void){
 }
 
 static void sliding_bark_average(float *f,int n,float width){
-  int i=0,j;
+  int i=0;
   float acc=0.,del=0.;
   float sec[hipad+1];
 
@@ -172,7 +173,6 @@ static void sliding_bark_average(float *f,int n,float width){
 
   for(i=0;i<n/2;i++){
 
-    float bark=toBark(44100.*i/n);
     int hi=widthlookup[i]>>16;
     int lo=widthlookup[i]&(0xffff);
     float del=hypot(f[(i<<1)+1],f[i<<1])/(lo-hi);
@@ -317,7 +317,6 @@ time_linkage *declip_read(time_linkage *in){
   switch(fillstate){
   case 0: /* prime the lapping and cache */
     for(i=0;i<input_ch;i++){
-      int j;
       float *temp=in->data[i];
       total=0;
       memset(work+blocksize/2,0,sizeof(*work)*blocksize/2);

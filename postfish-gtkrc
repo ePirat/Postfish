@@ -78,7 +78,7 @@ style "multislide" {
 
         text[NORMAL]="#707070" 
         text[ACTIVE]="#905050" 
-        font_name = "sans 6"    
+        font_name = "sans 7"    
 }
 
 style "clipbar" {
@@ -96,6 +96,15 @@ style "readout" {
 	bg[ACTIVE]="#ffffff" 
 
 	font_name = "Fixed, Nimbus Mono L, Courier, Monospace 10"	
+}
+
+style "small-readout" {
+	base[NORMAL]="#ffffff" 
+	base[ACTIVE]="#ffffff" 
+	bg[NORMAL]="#ffffff" 
+	bg[ACTIVE]="#ffffff" 
+	text[NORMAL]="#606060"
+	font_name = "Fixed, Nimbus Mono L, Courier, Monospace 8"	
 }
 
 style "darkpanel" {
@@ -160,6 +169,7 @@ widget "*.GtkFrame.GtkHBox.GtkLabel" style "frame-label"
 widget "*.framelabel" style "frame-label"
 
 widget "*.Readout*" style "readout"
+widget "*.smallreadout" style "small-readout"
 widget "*.GtkEntry" style "readout"
 widget "*.GtkHScale" style "slider"
 widget "*.GtkToggleButton*" style "button-poppy"

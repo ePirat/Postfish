@@ -401,7 +401,7 @@ static feedback_generic *new_input_feedback(void){
 }
 
 static void push_input_feedback(float *peak,float *rms, off_t cursor){
-  int i,n=input_ch+2;
+  int n=input_ch+2;
   input_feedback *f=(input_feedback *)
     feedback_new(&feedpool,new_input_feedback);
   f->cursor=cursor;
@@ -412,7 +412,7 @@ static void push_input_feedback(float *peak,float *rms, off_t cursor){
 
 int pull_input_feedback(float *peak,float *rms,off_t *cursor){
   input_feedback *f=(input_feedback *)feedback_pull(&feedpool);
-  int i,j,n=input_ch+2;
+  int n=input_ch+2;
   if(!f)return 0;
   if(rms)memcpy(rms,f->rms,sizeof(*rms)*n);
   if(peak)memcpy(peak,f->peak,sizeof(*peak)*n);
@@ -496,7 +496,6 @@ time_linkage *input_read(void){
   k=0;
   for(i=0;i<out.samples;i++){
     float mean=0.;
-    float div=0.;
     float divrms=0.;
 
     for(j=0;j<out.channels;j++){

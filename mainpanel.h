@@ -29,6 +29,8 @@ typedef struct postfish_mainpanel postfish_mainpanel;
 #include "clippanel.h"
 #include "eqpanel.h"
 #include "compandpanel.h"
+#include "singlepanel.h"
+#include "limitpanel.h"
 
 struct postfish_mainpanel{
   GtkWidget *topframe;
@@ -60,6 +62,7 @@ struct postfish_mainpanel{
 
   GtkWidget *buttonactive[7];
 
+  GtkWidget *cue_act[2];
   GtkWidget *cue_set[2];
   GtkWidget *cue_reset[2];
 
@@ -67,6 +70,11 @@ struct postfish_mainpanel{
 
   GtkWidget *inbar;
   GtkWidget *outbar;
+  GtkWidget *inreadout;
+  GtkWidget *outreadout;
+
+  float inpeak;
+  float outpeak;
 
   GtkWidget *channelshow[10]; /* support only up to 8 + mid/side */
 

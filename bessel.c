@@ -23,19 +23,51 @@
 
 /* code derived directly from mkfilter by the late A.J. Fisher,
    University of York <fisher@minster.york.ac.uk> September 1992; this
-   is only the minimum code needed to build an arbitrary 2nd order
-   Bessel filter */
+   is only the minimum code needed to build an arbitrary Bessel filter */
 
 #include "postfish.h"
-
-#define TWOPI	    (2.0 * M_PIl)
-#define EPS	    1e-10
-#define MAXORDER    2
-#define MAXPZ	    4
+#include "bessel.h"
 
 typedef struct { 
   double re, im;
 } complex;
+
+static complex bessel_poles[] = {
+  { -1.00000000000e+00, 0.00000000000e+00}, 
+  { -1.10160133059e+00, 6.36009824757e-01},
+  { -1.32267579991e+00, 0.00000000000e+00}, 
+  { -1.04740916101e+00, 9.99264436281e-01},
+  { -1.37006783055e+00, 4.10249717494e-01}, 
+  { -9.95208764350e-01, 1.25710573945e+00},
+  { -1.50231627145e+00, 0.00000000000e+00}, 
+  { -1.38087732586e+00, 7.17909587627e-01},
+  { -9.57676548563e-01, 1.47112432073e+00}, 
+  { -1.57149040362e+00, 3.20896374221e-01},
+  { -1.38185809760e+00, 9.71471890712e-01}, 
+  { -9.30656522947e-01, 1.66186326894e+00},
+  { -1.68436817927e+00, 0.00000000000e+00}, 
+  { -1.61203876622e+00, 5.89244506931e-01},
+  { -1.37890321680e+00, 1.19156677780e+00}, 
+  { -9.09867780623e-01, 1.83645135304e+00},
+  { -1.75740840040e+00, 2.72867575103e-01}, 
+  { -1.63693941813e+00, 8.22795625139e-01},
+  { -1.37384121764e+00, 1.38835657588e+00}, 
+  { -8.92869718847e-01, 1.99832584364e+00},
+  { -1.85660050123e+00, 0.00000000000e+00}, 
+  { -1.80717053496e+00, 5.12383730575e-01},
+  { -1.65239648458e+00, 1.03138956698e+00}, 
+  { -1.36758830979e+00, 1.56773371224e+00},
+  { -8.78399276161e-01, 2.14980052431e+00},
+  { -1.92761969145e+00, 2.41623471082e-01},
+  { -1.84219624443e+00, 7.27257597722e-01}, 
+  { -1.66181024140e+00, 1.22110021857e+00},
+  { -1.36069227838e+00, 1.73350574267e+00}, 
+  { -8.65756901707e-01, 2.29260483098e+00},
+};
+
+#define TWOPI	    (2.0 * M_PIl)
+#define EPS	    1e-10
+#define MAXPZ	    8
 
 typedef struct { 
   complex poles[MAXPZ], zeros[MAXPZ];
@@ -64,6 +96,11 @@ static complex csub(complex z1, complex z2){
   z1.re-=z2.re;
   z1.im-=z2.im;
   return z1;
+}
+
+static complex cconj(complex z){ 
+  z.im = -z.im;
+  return z;
 }
 
 static complex eval(complex coeffs[], int npz, complex z){ 
@@ -105,8 +142,8 @@ static void expand(complex pz[], int npz, complex coeffs[]){
   }
 }
 
-double mkbessel_2(double raw_alpha,double *ycoeff0,double *ycoeff1){ 
-  int i;
+double mkbessel(double raw_alpha,int order,double *ycoeff){ 
+  int i,p= (order*order)/4; 
   pzrep splane, zplane;
   complex topcoeffs[MAXPZ+1], botcoeffs[MAXPZ+1];
   double warped_alpha;
@@ -115,8 +152,11 @@ double mkbessel_2(double raw_alpha,double *ycoeff0,double *ycoeff1){
   memset(&splane,0,sizeof(splane));
   memset(&zplane,0,sizeof(zplane));
 
-  splane.poles[splane.numpoles++] = (complex){ -1.10160133059e+00, 6.36009824757e-01};
-  splane.poles[splane.numpoles++] = (complex){ -1.10160133059e+00, -6.36009824757e-01};
+  if (order & 1) splane.poles[splane.numpoles++] = bessel_poles[p++];
+  for (i = 0; i < order/2; i++){ 
+    splane.poles[splane.numpoles++] = bessel_poles[p];
+    splane.poles[splane.numpoles++] = cconj(bessel_poles[p++]);
+  }
   
   warped_alpha = tan(M_PIl * raw_alpha) / M_PIl;
   for (i = 0; i < splane.numpoles; i++){
@@ -137,11 +177,296 @@ double mkbessel_2(double raw_alpha,double *ycoeff0,double *ycoeff1){
   expand(zplane.poles, zplane.numpoles, botcoeffs);
   dc_gain = evaluate(topcoeffs, zplane.numzeros, botcoeffs, zplane.numpoles, (complex){1.0,0.0});
 
-  *ycoeff0 = -(botcoeffs[0].re / botcoeffs[zplane.numpoles].re);
-  *ycoeff1 = -(botcoeffs[1].re / botcoeffs[zplane.numpoles].re);
+  for(i=0;i<order;i++)
+    ycoeff[order-i-1] = -(botcoeffs[i].re / botcoeffs[zplane.numpoles].re);
 
   return hypot(dc_gain.re,dc_gain.im);
 }
 
+/* assymetrical attack/decay filter computation */
+/* this one is designed for fast attack, slow decay */
+void compute_iir_fast_attack2(float *x, int n, iir_state *is, 
+			     iir_filter *attack, iir_filter *decay){
+  double a_c0=attack->c[0],d_c0=decay->c[0];
+  double a_c1=attack->c[1],d_c1=decay->c[1];
+  double a_g=attack->g, d_g=decay->g;
+  
+  double x0=is->x[0],x1=is->x[1];
+  double y0=is->y[0],y1=is->y[1];
+  int state=is->state;
+  int i=0;
+
+  if(x[0]>y0)state=0; 
+      
+  while(i<n){
+    
+    if(state==0){
+      /* attack case */
+      while(i<n){
+	double ya= (x[i]+x0*2.+x1)/a_g + y0*a_c0+y1*a_c1;
+    
+	if(ya<y0){
+	  state=1; 
+	  break;
+	}
+	x1=x0;x0=x[i];
+	y1=y0;x[i]=y0=ya;
+	i++;
+      }
+    }
+
+    if(state==1){
+      /* decay case */
+      if(y1<y0){
+	/* decay fixup needed because we're in discontinuous time */
+	  y1=y0;
+      }
+
+      while(1){
+	double yd = (x[i]+x0*2.+x1)/d_g + y0*d_c0+y1*d_c1;
+
+	x1=x0;x0=x[i];
+	y1=y0;x[i]=y0=yd;
+	i++;
+
+	if(i>=n)break;
+	if(x[i]>y0){
+	  state=0;
+	  break;
+	}
+      }
+    }
+  }
+  
+  is->x[0]=x0;is->x[1]=x1;
+  is->y[0]=y0;is->y[1]=y1;
+  is->state=state;
+  
+}
+
+/* allow decay to proceed in freefall */
+void compute_iir_freefall1(float *x, int n, iir_state *is, 
+			   iir_filter *decay){
+  double d_c0=decay->c[0];
+  
+  double x0=is->x[0];
+  double y0=is->y[0];
+  int i=0;
+  
+  while(i<n){
+    double yd;
+
+     yd = y0*d_c0;
+
+    if(x[i]>yd)yd=x[i];
+
+    x0=x[i];
+    x[i]=y0=yd;
+    i++;
+  }
+  
+  is->x[0]=x0;
+  is->y[0]=y0;
+  
+}
+
+void compute_iir_freefall2(float *x, int n, iir_state *is, 
+			  iir_filter *decay){
+  double d_c0=decay->c[0];
+  double d_c1=decay->c[1];
+  
+  double x0=is->x[0];
+  double x1=is->x[1];
+  double y0=is->y[0];
+  double y1=is->y[1];
+  int i=0;
+
+  while(i<n){
+    double yd;
+    if(y1<y0)y1=y0; // slope fixup
+
+     yd = y0*d_c0+y1*d_c1;
+
+
+    if(x[i]>yd)yd=x[i];
+
+    x1=x0;x0=x[i];
+    y1=y0;x[i]=y0=yd;
+    i++;
+  }
+  
+  is->x[0]=x0;
+  is->x[1]=x1;
+  is->y[0]=y0;
+  is->y[1]=y1;
+  
+}
+
+void compute_iir_freefall3(float *x, int n, iir_state *is, 
+			  iir_filter *decay){
+  double d_c0=decay->c[0];
+  double d_c1=decay->c[1];
+  double d_c2=decay->c[2];
+  
+  double x0=is->x[0],y0=is->y[0];
+  double x1=is->x[1],y1=is->y[1];
+  double x2=is->x[2],y2=is->y[2];
+  int i=0;
+
+  while(i<n){
+    double yd;
+    if(y1<y0)y1=y0; // slope fixup
+    if(y2<y1)y2=y1; // slope fixup
+
+
+     yd = y0*d_c0+y1*d_c1+y2*d_c2;
+
+
+    if(x[i]>yd)yd=x[i];
+
+    x2=x1;x1=x0;x0=x[i];
+    y2=y1;y1=y0;x[i]=y0=yd;
+    i++;
+  }
+  
+  is->x[0]=x0;is->y[0]=y0;
+  is->x[1]=x1;is->y[1]=y1;
+  is->x[2]=x2;is->y[2]=y2;
+  
+}
+
+void compute_iir_freefall4(float *x, int n, iir_state *is, 
+			  iir_filter *decay){
+  double d_c0=decay->c[0];
+  double d_c1=decay->c[1];
+  double d_c2=decay->c[2];
+  double d_c3=decay->c[3];
+  
+  double x0=is->x[0],y0=is->y[0];
+  double x1=is->x[1],y1=is->y[1];
+  double x2=is->x[2],y2=is->y[2];
+  double x3=is->x[3],y3=is->y[3];
+  int i=0;
+
+  while(i<n){
+    double yd;
+    if(y1<y0)y1=y0; // slope fixup
+    if(y2<y1)y2=y1; // slope fixup
+    if(y3<y2)y3=y2; // slope fixup
+
+
+     yd = y0*d_c0+y1*d_c1+y2*d_c2+y3*d_c3;
+
+    if(x[i]>yd)yd=x[i];
+
+    x3=x2;x2=x1;x1=x0;x0=x[i];
+    y3=y2;y2=y1;y1=y0;x[i]=y0=yd;
+    i++;
+  }
+  
+  is->x[0]=x0;is->y[0]=y0;
+  is->x[1]=x1;is->y[1]=y1;
+  is->x[2]=x2;is->y[2]=y2;
+  is->x[3]=x3;is->y[3]=y3;
+  
+}
+
+/* symmetric filter computation */
+
+void compute_iir_symmetric2(float *x, int n, iir_state *is, 
+			   iir_filter *filter){
+  double c0=filter->c[0];
+  double c1=filter->c[1];
+  double g=filter->g;
+  
+  double x0=is->x[0];
+  double x1=is->x[1];
+  double y0=is->y[0];
+  double y1=is->y[1];
+    
+  int i=0;
+      
+  while(i<n){
+    double yd= (x[i]+x0*2.+x1)/g + y0*c0+y1*c1;
+    x1=x0;x0=x[i];
+    y1=y0;x[i]=y0=yd;
+    i++;
+  }
+  
+  is->x[0]=x0;
+  is->x[1]=x1;
+  is->y[0]=y0;
+  is->y[1]=y1;
+  
+}
+
+void compute_iir_symmetric3(float *x, int n, iir_state *is, 
+			   iir_filter *filter){
+  double c0=filter->c[0];
+  double c1=filter->c[1];
+  double c2=filter->c[2];
+  double g=filter->g;
+  
+  double x0=is->x[0],y0=is->y[0];
+  double x1=is->x[1],y1=is->y[1];
+  double x2=is->x[2],y2=is->y[2];
+    
+  int i=0;
+      
+  while(i<n){
+    double yd= (x[i]+(x0+x1)*3.+x2)/g + y0*c0+y1*c1+y2*c2;
+    x2=x1;x1=x0;x0=x[i];
+    y2=y1;y1=y0;x[i]=y0=yd;
+    i++;
+  }
+  
+  is->x[0]=x0;is->y[0]=y0;
+  is->x[1]=x1;is->y[1]=y1;
+  is->x[2]=x2;is->y[2]=y2;
+  
+}
+
+void compute_iir_symmetric4(float *x, int n, iir_state *is, 
+			   iir_filter *filter){
+  double c0=filter->c[0];
+  double c1=filter->c[1];
+  double c2=filter->c[2];
+  double c3=filter->c[3];
+  double g=filter->g;
+  
+  double x0=is->x[0],y0=is->y[0];
+  double x1=is->x[1],y1=is->y[1];
+  double x2=is->x[2],y2=is->y[2];
+  double x3=is->x[3],y3=is->y[3];
+    
+  int i=0;
+      
+  while(i<n){
+    double yd= (x[i]+(x0+x2)*4.+x1*6.+x3)/g + 
+      y0*c0+y1*c1+y2*c2+y3*c3;
+    x3=x2;x2=x1;x1=x0;x0=x[i];
+    y3=y2;y2=y1;y1=y0;x[i]=y0=yd;
+    i++;
+  }
+  
+  is->x[0]=x0;is->y[0]=y0;
+  is->x[1]=x1;is->y[1]=y1;
+  is->x[2]=x2;is->y[2]=y2;
+  is->x[3]=x3;is->y[3]=y3;
+  
+}
+
+
+/* filter decision wrapper */
+void compute_iir2(float *x, int n, iir_state *is, 
+		 iir_filter *attack, iir_filter *decay){
+
+  if (attack->alpha > decay->alpha){
+    /* fast attack, slow decay */
+    compute_iir_fast_attack2(x, n, is, attack, decay);
+  }else{
+    compute_iir_symmetric2(x, n, is, attack);
+  }
+}
 
 

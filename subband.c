@@ -41,9 +41,7 @@ typedef struct subband_feedback{
 } subband_feedback;
 
 static feedback_generic *new_subband_feedback(void){
-  int i;
   subband_feedback *ret=calloc(1,sizeof(*ret));
-
   return (feedback_generic *)ret;
 }
 
@@ -51,7 +49,7 @@ static feedback_generic *new_subband_feedback(void){
 
 int pull_subband_feedback(subband_state *ff,float **peak,float **rms,int *b){
   subband_feedback *f=(subband_feedback *)feedback_pull(&ff->feedpool);
-  int i,j;
+  int i;
   
   if(!f)return 0;
   
@@ -130,12 +128,11 @@ int subband_load(subband_state *f,int bands,int qblocksize){
 
 /* called only by initial setup */
 int subband_load_freqs(subband_state *f,subband_window *w,
-		       float *freq_list,int bands){
+		       const float *freq_list,int bands){
   int i,j;
 
   memset(w,0,sizeof(*w));
 
-  w->freq_list=freq_list;
   w->freq_bands=bands;
 
   /* supersample the spectrum */
@@ -233,7 +230,7 @@ int subband_reset(subband_state *f){
    and padded FFTs with 75% overlap. */
 
 static void subband_work(subband_state *f,time_linkage *in,subband_window *w){
-  int i,j,k,l,m,off;
+  int i,j,k,l,off;
   float *workoff=f->fftwf_forward_in+f->qblocksize;
 
   for(i=0;i<input_ch;i++){
@@ -303,7 +300,6 @@ static void subband_work(subband_state *f,time_linkage *in,subband_window *w){
 
 static void bypass_work(subband_state *f,time_linkage *in){
   int i,j;
-  float *workoff=f->fftwf_forward_in+f->qblocksize;
   float scale=f->qblocksize*4.;
 
   for(i=0;i<input_ch;i++){
@@ -358,13 +354,14 @@ static void unsubband_work(subband_state *f,float **out,int inbands){
     for(j=bands-1;j>=0;j--){
       
       /* add bands back together for output */
-      if(out)
+      if(out){
 	if(j==bands-1){
 	  memcpy(out[i],f->lap[j][i],input_size*(sizeof **out));
 	}else{
 	  for(k=0;k<input_size;k++)
 	    out[i][k]+=f->lap[j][i][k];
 	}
+      }
       
       /* shift bands for next lap */
       /* optimization target: ringbuffer me! */
@@ -420,8 +417,8 @@ time_linkage *subband_read(time_linkage *in, subband_state *f,
     }else{
       /* extrapolation mechanism; avoid harsh transients at edges */
       for(i=0;i<input_ch;i++){
-      preextrapolate_helper(in->data[i],input_size,
-			    f->cache[i],input_size);
+	preextrapolate_helper(in->data[i],input_size,
+			      f->cache[i],input_size);
       
       if(in->samples<in->size)
 	postextrapolate_helper(f->cache[i],input_size,
@@ -526,7 +523,6 @@ time_linkage *subband_read(time_linkage *in, subband_state *f,
 
   /* finish up the state feedabck */
   if(!bypass){
-    int j;
     subband_feedback *ff=
       (subband_feedback *)feedback_new(&f->feedpool,new_subband_feedback);
 

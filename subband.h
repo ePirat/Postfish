@@ -49,7 +49,6 @@ typedef struct {
 
 typedef struct {
 
-  float   *freq_list;
   int      freq_bands;
   float  **ho_window;
   float   *ho_area;
@@ -60,7 +59,7 @@ typedef struct {
 
 extern int subband_load(subband_state *f,int bands, int qb);
 extern int subband_load_freqs(subband_state *f,subband_window *w,
-			      float *freq_list,int bands);
+			      const float *freq_list,int bands);
 
 extern time_linkage *subband_read(time_linkage *in, subband_state *f,
 				  subband_window *w,

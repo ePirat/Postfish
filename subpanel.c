@@ -116,7 +116,6 @@ subpanel_generic *subpanel_create(postfish_mainpanel *mp,
 				  char *prompt,char *shortcut){
 
   subpanel_generic *panel=calloc(1,sizeof(*panel));
-  GdkWindow *root=gdk_get_default_root_window();
 
   GtkWidget *toplabelbox=gtk_event_box_new();
   GtkWidget *toplabelframe=gtk_frame_new(NULL);

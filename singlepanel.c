@@ -29,35 +29,26 @@
 #include "mainpanel.h"
 #include "subpanel.h"
 #include "feedback.h"
-#include "multicompand.h"
-#include "compandpanel.h"
+#include "singlecomp.h"
+#include "singlepanel.h"
 
-extern sig_atomic_t compand_active;
-extern sig_atomic_t compand_visible;
+extern sig_atomic_t singlecomp_active;
+extern sig_atomic_t singlecomp_visible;
 extern int input_ch;
 extern int input_size;
 extern int input_rate;
 
-extern banked_compand_settings bc[multicomp_banks];
-extern other_compand_settings c;
+extern singlecomp_settings scset;
 
 typedef struct {
-  GtkWidget *label;
-  GtkWidget *slider;
-  GtkWidget *readouto;
-  GtkWidget *readoutu;
-  int number;
-} cbar;
-
-typedef struct {
-  Readout *r0;
-  Readout *r1;
-  Readout *r2;
+  GtkWidget *r0;
+  GtkWidget *r1;
 } multireadout;
 
-static int bank_active=2;
-static cbar bars[multicomp_freqs_max+1];
-static int inactive_updatep=1;
+GtkWidget *t_label;
+GtkWidget *t_slider;
+multireadout t_readout;
+
 
 static void compand_change(GtkWidget *w,Readout *r,sig_atomic_t *var){
   char buffer[80];
@@ -80,18 +71,18 @@ static void compand_change(GtkWidget *w,Readout *r,sig_atomic_t *var){
   *var=rint(val*1000.);
 }
 static void under_compand_change(GtkWidget *w,gpointer in){
-  compand_change(w,(Readout *)in,&c.under_ratio);
+  compand_change(w,(Readout *)in,&scset.u_ratio);
 }
 
 static void over_compand_change(GtkWidget *w,gpointer in){
-  compand_change(w,(Readout *)in,&c.over_ratio);
+  compand_change(w,(Readout *)in,&scset.o_ratio);
 }
 
 static void base_compand_change(GtkWidget *w,gpointer in){
-  compand_change(w,(Readout *)in,&c.base_ratio);
+  compand_change(w,(Readout *)in,&scset.b_ratio);
 }
 
-static void timing_display(GtkWidget *w,Readout *r,float v){
+static void timing_display(GtkWidget *w,GtkWidget *r,float v){
   char buffer[80];
 
   if(v<10){
@@ -106,7 +97,7 @@ static void timing_display(GtkWidget *w,Readout *r,float v){
     sprintf(buffer,"%4.1fs",v/1000.);
   }
 
-  readout_set(r,buffer);
+  readout_set(READOUT(r),buffer);
 }
 
 static void under_timing_change(GtkWidget *w,gpointer in){
@@ -116,9 +107,9 @@ static void under_timing_change(GtkWidget *w,gpointer in){
 
   timing_display(w,r->r0,attack);
   timing_display(w,r->r1,decay);
- 
-  multicompand_under_attack_set(attack);
-  multicompand_under_decay_set(decay);  
+
+  scset.u_attack=rint(attack*10.);
+  scset.u_decay=rint(decay*10.);
 }
 
 static void over_timing_change(GtkWidget *w,gpointer in){
@@ -128,10 +119,9 @@ static void over_timing_change(GtkWidget *w,gpointer in){
 
   timing_display(w,r->r0,attack);
   timing_display(w,r->r1,decay);
-  
-  multicompand_over_attack_set(attack);
-  multicompand_over_decay_set(decay);
-  
+
+  scset.o_attack=rint(attack*10.);
+  scset.o_decay=rint(decay*10.);
 }
 
 static void base_timing_change(GtkWidget *w,gpointer in){
@@ -141,10 +131,9 @@ static void base_timing_change(GtkWidget *w,gpointer in){
 
   timing_display(w,r->r0,attack);
   timing_display(w,r->r1,decay);
-  
-  multicompand_base_attack_set(attack);
-  multicompand_base_decay_set(decay);
-  
+
+  scset.b_attack=rint(attack*10.);
+  scset.b_decay=rint(decay*10.);
 }
 
 static void under_lookahead_change(GtkWidget *w,gpointer in){
@@ -155,7 +144,7 @@ static void under_lookahead_change(GtkWidget *w,gpointer in){
   sprintf(buffer,"%3.0f%%",val);
   readout_set(r,buffer);
   
-  c.under_lookahead=rint(val*10.);
+  scset.u_lookahead=rint(val*10.);
 }
 
 static void over_lookahead_change(GtkWidget *w,gpointer in){
@@ -166,336 +155,54 @@ static void over_lookahead_change(GtkWidget *w,gpointer in){
   sprintf(buffer,"%3.0f%%",val);
   readout_set(r,buffer);
   
-  c.over_lookahead=rint(val*10.);
-}
-
-static int updating_av_slider=0;
-static void average_change(GtkWidget *w,gpointer in){
-  cbar *b=bars+multicomp_freqs_max;
-  float o,u;
-  float oav=0,uav=0;
-  int i;
-
-  u=rint(multibar_get_value(MULTIBAR(b->slider),0));
-  o=rint(multibar_get_value(MULTIBAR(b->slider),1));
-
-  /* compute the current average */
-  for(i=0;i<multicomp_freqs[bank_active];i++){
-    oav+=rint(bc[bank_active].static_o[i]);
-    uav+=rint(bc[bank_active].static_u[i]);
-  }
-  oav=rint(oav/multicomp_freqs[bank_active]);
-  uav=rint(uav/multicomp_freqs[bank_active]);
-
-  u-=uav;
-  o-=oav;
-
-  if(!updating_av_slider){
-    updating_av_slider=1;
-    if(o!=0.){
-      /* update o sliders */
-      for(i=0;i<multicomp_freqs[bank_active];i++){
-	float val=multibar_get_value(MULTIBAR(bars[i].slider),1);
-	multibar_thumb_set(MULTIBAR(bars[i].slider),val+o,1);
-      }
-      /* update u average (might have pushed it) */
-      uav=0;
-      for(i=0;i<multicomp_freqs[bank_active];i++)
-	uav+=rint(bc[bank_active].static_u[i]);
-      uav=rint(uav/multicomp_freqs[bank_active]);
-      multibar_thumb_set(MULTIBAR(bars[multicomp_freqs_max].slider),uav,0);
-    }else{
-      /* update u sliders */
-      for(i=0;i<multicomp_freqs[bank_active];i++){
-	float val=multibar_get_value(MULTIBAR(bars[i].slider),0);
-	multibar_thumb_set(MULTIBAR(bars[i].slider),val+u,0);
-      }
-      /* update o average (might have pushed it) */
-      oav=0;
-      for(i=0;i<multicomp_freqs[bank_active];i++)
-	oav+=rint(bc[bank_active].static_o[i]);
-      oav=rint(oav/multicomp_freqs[bank_active]);
-      multibar_thumb_set(MULTIBAR(bars[multicomp_freqs_max].slider),oav,1);
-    }
-    updating_av_slider=0;
-  }
+  scset.o_lookahead=rint(val*10.);
 }
 
 static void slider_change(GtkWidget *w,gpointer in){
   char buffer[80];
-  cbar *b=(cbar *)in;
+  multireadout *r=(multireadout *)in;
   int o,u;
-  int i;
 
-  u=multibar_get_value(MULTIBAR(b->slider),0);
+  u=multibar_get_value(MULTIBAR(w),0);
   sprintf(buffer,"%+4ddB",u);
-  readout_set(READOUT(b->readoutu),buffer);
-  bc[bank_active].static_u[b->number]=u;
+  readout_set(READOUT(r->r0),buffer);
+  scset.u_thresh=u;
   
-  o=multibar_get_value(MULTIBAR(b->slider),1);
+  o=multibar_get_value(MULTIBAR(w),1);
   sprintf(buffer,"%+4ddB",o);
-  readout_set(READOUT(b->readouto),buffer);
-  bc[bank_active].static_o[b->number]=o;
-
-  if(inactive_updatep){
-    /* keep the inactive banks also tracking settings */
-    
-    switch(bank_active){
-    case 0:
-      if(b->number==0){
-	bc[2].static_o[0]+=o-bc[2].static_o[1];
-	bc[2].static_u[0]+=u-bc[2].static_u[1];
-      }
-      if (b->number<9){
-	int adj;
-
-	/* convolutions for roundoff behavior */
-	if(b->number>0){
-	  adj=(bc[1].static_o[b->number*2-1]*2 -
-	       bc[1].static_o[b->number*2-2]-bc[1].static_o[b->number*2])/2;
-	  bc[1].static_o[b->number*2-1]=
-	    (bc[1].static_o[b->number*2-2]+o)/2+adj;
-
-	  adj=(bc[1].static_u[b->number*2-1]*2 -
-	       bc[1].static_u[b->number*2-2]-bc[1].static_u[b->number*2])/2;
-	  bc[1].static_u[b->number*2-1]=
-	    (bc[1].static_u[b->number*2-2]+u)/2+adj;
-
-	  adj=(bc[2].static_o[b->number*3-1]*3 -
-	       bc[2].static_o[b->number*3-2] - 
-	       bc[2].static_o[b->number*3-2] - 
-	       bc[2].static_o[b->number*3+1])/3;
-	  bc[2].static_o[b->number*3-1]=
-	    (bc[2].static_o[b->number*3-2]+
-	     bc[2].static_o[b->number*3-2]+
-	     o)/3+adj;
-
-	  adj=(bc[2].static_o[b->number*3]*3 -
-	       bc[2].static_o[b->number*3-2] - 
-	       bc[2].static_o[b->number*3+1] - 
-	       bc[2].static_o[b->number*3+1])/3;
-	  bc[2].static_o[b->number*3]=
-	    (bc[2].static_o[b->number*3-2]+o+o)/3+adj;
-
-	  adj=(bc[2].static_u[b->number*3-1]*3 -
-	       bc[2].static_u[b->number*3-2] - 
-	       bc[2].static_u[b->number*3-2] - 
-	       bc[2].static_u[b->number*3+1])/3;
-	  bc[2].static_u[b->number*3-1]=
-	    (bc[2].static_u[b->number*3-2]+
-	     bc[2].static_u[b->number*3-2]+
-	     u)/3+adj;
-
-	  adj=(bc[2].static_u[b->number*3]*3 -
-	       bc[2].static_u[b->number*3-2] - 
-	       bc[2].static_u[b->number*3+1] - 
-	       bc[2].static_u[b->number*3+1])/3;
-	  bc[2].static_u[b->number*3]=
-	    (bc[2].static_u[b->number*3-2]+u+u)/3+adj;
-
-	}
-
-	if(b->number<9){
-	  adj=(bc[1].static_o[b->number*2+1]*2-
-	       bc[1].static_o[b->number*2+2]-bc[1].static_o[b->number*2])/2;
-	  bc[1].static_o[b->number*2+1]=
-	    (bc[1].static_o[b->number*2+2]+o)/2+adj;
-	  
-	  adj=(bc[1].static_u[b->number*2+1]*2-
-	       bc[1].static_u[b->number*2+2]-bc[1].static_u[b->number*2])/2;
-	  bc[1].static_u[b->number*2+1]=
-	    (bc[1].static_u[b->number*2+2]+u)/2+adj;
-
-	  adj=(bc[2].static_o[b->number*3+3]*3 -
-	       bc[2].static_o[b->number*3+4] - 
-	       bc[2].static_o[b->number*3+4] - 
-	       bc[2].static_o[b->number*3+1])/3;
-	  bc[2].static_o[b->number*3+3]=
-	    (bc[2].static_o[b->number*3+4]+
-	     bc[2].static_o[b->number*3+4]+
-	     o)/3+adj;
-
-	  adj=(bc[2].static_o[b->number*3+2]*3 -
-	       bc[2].static_o[b->number*3+4] - 
-	       bc[2].static_o[b->number*3+1] - 
-	       bc[2].static_o[b->number*3+1])/3;
-	  bc[2].static_o[b->number*3+2]=
-	    (bc[2].static_o[b->number*3+4]+o+o)/3+adj;
-
-	  adj=(bc[2].static_u[b->number*3+3]*3 -
-	       bc[2].static_u[b->number*3+4] - 
-	       bc[2].static_u[b->number*3+4] - 
-	       bc[2].static_u[b->number*3+1])/3;
-	  bc[2].static_u[b->number*3+3]=
-	    (bc[2].static_u[b->number*3+4]+
-	     bc[2].static_u[b->number*3+4]+
-	     u)/3+adj;
-
-	  adj=(bc[2].static_u[b->number*3+2]*3 -
-	       bc[2].static_u[b->number*3+4] - 
-	       bc[2].static_u[b->number*3+1] - 
-	       bc[2].static_u[b->number*3+1])/3;
-	  bc[2].static_u[b->number*3+2]=
-	    (bc[2].static_u[b->number*3+4]+u+u)/3+adj;
-
-	}
-      }
-
-      if(b->number==9){
-	bc[1].static_o[19]+=o-bc[1].static_o[18];
-	bc[1].static_u[19]+=u-bc[1].static_u[18];
-	bc[2].static_o[29]+=o-bc[2].static_o[28];
-	bc[2].static_u[29]+=u-bc[2].static_u[28];
-      }
-
-      bc[1].static_o[b->number*2]=o;
-      bc[1].static_u[b->number*2]=u;
-      bc[2].static_o[b->number*3+1]=o;
-      bc[2].static_u[b->number*3+1]=u;
-
-      break;
-    case 1:
-      if((b->number&1)==0){
-	bc[0].static_o[b->number>>1]=o;
-	bc[0].static_u[b->number>>1]=u;
-	bc[2].static_o[b->number/2*3+1]=o;
-	bc[2].static_u[b->number/2*3+1]=u;
-      }else{
-	if(b->number<19){
-	  int val=(bc[2].static_o[b->number/2*3+2]+
-		     bc[2].static_o[b->number/2*3+3])/2;
-	  bc[2].static_o[b->number/2*3+2]+=(o-val);
-	  bc[2].static_o[b->number/2*3+3]+=(o-val);
-	  
-	  val=(bc[2].static_u[b->number/2*3+2]+
-	       bc[2].static_u[b->number/2*3+3])/2;
-	  bc[2].static_u[b->number/2*3+2]+=(u-val);
-	  bc[2].static_u[b->number/2*3+3]+=(u-val);
-	  
-	}else{
-	  bc[2].static_o[b->number/2*3+2]=o;
-	  bc[2].static_u[b->number/2*3+2]=u;
-	}
-      }
-      if(b->number==0){
-	bc[2].static_o[0]+=o-bc[2].static_o[1];
-	bc[2].static_u[0]+=u-bc[2].static_u[1];
-      }
-
-      break;
-    case 2:
-      if((b->number%3)==1){
-	bc[0].static_o[b->number/3]=o;
-	bc[0].static_u[b->number/3]=u;
-	bc[1].static_o[b->number/3*2]=o;
-	bc[1].static_u[b->number/3*2]=u;
-      }else if(b->number>1){
-	if(b->number<29){
-	  bc[1].static_o[(b->number-1)/3*2+1]=
-	    (bc[2].static_o[(b->number-1)/3*3+2]+
-	     bc[2].static_o[(b->number-1)/3*3+3])/2;
-	  bc[1].static_u[(b->number-1)/3*2+1]=
-	    (bc[2].static_u[(b->number-1)/3*3+2]+
-	     bc[2].static_u[(b->number-1)/3*3+3])/2;
-	}else{
-	  bc[1].static_o[(b->number-1)/3*2+1]=o;
-	  bc[1].static_u[(b->number-1)/3*2+1]=u;
-	}
-      }
-      break;
-    }
-  }
-
-  /* update average slider */
-  if(!updating_av_slider && bars[multicomp_freqs_max].slider){
-    float oav=0,uav=0;
-    updating_av_slider=1;
-    
-    /* compute the current average */
-    for(i=0;i<multicomp_freqs[bank_active];i++){
-      oav+=rint(bc[bank_active].static_o[i]);
-      uav+=rint(bc[bank_active].static_u[i]);
-    }
-    oav=rint(oav/multicomp_freqs[bank_active]);
-    uav=rint(uav/multicomp_freqs[bank_active]);
-    
-    multibar_thumb_set(MULTIBAR(bars[multicomp_freqs_max].slider),uav,0);
-    multibar_thumb_set(MULTIBAR(bars[multicomp_freqs_max].slider),oav,1);
-    updating_av_slider=0;
-  }
-}
-
-static void static_octave(GtkWidget *w,gpointer in){
-  int octave=(int)in,i;
-
-  if(!w || gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(w))){
-    if(bank_active!=octave || w==NULL){
-      bank_active=octave;
-      
-      /* map, unmap, relabel */
-      for(i=0;i<multicomp_freqs_max;i++){
-	if(i<multicomp_freqs[bank_active]){
-	  gtk_label_set_text(GTK_LABEL(bars[i].label),
-			     multicomp_freq_labels[bank_active][i]);
-	  gtk_widget_show(bars[i].label);
-	  gtk_widget_show(bars[i].slider);
-	  gtk_widget_show(bars[i].readouto);
-	  gtk_widget_show(bars[i].readoutu);
-	  
-	  inactive_updatep=0;
-	  
-	  {
-	    float o=bc[bank_active].static_o[i];
-	    float u=bc[bank_active].static_u[i];
-
-	    multibar_thumb_set(MULTIBAR(bars[i].slider),u,0);
-	    multibar_thumb_set(MULTIBAR(bars[i].slider),o,1);
-	  }
-
-	  inactive_updatep=1;
-	  
-	}else{
-	  gtk_widget_hide(bars[i].label);
-	  gtk_widget_hide(bars[i].slider);
-	  gtk_widget_hide(bars[i].readouto);
-	  gtk_widget_hide(bars[i].readoutu);
-	}
-      }
-      multicompand_set_bank(bank_active);
-      
-    }
-  }
+  readout_set(READOUT(r->r1),buffer);
+  scset.o_thresh=o;
 }
 
 static void over_mode(GtkButton *b,gpointer in){
   int mode=(int)in;
-  c.over_mode=mode;
+  scset.o_mode=mode;
 }
 
 static void under_mode(GtkButton *b,gpointer in){
   int mode=(int)in;
-  c.under_mode=mode;
+  scset.u_mode=mode;
 }
 
 static void base_mode(GtkButton *b,gpointer in){
   int mode=(int)in;
-  c.base_mode=mode;
+  scset.b_mode=mode;
 }
 
 static void under_knee(GtkToggleButton *b,gpointer in){
   int mode=gtk_toggle_button_get_active(b);
-  c.under_softknee=mode;
+  scset.u_softknee=mode;
 }
 
 static void over_knee(GtkToggleButton *b,gpointer in){
   int mode=gtk_toggle_button_get_active(b);
-  c.over_softknee=mode;
+  scset.o_softknee=mode;
 }
 
-void compandpanel_create(postfish_mainpanel *mp,
-			 GtkWidget *windowbutton,
-			 GtkWidget *activebutton){
-  int i;
+void singlepanel_create(postfish_mainpanel *mp,
+			GtkWidget *windowbutton,
+			GtkWidget *activebutton){
+
   char *labels[14]={"130","120","110","100","90","80","70",
 		    "60","50","40","30","20","10","0"};
   float levels[15]={-140,-130,-120,-110,-100,-90,-80,-70,-60,-50,-40,
@@ -512,15 +219,13 @@ void compandpanel_create(postfish_mainpanel *mp,
 
 
   subpanel_generic *panel=subpanel_create(mp,windowbutton,activebutton,
-					  &compand_active,
-					  &compand_visible,
-					  "_Multiband Compand"," [m] ");
+					  &singlecomp_active,
+					  &singlecomp_visible,
+					  "_Singleband Compand"," [s] ");
   
-  GtkWidget *hbox=gtk_hbox_new(0,0);
-  GtkWidget *sliderbox=gtk_vbox_new(0,0);
   GtkWidget *sliderframe=gtk_frame_new(NULL);
-  GtkWidget *staticbox=gtk_vbox_new(0,0);
-  GtkWidget *slidertable=gtk_table_new(multicomp_freqs_max+2,4,0);
+  GtkWidget *allbox=gtk_vbox_new(0,0);
+  GtkWidget *slidertable=gtk_table_new(2,3,0);
 
   GtkWidget *overlabel=gtk_label_new("Over threshold compand ");
   GtkWidget *overtable=gtk_table_new(6,4,0);
@@ -541,66 +246,43 @@ void compandpanel_create(postfish_mainpanel *mp,
 
     
   {
-  
-    GtkWidget *octave_box=gtk_hbox_new(0,0);
-    GtkWidget *octave_a=gtk_radio_button_new_with_label(NULL,"full-octave");
-    GtkWidget *octave_b=
-      gtk_radio_button_new_with_label_from_widget(GTK_RADIO_BUTTON(octave_a),
-						  "half-octave");
-    GtkWidget *octave_c=
-      gtk_radio_button_new_with_label_from_widget(GTK_RADIO_BUTTON(octave_b),
-						  "third-octave");
+    GtkWidget *label1=gtk_label_new("compand threshold");
     GtkWidget *label2=gtk_label_new("under");
     GtkWidget *label3=gtk_label_new("over");
 
+    gtk_misc_set_alignment(GTK_MISC(label1),.5,1.);
     gtk_misc_set_alignment(GTK_MISC(label2),.5,1.);
     gtk_misc_set_alignment(GTK_MISC(label3),.5,1.);
     gtk_widget_set_name(label2,"scalemarker");
     gtk_widget_set_name(label3,"scalemarker");
 
-
-    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(octave_b),1);
-
-    g_signal_connect (G_OBJECT (octave_a), "clicked",
-		      G_CALLBACK (static_octave), (gpointer)0);
-    g_signal_connect (G_OBJECT (octave_b), "clicked",
-		      G_CALLBACK (static_octave), (gpointer)1);
-    g_signal_connect (G_OBJECT (octave_c), "clicked",
-		      G_CALLBACK (static_octave), (gpointer)2);
-   
-    gtk_table_attach(GTK_TABLE(slidertable),label2,1,2,0,1,GTK_FILL,GTK_FILL|GTK_EXPAND,2,0);
-    gtk_table_attach(GTK_TABLE(slidertable),label3,3,4,0,1,GTK_FILL,GTK_FILL|GTK_EXPAND,2,0);
+    gtk_table_attach(GTK_TABLE(slidertable),label2,0,1,0,1,GTK_FILL,GTK_FILL|GTK_EXPAND,2,0);
+    gtk_table_attach(GTK_TABLE(slidertable),label1,1,2,0,1,GTK_FILL,GTK_FILL|GTK_EXPAND,2,0);
+    gtk_table_attach(GTK_TABLE(slidertable),label3,2,3,0,1,GTK_FILL,GTK_FILL|GTK_EXPAND,2,0);
  
-    gtk_box_pack_start(GTK_BOX(octave_box),octave_a,0,1,3);
-    gtk_box_pack_start(GTK_BOX(octave_box),octave_b,0,1,3);
-    gtk_box_pack_start(GTK_BOX(octave_box),octave_c,0,1,3);
-    gtk_table_attach(GTK_TABLE(slidertable),octave_box,2,3,0,1,
-		     GTK_EXPAND,0,0,0);
-
-    gtk_box_pack_start(GTK_BOX(sliderbox),sliderframe,0,0,0);
     gtk_container_add(GTK_CONTAINER(sliderframe),slidertable);
 
-    gtk_frame_set_shadow_type(GTK_FRAME(sliderframe),GTK_SHADOW_NONE);
+    //gtk_frame_set_shadow_type(GTK_FRAME(sliderframe),GTK_SHADOW_NONE);
     
     gtk_container_set_border_width(GTK_CONTAINER(sliderframe),4);
+    gtk_container_set_border_width(GTK_CONTAINER(slidertable),10);
 
   }
 
-  gtk_box_pack_start(GTK_BOX(panel->subpanel_box),hbox,0,0,0);
-  gtk_box_pack_start(GTK_BOX(hbox),sliderbox,0,0,0);
-  gtk_box_pack_start(GTK_BOX(hbox),staticbox,0,0,0);
+  gtk_box_pack_start(GTK_BOX(panel->subpanel_box),allbox,0,0,0);
+  gtk_box_pack_start(GTK_BOX(allbox),sliderframe,0,0,0);
+
 
   {
     GtkWidget *hs1=gtk_hseparator_new();
     GtkWidget *hs2=gtk_hseparator_new();
-    GtkWidget *hs3=gtk_hseparator_new();
 
-    gtk_box_pack_start(GTK_BOX(staticbox),overtable,0,0,10);
-    gtk_box_pack_start(GTK_BOX(staticbox),hs1,0,0,0);
-    gtk_box_pack_start(GTK_BOX(staticbox),undertable,0,0,10);
-    gtk_box_pack_start(GTK_BOX(staticbox),hs2,0,0,0);
-    gtk_box_pack_start(GTK_BOX(staticbox),basetable,0,0,10);
-    gtk_box_pack_start(GTK_BOX(staticbox),hs3,0,0,0);
+    //gtk_box_pack_start(GTK_BOX(allbox),hs3,0,0,0);
+    gtk_box_pack_start(GTK_BOX(allbox),overtable,0,0,10);
+    gtk_box_pack_start(GTK_BOX(allbox),hs1,0,0,0);
+    gtk_box_pack_start(GTK_BOX(allbox),undertable,0,0,10);
+    gtk_box_pack_start(GTK_BOX(allbox),hs2,0,0,0);
+    gtk_box_pack_start(GTK_BOX(allbox),basetable,0,0,10);
 
     gtk_container_set_border_width(GTK_CONTAINER(overtable),5);
     gtk_container_set_border_width(GTK_CONTAINER(undertable),5);
@@ -661,8 +343,8 @@ void compandpanel_create(postfish_mainpanel *mp,
     GtkWidget *slider=multibar_slider_new(5,timing_labels,timing_levels,2);
     multireadout *r=calloc(1,sizeof(*r));
 
-    r->r0=(Readout *)readout1;
-    r->r1=(Readout *)readout2;
+    r->r0=readout1;
+    r->r1=readout2;
    
     multibar_callback(MULTIBAR(slider),under_timing_change,r);
     multibar_thumb_set(MULTIBAR(slider),1,0);
@@ -750,8 +432,8 @@ void compandpanel_create(postfish_mainpanel *mp,
     GtkWidget *slider=multibar_slider_new(5,timing_labels,timing_levels,2);
    
     multireadout *r=calloc(1,sizeof(*r));
-    r->r0=(Readout *)readout1;
-    r->r1=(Readout *)readout2;
+    r->r0=readout1;
+    r->r1=readout2;
 
     multibar_callback(MULTIBAR(slider),over_timing_change,r);
     multibar_thumb_set(MULTIBAR(slider),1,0);
@@ -835,8 +517,8 @@ void compandpanel_create(postfish_mainpanel *mp,
     GtkWidget *slider=multibar_slider_new(5,timing_labels,timing_levels,2);
     multireadout *r=calloc(1,sizeof(*r));
 
-    r->r0=(Readout *)readout1;
-    r->r1=(Readout *)readout2;
+    r->r0=readout1;
+    r->r1=readout2;
    
     multibar_callback(MULTIBAR(slider),base_timing_change,r);
     multibar_thumb_set(MULTIBAR(slider),1,0);
@@ -854,86 +536,47 @@ void compandpanel_create(postfish_mainpanel *mp,
 
   /* threshold controls */
 
-  for(i=0;i<multicomp_freqs_max;i++){
-    GtkWidget *label=gtk_label_new(NULL);
-    gtk_widget_set_name(label,"scalemarker");
-    
-    bars[i].readoutu=readout_new("  +0");
-    bars[i].readouto=readout_new("  +0");
-    bars[i].slider=multibar_new(14,labels,levels,2,HI_DECAY|LO_DECAY|LO_ATTACK);
-    bars[i].number=i;
-    bars[i].label=label;
-
-    multibar_callback(MULTIBAR(bars[i].slider),slider_change,bars+i);
-    multibar_thumb_set(MULTIBAR(bars[i].slider),-140.,0);
-    multibar_thumb_set(MULTIBAR(bars[i].slider),0.,1);
-    multibar_thumb_bounds(MULTIBAR(bars[i].slider),-140,0);
-    multibar_thumb_increment(MULTIBAR(bars[i].slider),1.,10.);
-    
-    gtk_misc_set_alignment(GTK_MISC(label),1,.5);
-      
-    gtk_table_attach(GTK_TABLE(slidertable),label,0,1,i+1,i+2,
-		     GTK_FILL,0,10,0);
-    gtk_table_attach(GTK_TABLE(slidertable),bars[i].readoutu,1,2,i+1,i+2,
-		     0,0,0,0);
-    gtk_table_attach(GTK_TABLE(slidertable),bars[i].slider,2,3,i+1,i+2,
-		     GTK_FILL|GTK_EXPAND,GTK_EXPAND,0,0);
-    gtk_table_attach(GTK_TABLE(slidertable),bars[i].readouto,3,4,i+1,i+2,
-		     0,0,0,0);
-  }
-
-  /* "average" slider */
   {
-    GtkWidget *label=gtk_label_new("average");
-    
-    bars[multicomp_freqs_max].slider=multibar_slider_new(14,labels,levels,2);
+    t_readout.r0=readout_new("  +0");
+    t_readout.r1=readout_new("  +0");
+    t_slider=multibar_new(14,labels,levels,2,HI_DECAY|LO_DECAY|LO_ATTACK);
 
-    multibar_callback(MULTIBAR(bars[multicomp_freqs_max].slider),average_change,bars+multicomp_freqs_max);
-
-    multibar_thumb_set(MULTIBAR(bars[multicomp_freqs_max].slider),-140.,0);
-    multibar_thumb_set(MULTIBAR(bars[multicomp_freqs_max].slider),0.,1);
-    multibar_thumb_bounds(MULTIBAR(bars[multicomp_freqs_max].slider),-140,0);
+    multibar_callback(MULTIBAR(t_slider),slider_change,&t_readout);
+    multibar_thumb_set(MULTIBAR(t_slider),-140.,0);
+    multibar_thumb_set(MULTIBAR(t_slider),0.,1);
+    multibar_thumb_bounds(MULTIBAR(t_slider),-140,0);
+    multibar_thumb_increment(MULTIBAR(t_slider),1.,10.);
     
-    gtk_table_attach(GTK_TABLE(slidertable),label,0,2,multicomp_freqs_max+1,multicomp_freqs_max+2,
-		     GTK_FILL,0,0,0);
-    gtk_table_attach(GTK_TABLE(slidertable),bars[i].slider,2,3,multicomp_freqs_max+1,multicomp_freqs_max+2,
+    
+    gtk_table_attach(GTK_TABLE(slidertable),t_readout.r0,0,1,1,2,
+		     0,0,0,0);
+    gtk_table_attach(GTK_TABLE(slidertable),t_slider,1,2,1,2,
 		     GTK_FILL|GTK_EXPAND,GTK_EXPAND,0,0);
-    gtk_table_set_row_spacing(GTK_TABLE(slidertable),multicomp_freqs_max,10);
+    gtk_table_attach(GTK_TABLE(slidertable),t_readout.r1,2,3,1,2,
+		     0,0,0,0);
   }
-
   
   subpanel_show_all_but_toplevel(panel);
 
-  /* Now unmap the sliders we don't want */
-  static_octave(NULL,(gpointer)1);
-
 }
 
-static float **peakfeed=0;
-static float **rmsfeed=0;
+static float *peakfeed=0;
+static float *rmsfeed=0;
 
-void compandpanel_feedback(int displayit){
-  int i,bands;
+void singlepanel_feedback(int displayit){
   if(!peakfeed){
-    peakfeed=malloc(sizeof(*peakfeed)*multicomp_freqs_max);
-    rmsfeed=malloc(sizeof(*rmsfeed)*multicomp_freqs_max);
-
-    for(i=0;i<multicomp_freqs_max;i++){
-      peakfeed[i]=malloc(sizeof(**peakfeed)*input_ch);
-      rmsfeed[i]=malloc(sizeof(**rmsfeed)*input_ch);
-    }
+    peakfeed=malloc(sizeof(*peakfeed)*input_ch);
+    rmsfeed=malloc(sizeof(*rmsfeed)*input_ch);
   }
-
-  if(pull_multicompand_feedback(peakfeed,rmsfeed,&bands)==1)
-    for(i=0;i<bands;i++)
-      multibar_set(MULTIBAR(bars[i].slider),rmsfeed[i],peakfeed[i],
-		   input_ch,(displayit && compand_visible));
+  
+  if(pull_singlecomp_feedback(peakfeed,rmsfeed)==1)
+    multibar_set(MULTIBAR(t_slider),rmsfeed,peakfeed,
+		 input_ch,(displayit && singlecomp_visible));
 }
 
-void compandpanel_reset(void){
-  int i;
-  for(i=0;i<multicomp_freqs_max;i++)
-    multibar_reset(MULTIBAR(bars[i].slider));
+void singlepanel_reset(void){
+  multibar_reset(MULTIBAR(t_slider));
 }
+
 
 

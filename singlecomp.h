@@ -23,25 +23,32 @@
 
 #include "postfish.h"
 
-#define eq_freqs 30
+typedef struct {
+  sig_atomic_t o_attack;
+  sig_atomic_t o_decay;
+  sig_atomic_t u_attack;
+  sig_atomic_t u_decay;
+  sig_atomic_t b_attack;
+  sig_atomic_t b_decay;
 
-static const float eq_freq_list[eq_freqs+1]={
-  25,31.5,40,50,63,80,
-  100,125,160,200,250,315,
-  400,500,630,800,1000,1250,1600,
-  2000,2500,3150,4000,5000,6300,
-  8000,10000,12500,16000,20000,9e10};
+  sig_atomic_t o_thresh;
+  sig_atomic_t o_ratio;
+  sig_atomic_t o_lookahead;
+  sig_atomic_t o_mode;
+  sig_atomic_t o_softknee;
 
-static char * const eq_freq_labels[eq_freqs]={
-  "25","31.5","40","50","63","80",
-  "100","125","160","200","250","315",
-  "400","500","630","800","1k","1.2k","1.6k",
-  "2k","2.5k","3.1k","4k","5k","6.3k",
-  "8k","10k","12.5k","16k","20k"
-};
+  sig_atomic_t u_thresh;
+  sig_atomic_t u_ratio;
+  sig_atomic_t u_lookahead;
+  sig_atomic_t u_mode;
+  sig_atomic_t u_softknee;
 
-extern int pull_eq_feedback(float **peak,float **rms);
-extern int eq_load(void);
-extern int eq_reset();
-extern void eq_set(int freq, float value);
-extern time_linkage *eq_read(time_linkage *in);
+  sig_atomic_t b_ratio;
+  sig_atomic_t b_mode;
+
+} singlecomp_settings;
+
+extern int pull_singlecomp_feedback(float *peak,float *rms);
+extern int singlecomp_load(void);
+extern int singlecomp_reset(void);
+extern time_linkage *singlecomp_read(time_linkage *in);

@@ -30,6 +30,7 @@
 #include <glib-object.h>
 #include <gtk/gtkcontainer.h>
 #include <gtk/gtkdrawingarea.h>
+#include <gdk/gdkdrawable.h>
 
 G_BEGIN_DECLS
 
