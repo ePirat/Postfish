@@ -174,7 +174,6 @@ static float determine_average(void){
 
 static void av_slider_change(GtkWidget *w,gpointer in){
   if(!av_callback_enter){
-    char buffer[80];
     atten_panelsave *p=(atten_panelsave *)in;
     
     float av=multibar_get_value(MULTIBAR(p->average),0);

@@ -36,13 +36,15 @@
 typedef struct {
   GtkWidget *slider;
   GtkWidget *readout;
-  eq_settings *s;
+  struct eps *p;
   int number;
 } bar;
 
-typedef struct {
+typedef struct eps {
   subpanel_generic *panel;
   bar *bars;
+  eq_settings *s;
+  int av_callback_enter;
 } eq_panel_state;
 
 static eq_panel_state *master_panel;
@@ -80,6 +82,33 @@ void eqpanel_state_from_config(int bank){
     eqpanel_state_from_config_helper(bank,eq_channel_set+i,channel_panel[i],i+1);
 }
 
+static float determine_average(eq_panel_state *p){
+  bar *b=p->bars;
+  int i;
+  float acc=0;
+  for(i=0;i<eq_freqs;i++)
+    acc+=multibar_get_value(MULTIBAR(b[i].slider),0);
+  return acc/eq_freqs;
+}
+
+static void average_change(GtkWidget *w,gpointer in){
+  eq_panel_state *p=(eq_panel_state *)in;
+  if(!p->av_callback_enter){
+    
+    float av=multibar_get_value(MULTIBAR(p->bars[eq_freqs].slider),0);
+    float actual=determine_average(p);
+    int i;
+
+    p->av_callback_enter=1;
+    for(i=0;i<eq_freqs;i++){
+      float val=multibar_get_value(MULTIBAR(p->bars[i].slider),0) + av - actual;
+      multibar_thumb_set(MULTIBAR(p->bars[i].slider),val,0);
+    }
+    
+    p->av_callback_enter=0;
+  }
+}
+
 static void slider_change(GtkWidget *w,gpointer in){
   char buffer[80];
   bar *b=(bar *)in;
@@ -88,8 +117,14 @@ static void slider_change(GtkWidget *w,gpointer in){
   sprintf(buffer,"%+3.0fdB",val);
   readout_set(READOUT(b->readout),buffer);
   
-  eq_set(b->s,b->number,val);
+  eq_set(b->p->s,b->number,val);
 
+  if(!b->p->av_callback_enter){
+    b->p->av_callback_enter=1;
+    float actual=determine_average(b->p);
+    multibar_thumb_set(MULTIBAR(b->p->bars[eq_freqs].slider),actual,0);
+    b->p->av_callback_enter=0;
+  }
 }
 
 static eq_panel_state *eqpanel_create_helper(postfish_mainpanel *mp,
@@ -99,15 +134,19 @@ static eq_panel_state *eqpanel_create_helper(postfish_mainpanel *mp,
   int i;
   char *labels[16]={"","110","100","90","80","70","60","50","40",
 		    "30","20","10","0","+10","+20","+30"};
+  char *labels2[16]={"","","","","","","60","50","40",
+		    "30","20","10","0","+10","+20","+30"};
   float levels[16]={-120,-110,-100,-90,-80,-70,-60,-50,-40,
 		     -30,-20,-10,0,10,20,30};
 
-  GtkWidget *slidertable=gtk_table_new(eq_freqs,3,0);
-  bar *bars=calloc(eq_freqs,sizeof(*bars));
+  GtkWidget *slidertable=gtk_table_new(eq_freqs+1,3,0);
+  bar *bars=calloc(eq_freqs+1,sizeof(*bars));
   eq_panel_state *p=calloc(1,sizeof(*p));
 
   p->bars=bars;
+  p->s=es;
   p->panel=panel;
+  p->av_callback_enter=1;
 
   for(i=0;i<eq_freqs;i++){
     const char *labeltext=eq_freq_labels[i];
@@ -119,7 +158,7 @@ static eq_panel_state *eqpanel_create_helper(postfish_mainpanel *mp,
     bars[i].slider=multibar_new(16,labels,levels,1,
 				LO_DECAY|HI_DECAY|LO_ATTACK|HI_ATTACK);
     bars[i].number=i;
-    bars[i].s=es;
+    bars[i].p=p;
 
     multibar_callback(MULTIBAR(bars[i].slider),slider_change,bars+i);
     multibar_thumb_set(MULTIBAR(bars[i].slider),0.,0);
@@ -136,8 +175,30 @@ static eq_panel_state *eqpanel_create_helper(postfish_mainpanel *mp,
 		     GTK_FILL|GTK_EXPAND,GTK_FILL|GTK_EXPAND,0,0);
   }
 
+  {
+    GtkWidget *label=gtk_label_new("average");
+    gtk_widget_set_name(label,"smallmarker");
+
+    bars[i].slider=multibar_slider_new(16,labels2,levels,1);
+    bars[i].number=i;
+    bars[i].p=p;
+
+    multibar_callback(MULTIBAR(bars[i].slider),average_change,p);
+    multibar_thumb_bounds(MULTIBAR(bars[i].slider),-60,30);
+    multibar_thumb_increment(MULTIBAR(bars[i].slider),1,10);
+
+    gtk_misc_set_alignment(GTK_MISC(label),1,.5);
+
+    gtk_table_attach(GTK_TABLE(slidertable),label,0,1,i,i+1,
+		     GTK_FILL,0,0,0);
+    gtk_table_attach(GTK_TABLE(slidertable),bars[i].slider,1,2,i,i+1,
+		     GTK_FILL|GTK_EXPAND,GTK_FILL|GTK_EXPAND,0,0);
+
+  }
+
   gtk_box_pack_start(GTK_BOX(panel->subpanel_box),slidertable,1,1,4);
   subpanel_show_all_but_toplevel(panel);
+  p->av_callback_enter=0;
 
   return p;
 }
