@@ -77,20 +77,14 @@ extern void compute_iir_fast_decay2(float *x, int n, iir_state *is,
 				     iir_filter *attack, iir_filter *decay);
 extern void compute_iir_symmetric2(float *x, int n, iir_state *is, 
 				  iir_filter *filter);
-extern void compute_iir_symmetric3(float *x, int n, iir_state *is, 
-				  iir_filter *filter);
-extern void compute_iir_symmetric4(float *x, int n, iir_state *is, 
-				  iir_filter *filter);
 extern void compute_iir2(float *x, int n, iir_state *is, 
 			iir_filter *attack, iir_filter *decay);
-extern void compute_iir_freefall1(float *x, int n, iir_state *is, 
-				 iir_filter *decay);
-extern void compute_iir_freefall2(float *x, int n, iir_state *is, 
+extern void compute_iir_only_freefall1(float *x, int n, iir_state *is, 
 				 iir_filter *decay);
 extern void compute_iir_decayonly2(float *x, int n, iir_state *is, 
 				 iir_filter *decay);
-extern void compute_iir_freefall3(float *x, int n, iir_state *is, 
-				 iir_filter *decay);
-extern void compute_iir_freefall4(float *x, int n, iir_state *is, 
-				 iir_filter *decay);
+
+extern void compute_iir_symmetric_freefall2(float *x, int n, iir_state *is, 
+					    iir_filter *filter);
+
 

@@ -313,7 +313,7 @@ void compute_iir_fast_decay2(float *x, int n, iir_state *is,
 }
 
 /* allow decay to proceed in freefall */
-void compute_iir_freefall1(float *x, int n, iir_state *is, 
+void compute_iir_only_freefall1(float *x, int n, iir_state *is, 
 			   iir_filter *decay){
   double d_c0=decay->c[0];
   
@@ -344,42 +344,6 @@ void compute_iir_freefall1(float *x, int n, iir_state *is,
   
   is->x[0]=x0;
   is->y[0]=y0;
-  
-}
-
-void compute_iir_freefall2(float *x, int n, iir_state *is, 
-			  iir_filter *decay){
-  double d_c0=decay->c[0];
-  double d_c1=decay->c[1];
-  
-  double x0=is->x[0];
-  double x1=is->x[1];
-  double y0=is->y[0];
-  double y1=is->y[1];
-  int i=0;
-
-  if(zerome(y0) && zerome(y1)){
-    y0=y1=0.;
-  }
-
-  while(i<n){
-    double yd;
-    if(y1<y0)y1=y0; // slope fixup
-
-     yd = y0*d_c0+y1*d_c1;
-
-
-    if(x[i]>yd)yd=x[i];
-
-    x1=x0;x0=x[i];
-    y1=y0;x[i]=y0=yd;
-    i++;
-  }
-  
-  is->x[0]=x0;
-  is->x[1]=x1;
-  is->y[0]=y0;
-  is->y[1]=y1;
   
 }
 
@@ -420,83 +384,6 @@ void compute_iir_decayonly2(float *x, int n, iir_state *is,
   
 }
 
-void compute_iir_freefall3(float *x, int n, iir_state *is, 
-			  iir_filter *decay){
-  double d_c0=decay->c[0];
-  double d_c1=decay->c[1];
-  double d_c2=decay->c[2];
-  
-  double x0=is->x[0],y0=is->y[0];
-  double x1=is->x[1],y1=is->y[1];
-  double x2=is->x[2],y2=is->y[2];
-  int i=0;
-
-  if(zerome(y0) && zerome(y1) && zerome(y2)){
-    y0=y1=y2=0.;
-  }
-
-  while(i<n){
-    double yd;
-    if(y1<y0)y1=y0; // slope fixup
-    if(y2<y1)y2=y1; // slope fixup
-
-
-     yd = y0*d_c0+y1*d_c1+y2*d_c2;
-
-
-    if(x[i]>yd)yd=x[i];
-
-    x2=x1;x1=x0;x0=x[i];
-    y2=y1;y1=y0;x[i]=y0=yd;
-    i++;
-  }
-  
-  is->x[0]=x0;is->y[0]=y0;
-  is->x[1]=x1;is->y[1]=y1;
-  is->x[2]=x2;is->y[2]=y2;
-  
-}
-
-void compute_iir_freefall4(float *x, int n, iir_state *is, 
-			  iir_filter *decay){
-  double d_c0=decay->c[0];
-  double d_c1=decay->c[1];
-  double d_c2=decay->c[2];
-  double d_c3=decay->c[3];
-  
-  double x0=is->x[0],y0=is->y[0];
-  double x1=is->x[1],y1=is->y[1];
-  double x2=is->x[2],y2=is->y[2];
-  double x3=is->x[3],y3=is->y[3];
-  int i=0;
-
-  if(zerome(y0) && zerome(y1) && zerome(y2) && zerome(y3)){
-    y0=y1=y2=y3=0.;
-  }
-
-  while(i<n){
-    double yd;
-    if(y1<y0)y1=y0; // slope fixup
-    if(y2<y1)y2=y1; // slope fixup
-    if(y3<y2)y3=y2; // slope fixup
-
-
-     yd = y0*d_c0+y1*d_c1+y2*d_c2+y3*d_c3;
-
-    if(x[i]>yd)yd=x[i];
-
-    x3=x2;x2=x1;x1=x0;x0=x[i];
-    y3=y2;y2=y1;y1=y0;x[i]=y0=yd;
-    i++;
-  }
-  
-  is->x[0]=x0;is->y[0]=y0;
-  is->x[1]=x1;is->y[1]=y1;
-  is->x[2]=x2;is->y[2]=y2;
-  is->x[3]=x3;is->y[3]=y3;
-  
-}
-
 /* symmetric filter computation */
 
 void compute_iir_symmetric2(float *x, int n, iir_state *is, 
@@ -530,70 +417,42 @@ void compute_iir_symmetric2(float *x, int n, iir_state *is,
   
 }
 
-void compute_iir_symmetric3(float *x, int n, iir_state *is, 
-			   iir_filter *filter){
+void compute_iir_symmetric_freefall2(float *x, int n, iir_state *is, 
+				     iir_filter *filter){
   double c0=filter->c[0];
   double c1=filter->c[1];
-  double c2=filter->c[2];
   double g=filter->g;
   
-  double x0=is->x[0],y0=is->y[0];
-  double x1=is->x[1],y1=is->y[1];
-  double x2=is->x[2],y2=is->y[2];
+  double x0=is->x[0];
+  double x1=is->x[1];
+  double y0=is->y[0];
+  double y1=is->y[1];
     
   int i=0;
       
-  if(zerome(y0) && zerome(y1) && zerome(y2)){
-    y0=y1=y2=0.;
+  if(zerome(y0) && zerome(y1)){
+    y0=y1=0.;
   }
 
   while(i<n){
-    double yd= (x[i]+(x0+x1)*3.+x2)/g + y0*c0+y1*c1+y2*c2;
-    x2=x1;x1=x0;x0=x[i];
-    y2=y1;y1=y0;x[i]=y0=yd;
+    double yd= (x0*2.+x1)/g + y0*c0+y1*c1;
+
+    if(x[i]<yd){
+      x1=x0;x0=0;
+    }else{
+      yd+= x[i]/g;
+      x1=x0;x0=x[i];
+    }
+    y1=y0;x[i]=y0=yd;
     i++;
   }
   
-  is->x[0]=x0;is->y[0]=y0;
-  is->x[1]=x1;is->y[1]=y1;
-  is->x[2]=x2;is->y[2]=y2;
+  is->x[0]=x0;
+  is->x[1]=x1;
+  is->y[0]=y0;
+  is->y[1]=y1;
   
 }
-
-void compute_iir_symmetric4(float *x, int n, iir_state *is, 
-			   iir_filter *filter){
-  double c0=filter->c[0];
-  double c1=filter->c[1];
-  double c2=filter->c[2];
-  double c3=filter->c[3];
-  double g=filter->g;
-  
-  double x0=is->x[0],y0=is->y[0];
-  double x1=is->x[1],y1=is->y[1];
-  double x2=is->x[2],y2=is->y[2];
-  double x3=is->x[3],y3=is->y[3];
-    
-  int i=0;
-      
-  if(zerome(y0) && zerome(y1) && zerome(y2) && zerome(y3)){
-    y0=y1=y2=y3=0.;
-  }
-
-  while(i<n){
-    double yd= (x[i]+(x0+x2)*4.+x1*6.+x3)/g + 
-      y0*c0+y1*c1+y2*c2+y3*c3;
-    x3=x2;x2=x1;x1=x0;x0=x[i];
-    y3=y2;y2=y1;y1=y0;x[i]=y0=yd;
-    i++;
-  }
-  
-  is->x[0]=x0;is->y[0]=y0;
-  is->x[1]=x1;is->y[1]=y1;
-  is->x[2]=x2;is->y[2]=y2;
-  is->x[3]=x3;is->y[3]=y3;
-  
-}
-
 
 /* filter decision wrapper */
 void compute_iir2(float *x, int n, iir_state *is, 
