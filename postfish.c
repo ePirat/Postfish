@@ -70,13 +70,14 @@ static int outbytes=2;
 static int rate=0;
 static int ch=0;
 static int signp=0;
-
 #define MAX_DECAY_MS 2000
 
 /* saved, but not part of a config profile */
 static long TX[10]={-1,-1,-1,-1,-1,-1,-1,-1,-1,-1}; 
 static long A=0;
 static long B=-1;
+static long eq_m=1;
+static long n_m=1;
 
 typedef struct {
   long block_a;
@@ -101,26 +102,26 @@ typedef struct {
 static long configactive=0;
 static configprofile configlist[CONFIG_MAX]={
   {
-    8192,2,300,-30,0,1,0,1,1,
+    8192,2,3000,-30,0,1,0,1,1,
     {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
      0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
     1,
-    {-120,-120,-120,-120,-120,-120,-120,-120,-120,
-     -120,-120,-120,-120,-120,-120,-120,-120,-120,
-     -120,-120,-120,-120,-120,-120,-120,-120,-120,
-     -120,-120,-120,-120,-120,-120,-120,-120},
+    {-1200,-1200,-1200,-1200,-1200,-1200,-1200,-1200,-1200,
+     -1200,-1200,-1200,-1200,-1200,-1200,-1200,-1200,-1200,
+     -1200,-1200,-1200,-1200,-1200,-1200,-1200,-1200,-1200,
+     -1200,-1200,-1200,-1200,-1200,-1200,-1200,-1200},
     1,
   }
 };
 static configprofile configdefault={
-  8192,2,300,-30,0,1,0,1,1,
+  8192,2,3000,-30,0,1,0,1,1,
   {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
   1,
-  {-120,-120,-120,-120,-120,-120,-120,-120,-120,
-   -120,-120,-120,-120,-120,-120,-120,-120,-120,
-   -120,-120,-120,-120,-120,-120,-120,-120,-120,
-   -120,-120,-120,-120,-120,-120,-120,-120},
+    {-1200,-1200,-1200,-1200,-1200,-1200,-1200,-1200,-1200,
+     -1200,-1200,-1200,-1200,-1200,-1200,-1200,-1200,-1200,
+     -1200,-1200,-1200,-1200,-1200,-1200,-1200,-1200,-1200,
+     -1200,-1200,-1200,-1200,-1200,-1200,-1200,-1200},
   0,
 };
 static configprofile wc;
@@ -215,10 +216,10 @@ int seekable=0;
 #define D_Y 2
 #define D_X 70
 
-#define T_Y (6+BANDS)
+#define T_Y (7+BANDS)
 #define T_X 6
 
-#define C_Y (BANDS-CONFIG_MAX+2)
+#define C_Y (BANDS-CONFIG_MAX+3)
 #define C_X D_X
 
 form editf;
@@ -226,7 +227,7 @@ form noneditf;
 
 
 void update_N(){
-  mvaddstr(N_Y,N_X+4,"     [n] Noise Gate ");
+  mvaddstr(N_Y,N_X+4,"     [n] Noisegate ");
   if(wc.noise_p){
     attron(A_BOLD);
     addstr("ON ");
@@ -237,57 +238,126 @@ void update_N(){
 
   attrset(0);
 
+  mvaddstr(N_Y+1,N_X+4,"     [N] Edit Band ");
+  if(n_m){
+    attron(A_BOLD);
+    addstr("NARROW");
+  }else{
+    attron(A_BOLD);
+    addstr("WIDE  ");
+  }
+
+  attrset(0);
 }
 
 void dirty_the_noise(){
+  int i,j;
   noise_dirty=1;
+
+  /* really evil little hack to implement 'wideband' editing */
+  /* compare working settings to the copy stored in profile to figure out
+     what just got incremented/decremented */
+  if(!n_m){
+    for(i=0;i<BANDS;i++)
+      if(wc.noiset[i]!=configlist[configactive].noiset[i])break;
+    if(i<BANDS){
+      int del=wc.noiset[i]-configlist[configactive].noiset[i];
+      for(j=-3;j<4;j++){
+	if(i+j>=0 && i+j<BANDS){
+	  switch(j){
+	  case -3:case 3:
+	    wc.noiset[i+j]+=del*.2;
+	    break;
+	  case -2:case 2:
+	    wc.noiset[i+j]+=del*.5;
+	    break;
+	  case -1:case 1:
+	    wc.noiset[i+j]+=del*.8;
+	    break;
+	  }
+	}
+      }
+    }
+    memcpy(configlist[configactive].noiset,wc.noiset,sizeof(wc.noiset));
+    form_redraw(&editf);
+  }
 }
+
 void dirty_the_eq(){
+  int i,j;
   eq_dirty=1;
+
+  /* really evil little hack to implement 'wideband' editing */
+  /* compare working settings to the copy stored in profile to figure out
+     what just got incremented/decremented */
+  if(!eq_m){
+    for(i=0;i<BANDS;i++)
+      if(wc.eqt[i]!=configlist[configactive].eqt[i])break;
+    if(i<BANDS){
+      int del=wc.eqt[i]-configlist[configactive].eqt[i];
+      for(j=-3;j<4;j++){
+	if(i+j>=0 && i+j<BANDS){
+	  switch(j){
+	  case -3:case 3:
+	    wc.eqt[i+j]+=del*.2;
+	    break;
+	  case -2:case 2:
+	    wc.eqt[i+j]+=del*.5;
+	    break;
+	  case -1:case 1:
+	    wc.eqt[i+j]+=del*.8;
+	    break;
+	  }
+	}
+      }
+    }
+    memcpy(configlist[configactive].eqt,wc.eqt,sizeof(wc.noiset));
+    form_redraw(&editf);
+  }
 }
 
 void update_static_N(){
   int i;
-  mvaddstr(N_Y+2, N_X,"  63 ");
-  mvaddstr(N_Y+4, N_X,"  88 ");
-  mvaddstr(N_Y+6, N_X," 125 ");
-  mvaddstr(N_Y+8, N_X," 175 ");
-  mvaddstr(N_Y+10,N_X," 250 ");
-  mvaddstr(N_Y+12,N_X," 350 ");
-  mvaddstr(N_Y+14,N_X," 500 ");
-  mvaddstr(N_Y+16,N_X," 700 ");
-  mvaddstr(N_Y+18,N_X,"  1k ");
-  mvaddstr(N_Y+20,N_X,"1.4k ");
-  mvaddstr(N_Y+22,N_X,"  2k ");
-  mvaddstr(N_Y+24,N_X,"2.8k ");
-  mvaddstr(N_Y+26,N_X,"  4k ");
-  mvaddstr(N_Y+28,N_X,"5.6k ");
-  mvaddstr(N_Y+30,N_X,"  8k ");
-  mvaddstr(N_Y+32,N_X," 11k ");
-  mvaddstr(N_Y+34,N_X," 16k ");
-  mvaddstr(N_Y+36,N_X," 22k ");
+  mvaddstr(N_Y+3, N_X,"  63 ");
+  mvaddstr(N_Y+5, N_X,"  88 ");
+  mvaddstr(N_Y+7, N_X," 125 ");
+  mvaddstr(N_Y+9, N_X," 175 ");
+  mvaddstr(N_Y+11,N_X," 250 ");
+  mvaddstr(N_Y+13,N_X," 350 ");
+  mvaddstr(N_Y+15,N_X," 500 ");
+  mvaddstr(N_Y+17,N_X," 700 ");
+  mvaddstr(N_Y+19,N_X,"  1k ");
+  mvaddstr(N_Y+21,N_X,"1.4k ");
+  mvaddstr(N_Y+23,N_X,"  2k ");
+  mvaddstr(N_Y+25,N_X,"2.8k ");
+  mvaddstr(N_Y+27,N_X,"  4k ");
+  mvaddstr(N_Y+29,N_X,"5.6k ");
+  mvaddstr(N_Y+31,N_X,"  8k ");
+  mvaddstr(N_Y+33,N_X," 11k ");
+  mvaddstr(N_Y+35,N_X," 16k ");
+  mvaddstr(N_Y+37,N_X," 22k ");
 
-  mvvline(N_Y+2,N_X+9,0,BANDS);
-  mvvline(N_Y+2,N_X+20,0,BANDS);
-  mvvline(N_Y+2,N_X+31,0,BANDS);
+  mvvline(N_Y+3,N_X+9,0,BANDS);
+  mvvline(N_Y+3,N_X+20,0,BANDS);
+  mvvline(N_Y+3,N_X+31,0,BANDS);
 
-  mvhline(N_Y+1,N_X+9,0,23);
-  mvhline(N_Y+2+BANDS,N_X+9,0,23);
+  mvhline(N_Y+2,N_X+9,0,23);
+  mvhline(N_Y+3+BANDS,N_X+9,0,23);
 
-  mvaddch(N_Y+1,N_X+9,ACS_ULCORNER);
-  mvaddch(N_Y+1,N_X+31,ACS_URCORNER);
-  mvaddch(N_Y+1,N_X+20,ACS_TTEE);
-  mvaddch(N_Y+2+BANDS,N_X+9,ACS_LLCORNER);
-  mvaddch(N_Y+2+BANDS,N_X+31,ACS_LRCORNER);
+  mvaddch(N_Y+2,N_X+9,ACS_ULCORNER);
+  mvaddch(N_Y+2,N_X+31,ACS_URCORNER);
+  mvaddch(N_Y+2,N_X+20,ACS_TTEE);
+  mvaddch(N_Y+3+BANDS,N_X+9,ACS_LLCORNER);
+  mvaddch(N_Y+3+BANDS,N_X+31,ACS_LRCORNER);
 
-  mvaddstr(N_Y+2+BANDS,N_X,"       dB");
-  mvaddstr(N_Y+2+BANDS,N_X+10,"30- ");
-  mvaddstr(N_Y+2+BANDS,N_X+19," 0 ");
-  mvaddstr(N_Y+2+BANDS,N_X+27," +30");
+  mvaddstr(N_Y+3+BANDS,N_X,"       dB");
+  mvaddstr(N_Y+3+BANDS,N_X+10,"30- ");
+  mvaddstr(N_Y+3+BANDS,N_X+19," 0 ");
+  mvaddstr(N_Y+3+BANDS,N_X+27," +30");
 
   for(i=0;i<BANDS;i++)
-    field_add(&editf,FORM_DB,N_X+5,N_Y+2+i,4,&wc.noiset[i],
-	      dirty_the_noise,0,-150,0);
+    field_add(&editf,FORM_DB,N_X+5,N_Y+3+i,4,&wc.noiset[i],
+	      dirty_the_noise,0,-1500,0);
 }
 
 void update_E(){
@@ -300,51 +370,60 @@ void update_E(){
     addstr("OFF");
   }
   attrset(0);
+  mvaddstr(E_Y+1,E_X+4,"    [E] Edit Band ");
+  if(eq_m){
+    attron(A_BOLD);
+    addstr("NARROW");
+  }else{
+    attron(A_BOLD);
+    addstr("WIDE  ");
+  }
+  attrset(0);
 }
 
 void update_static_E(){
   int i;
-  mvaddstr(E_Y+2, E_X,"  63 ");
-  mvaddstr(E_Y+4, E_X,"  88 ");
-  mvaddstr(E_Y+6, E_X," 125 ");
-  mvaddstr(E_Y+8, E_X," 175 ");
-  mvaddstr(E_Y+10,E_X," 250 ");
-  mvaddstr(E_Y+12,E_X," 350 ");
-  mvaddstr(E_Y+14,E_X," 500 ");
-  mvaddstr(E_Y+16,E_X," 700 ");
-  mvaddstr(E_Y+18,E_X,"  1k ");
-  mvaddstr(E_Y+20,E_X,"1.4k ");
-  mvaddstr(E_Y+22,E_X,"  2k ");
-  mvaddstr(E_Y+24,E_X,"2.8k ");
-  mvaddstr(E_Y+26,E_X,"  4k ");
-  mvaddstr(E_Y+28,E_X,"5.6k ");
-  mvaddstr(E_Y+30,E_X,"  8k ");
-  mvaddstr(E_Y+32,E_X," 11k ");
-  mvaddstr(E_Y+34,E_X," 16k ");
-  mvaddstr(E_Y+36,E_X," 22k ");
+  mvaddstr(E_Y+3, E_X,"  63 ");
+  mvaddstr(E_Y+5, E_X,"  88 ");
+  mvaddstr(E_Y+7, E_X," 125 ");
+  mvaddstr(E_Y+9, E_X," 175 ");
+  mvaddstr(E_Y+11,E_X," 250 ");
+  mvaddstr(E_Y+13,E_X," 350 ");
+  mvaddstr(E_Y+15,E_X," 500 ");
+  mvaddstr(E_Y+17,E_X," 700 ");
+  mvaddstr(E_Y+19,E_X,"  1k ");
+  mvaddstr(E_Y+21,E_X,"1.4k ");
+  mvaddstr(E_Y+23,E_X,"  2k ");
+  mvaddstr(E_Y+25,E_X,"2.8k ");
+  mvaddstr(E_Y+27,E_X,"  4k ");
+  mvaddstr(E_Y+29,E_X,"5.6k ");
+  mvaddstr(E_Y+31,E_X,"  8k ");
+  mvaddstr(E_Y+33,E_X," 11k ");
+  mvaddstr(E_Y+35,E_X," 16k ");
+  mvaddstr(E_Y+37,E_X," 22k ");
 
-  mvvline(E_Y+2,E_X+8,0,BANDS);
-  mvvline(E_Y+2,E_X+30,0,BANDS);
+  mvvline(E_Y+3,E_X+8,0,BANDS);
+  mvvline(E_Y+3,E_X+30,0,BANDS);
 
-  mvhline(E_Y+1,E_X+8,0,23);
-  mvhline(E_Y+2+BANDS,E_X+8,0,23);
+  mvhline(E_Y+2,E_X+8,0,23);
+  mvhline(E_Y+3+BANDS,E_X+8,0,23);
 
-  mvaddch(E_Y+1,E_X+8,ACS_ULCORNER);
-  mvaddch(E_Y+1,E_X+30,ACS_URCORNER);
-  mvaddch(E_Y+2+BANDS,E_X+8,ACS_LLCORNER);
-  mvaddch(E_Y+2+BANDS,E_X+30,ACS_LRCORNER);
+  mvaddch(E_Y+2,E_X+8,ACS_ULCORNER);
+  mvaddch(E_Y+2,E_X+30,ACS_URCORNER);
+  mvaddch(E_Y+3+BANDS,E_X+8,ACS_LLCORNER);
+  mvaddch(E_Y+3+BANDS,E_X+30,ACS_LRCORNER);
 
-  mvaddstr(E_Y+2+BANDS,E_X,"      dB");
-  mvaddstr(E_Y+2+BANDS,E_X+9,"30- ");
-  mvaddstr(E_Y+2+BANDS,E_X+18," 0 ");
-  mvaddstr(E_Y+2+BANDS,E_X+26," +30");
+  mvaddstr(E_Y+3+BANDS,E_X,"      dB");
+  mvaddstr(E_Y+3+BANDS,E_X+9,"30- ");
+  mvaddstr(E_Y+3+BANDS,E_X+18," 0 ");
+  mvaddstr(E_Y+3+BANDS,E_X+26," +30");
 
-  mvaddstr(E_Y+1,E_X+9,"120- ");
-  mvaddstr(E_Y+1,E_X+27," +0");
+  mvaddstr(E_Y+2,E_X+9,"120- ");
+  mvaddstr(E_Y+2,E_X+27," +0");
 
   for(i=0;i<BANDS;i++)
-    field_add(&editf,FORM_DB,E_X+5,E_Y+2+i,3,&wc.eqt[i],
-	      dirty_the_eq,0,-30,30);
+    field_add(&editf,FORM_DB,E_X+5,E_Y+3+i,3,&wc.eqt[i],
+	      dirty_the_eq,0,-300,300);
 }
 
 
@@ -474,7 +553,7 @@ void update_static_D(){
   field_add(&editf,FORM_DB,D_X+23,D_Y+1,5,&wc.dynamicatt,NULL,1,-900,+900);
   field_add(&editf,FORM_P2,D_X+23,D_Y+2,5,&wc.block_a,NULL,0,64,MAX_BLOCKSIZE);
   field_add(&editf,FORM_DB,D_X+23,D_Y+8,5,&wc.dynt,NULL,1,-300,0);
-  limit_field=field_add(&editf,FORM_DB,D_X+23,D_Y+9,5,&wc.dynms,NULL,0,0,MAX_DECAY_MS);
+  limit_field=field_add(&editf,FORM_DB,D_X+23,D_Y+9,5,&wc.dynms,NULL,0,0,MAX_DECAY_MS*10);
 
   mvaddstr(D_Y+14,D_X,"[a]             [A] Clear");
   mvaddstr(D_Y+15,D_X,"[b]             [B] Clear");
@@ -551,7 +630,7 @@ void update_static_0(){
   mvaddstr(T_Y,T_X,"[0>");
   field_add(&noneditf,FORM_TIME,T_X+3,T_Y,11,&TX[0],NULL,0,0,99999999);
   mvaddstr(T_Y,T_X+19,"[1>");
-  field_add(&noneditf,FORM_TIME,T_X+21,T_Y,11,&TX[1],NULL,0,0,99999999);
+  field_add(&noneditf,FORM_TIME,T_X+22,T_Y,11,&TX[1],NULL,0,0,99999999);
   mvaddstr(T_Y,T_X+38,"[2>");
   field_add(&noneditf,FORM_TIME,T_X+41,T_Y,11,&TX[2],NULL,0,0,99999999);
   mvaddstr(T_Y,T_X+57,"[3>");
@@ -562,7 +641,7 @@ void update_static_0(){
   mvaddstr(T_Y+1,T_X,"[5>");
   field_add(&noneditf,FORM_TIME,T_X+3,T_Y+1,11,&TX[5],NULL,0,0,99999999);
   mvaddstr(T_Y+1,T_X+19,"[6>");
-  field_add(&noneditf,FORM_TIME,T_X+21,T_Y+1,11,&TX[6],NULL,0,0,99999999);
+  field_add(&noneditf,FORM_TIME,T_X+22,T_Y+1,11,&TX[6],NULL,0,0,99999999);
   mvaddstr(T_Y+1,T_X+38,"[7>");
   field_add(&noneditf,FORM_TIME,T_X+41,T_Y+1,11,&TX[7],NULL,0,0,99999999);
   mvaddstr(T_Y+1,T_X+57,"[8>");
@@ -590,13 +669,13 @@ void update_ui(){
 
   for(i=0;i<BANDS;i++){
     int valM,valA,valT;
-    valT=rint(wc.eqt[i]/3.+10);
+    valT=rint(wc.eqt[i]/30.+10);
     pthread_mutex_lock(&master_mutex);
     valM=rint(todB(eqt_feedbackmax[i])/5.7142857+21);
     valA=rint(todB(eqt_feedbackav[i]/eqt_feedbackcount[i])/5.7142857+21);
     pthread_mutex_unlock(&master_mutex);
 
-    move(E_Y+2+i,E_X+9);
+    move(E_Y+3+i,E_X+9);
     for(j=0;j<valA && j<21;j++){
       if(j==valT)
 	addch(ACS_VLINE);
@@ -656,7 +735,7 @@ void update_play(){
     }
     pthread_mutex_unlock(&master_mutex);
 
-    move(N_Y+2+i,N_X+10);
+    move(N_Y+3+i,N_X+10);
     for(j=0;j<valA && j<=21;j++){
       if(j==21)
 	addch('+');
@@ -837,7 +916,7 @@ void dynamic_limit(double **b){
     double thresh=fromdB(wc.dynt*.1);
     double y=0;
     double d=0;
-    long ms=wc.dynms;
+    long ms=wc.dynms/10;
     pthread_mutex_unlock(&master_mutex);
     
     for(j=0;j<ch;j++)
@@ -926,7 +1005,7 @@ void refresh_thresh_array(double *t,long *set){
     oc[i]=rint(hoc);
 
     dhoc=sin(dhoc*M_PI/2)*sin(dhoc*M_PI/2);
-    dB=set[ihoc]*(1.-dhoc)+set[ihoc+1]*dhoc;
+    dB=(set[ihoc]/10)*(1.-dhoc)+(set[ihoc+1]/10)*dhoc;
 
     t[i]=fromdB(dB);
   }
@@ -1487,6 +1566,8 @@ void save_settings(int fd){
     
     fprintf(f,"A:%ld\n",A);
     fprintf(f,"B:%ld\n",B);
+    fprintf(f,"NM:%ld\n",n_m);
+    fprintf(f,"EQM:%ld\n",eq_m);
     for(i=0;i<10;i++)
       fprintf(f,"TIME_%d:%ld\n",i,TX[i]);
   
@@ -1564,6 +1645,8 @@ void load_settings(int fd){
       
     }
 
+    confparse_ld(buffer,"NM",&n_m);
+    confparse_ld(buffer,"EQM",&eq_m);
     confparse_ld(buffer,"A",&A);
     confparse_ld(buffer,"B",&B);
 
@@ -1791,7 +1874,7 @@ int main(int argc, char **argv){
   aseek(0);
 
   {
-    int ysize=10+BANDS;
+    int ysize=11+BANDS;
     int xsize=104;
 
     initscr(); cbreak(); noecho();
@@ -1814,7 +1897,7 @@ int main(int argc, char **argv){
     form_init(&editf,120,1);
     form_init(&noneditf,50,0);
     box(stdscr,0,0);
-    mvaddstr(0, 2, " Postfish Filter $Id: postfish.c,v 1.3 2002/12/01 06:30:17 xiphmont Exp $ ");
+    mvaddstr(0, 2, " Postfish Filter $Id: postfish.c,v 1.4 2002/12/01 08:34:40 xiphmont Exp $ ");
     mvaddstr(LINES-1, 2, 
 	     "  [<]<<   [,]<   [Spc] Play/Pause   [Bksp] Stop/Cue   [.]>   [>]>>  ");
 
@@ -1843,6 +1926,14 @@ int main(int argc, char **argv){
       int c=form_handle_char(&editf,pgetch());
       if(c=='q')break;
       switch(c){
+      case 'N':
+	n_m=!n_m;
+	update_N();
+	break;
+      case 'E':
+	eq_m=!eq_m;
+	update_E();
+	break;
       case '<':
 	pthread_mutex_lock(&master_mutex);
 	aseek(cursor-rate*ch*inbytes*60);

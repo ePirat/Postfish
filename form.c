@@ -197,14 +197,14 @@ void draw_field(formfield *f){
       if(focus)cursor_active=0;
     }
     break;
-  default:
+  case FORM_DB:
     {
       char buf[80];
       if(f->active){
-	if(f->dpoint)
+	if(f->dpoint==1)
 	  snprintf(buf,80,"%+*.1f",f->width,lval*.1);
 	else
-	  snprintf(buf,80,"%+*ld",f->width,lval);
+	  snprintf(buf,80,"%+*ld",f->width,(long)(lval*.1));
 	addstr(buf);
       }else
 	for(i=0;i<f->width;i++)addch('-');
@@ -240,7 +240,7 @@ formfield *field_add(form *f,enum field_type type,int x,int y,int width,
   f->fields[n].width=width;
   f->fields[n].var=var;
   f->fields[n].cb=cb;
-  f->fields[n].dpoint=d;
+  f->fields[n].dpoint=(d?1:10);
   f->fields[n].active=1;
 
   f->fields[n].min=min;
@@ -435,22 +435,22 @@ int form_handle_char(form *f,int c){
 	long *val=(long *)ff->var;
 	switch(c){
 	case '=':
-	  (*val)++;
+	  (*val)+=ff->dpoint;
 	  if(*val>ff->max)*val=ff->max;
 	  if(ff->cb)ff->cb();
 	  break;
 	case '+':
-	  (*val)+=10;
+	  (*val)+=ff->dpoint*10;
 	  if(*val>ff->max)*val=ff->max;
 	  if(ff->cb)ff->cb();
 	  break;
 	case '-':
-	  (*val)--;
+	  (*val)-=ff->dpoint;
 	  if(*val<ff->min)*val=ff->min;
 	  if(ff->cb)ff->cb();
 	  break;
 	case '_':
-	  (*val)-=10;
+	  (*val)-=ff->dpoint*10;
 	  if(*val<ff->min)*val=ff->min;
 	  if(ff->cb)ff->cb();
 	  break;

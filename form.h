@@ -51,6 +51,7 @@ typedef struct form {
   int editable;
 } form;
 
+extern int pgetch(void);
 extern void form_init(form *f,int maxstorage,int editable);
 extern void form_clear(form *f);
 extern void draw_field(formfield *f);
