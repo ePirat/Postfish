@@ -37,6 +37,7 @@ extern int input_size;
 extern int input_rate;
 
 extern multicompand_settings multi_master_set;
+extern multicompand_settings *multi_channel_set;
 
 typedef struct {
   GtkWidget *label;
@@ -490,9 +491,8 @@ static void mode_knee(GtkToggleButton *b,gpointer in){
 }
 
 static void compandpanel_create(postfish_mainpanel *mp,
-				multicompand_settings *ms,
-				GtkWidget *windowbutton,
-				GtkWidget *activebutton){
+				subpanel_generic *panel,
+				multicompand_settings *ms){
   int i;
   char *labels[14]={"130","120","110","100","90","80","70",
 		    "60","50","40","30","20","10","0"};
@@ -507,14 +507,6 @@ static void compandpanel_create(postfish_mainpanel *mp,
 
   float per_levels[9]={0,12.5,25,37.5,50,62.5,75,87.5,100};
   char  *per_labels[8]={"","25%","","50%","","75%","","100%"};
-
-  char *shortcut[]={" m "};
-
-  subpanel_generic *panel=subpanel_create(mp,windowbutton,&activebutton,
-					  &ms->panel_active,
-					  &ms->panel_visible,
-					  "_Multiband Compand",shortcut,
-					  0,1);
 
   multi_panel_state *ps=master_panel=calloc(1,sizeof(multi_panel_state));
   ps->inactive_updatep=1;
@@ -945,8 +937,35 @@ static void compandpanel_create(postfish_mainpanel *mp,
 void compandpanel_create_master(postfish_mainpanel *mp,
 				GtkWidget *windowbutton,
 				GtkWidget *activebutton){
-  
-  compandpanel_create(mp,&multi_master_set,windowbutton,activebutton);
+  char *shortcut[]={" m "};
+  subpanel_generic *panel=subpanel_create(mp,windowbutton,&activebutton,
+					  &multi_master_set.panel_active,
+					  &multi_master_set.panel_visible,
+					  "_Multiband Compand (master)",shortcut,
+					  0,1);
+
+  compandpanel_create(mp,panel,&multi_master_set);
+}
+
+void compandpanel_create_channel(postfish_mainpanel *mp,
+				 GtkWidget **windowbutton,
+				 GtkWidget **activebutton){
+  int i;
+
+  /* a panel for each channel */
+  for(i=0;i<input_ch;i++){
+    subpanel_generic *panel;
+    char buffer[80];
+
+    sprintf(buffer,"_Multiband Compand (channel %d)",i+1);
+    panel=subpanel_create(mp,windowbutton[i],activebutton+i,
+			  &multi_channel_set[i].panel_active,
+			  &multi_channel_set[i].panel_visible,
+			  buffer,NULL,
+			  i,1);
+    
+    compandpanel_create(mp,panel,multi_channel_set+1);
+  }
 }
 
 

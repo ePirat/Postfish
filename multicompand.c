@@ -74,6 +74,8 @@ typedef struct {
 } multicompand_state;
 
 multicompand_settings multi_master_set;
+multicompand_settings *multi_channel_set;
+
 static multicompand_state ms;
 
 static feedback_generic *new_multicompand_feedback(void){
@@ -140,6 +142,8 @@ int multicompand_load(void){
   int h,i;
   int qblocksize=input_size/8;
   memset(&ms,0,sizeof(ms));
+
+  multi_channel_set=calloc(input_ch,sizeof(*multi_channel_set));
 
   subband_load(&ms.ss,multicomp_freqs_max,qblocksize);
 
