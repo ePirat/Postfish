@@ -456,7 +456,7 @@ static void suppress(float *peak, float *rms, float *gain,
   /* (since this one is kinda unique) The Suppressor....
 
      Reverberation in a measurably live environment displays
-     log-amplitute decay with time (linear decay when plotted on a dB
+     log amplitude decay with time (linear decay when plotted on a dB
      scale).
 
      In its simplest form, the suppressor follows actual {RMS|peak}
@@ -465,7 +465,7 @@ static void suppress(float *peak, float *rms, float *gain,
      decay.
 
      The 'depth' setting is used to limit the expanded distance
-     between actual and slow decy; it's also used to drag the slow
+     between actual and slow decay; it's also used to drag the slow
      decay down with the actual decay once the expansion has hit the
      depth limit.
 
@@ -474,7 +474,7 @@ static void suppress(float *peak, float *rms, float *gain,
 
   int ii;
   float *envelope; 
-  float ratio=1.+c.suppress_ratio/1000.;
+  float ratio=c.suppress_ratio/100.;
   float decay=c.suppress_decay/(float)(1024*1024);
   float depth=-c.suppress_depth/10.;
   float chase=e->suppress_decay_chase;
