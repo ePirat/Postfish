@@ -3,20 +3,40 @@
 static GtkFrameClass *parent_class = NULL;
 
 static void readout_class_init (ReadoutClass *class){
+  GtkWidgetClass *widget_class = (GtkWidgetClass*) class;
   parent_class = g_type_class_peek_parent (class);
+
 }
 
 static void readout_init (Readout *r){
   GtkWidget *widget=GTK_WIDGET(r);
+  GtkWidget *notebook=gtk_notebook_new();
+  GtkWidget *box=gtk_event_box_new();
+  
+  gtk_notebook_popup_disable(GTK_NOTEBOOK(notebook));
+  gtk_notebook_set_show_tabs(GTK_NOTEBOOK(notebook),FALSE);
+  gtk_notebook_set_show_border(GTK_NOTEBOOK(notebook),FALSE);
+  gtk_notebook_set_scrollable(GTK_NOTEBOOK(notebook),FALSE);
 
-  r->box=gtk_event_box_new();
+  r->sizelabel=gtk_label_new(NULL);
   r->label=gtk_label_new(NULL);
-  gtk_container_add(GTK_CONTAINER(widget),r->box);
-  gtk_container_add(GTK_CONTAINER(r->box),r->label);
+  gtk_container_add(GTK_CONTAINER(box),r->label);
+  
+  gtk_container_add(GTK_CONTAINER(widget),notebook);
+  gtk_notebook_append_page(GTK_NOTEBOOK(notebook),box,NULL);
+  gtk_notebook_append_page(GTK_NOTEBOOK(notebook),r->sizelabel,NULL);
+
   gtk_misc_set_alignment(GTK_MISC(r->label),1.0,.5);
-  gtk_misc_set_padding(GTK_MISC(r->label),4,0);
-  gtk_widget_show(r->box);
+  gtk_misc_set_padding(GTK_MISC(r->label),4,3);
+  gtk_misc_set_padding(GTK_MISC(r->sizelabel),4,3);
+
+  gtk_notebook_set_current_page(GTK_NOTEBOOK(notebook),0);
+
+  gtk_widget_show(notebook);
+  gtk_widget_show(box);
   gtk_widget_show(r->label);
+  gtk_widget_show(r->sizelabel);
+
 }
 
 GType readout_get_type (void){
@@ -45,6 +65,7 @@ GtkWidget* readout_new (char *markup){
   GtkWidget *ret= GTK_WIDGET (g_object_new (readout_get_type (), NULL));
   Readout *r=READOUT(ret);
 
+  gtk_label_set_markup(GTK_LABEL(r->sizelabel),markup);
   readout_set(r,markup);
   return ret;
 }

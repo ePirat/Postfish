@@ -238,9 +238,7 @@ static void size_request (GtkWidget *widget,GtkRequisition *requisition){
 static GtkDrawingAreaClass *parent_class = NULL;
 
 static void multibar_class_init (MultibarClass *class){
-  GtkWidgetClass *widget_class;
-  widget_class = (GtkWidgetClass*) class;
-
+  GtkWidgetClass *widget_class = (GtkWidgetClass*) class;
   parent_class = g_type_class_peek_parent (class);
 
   widget_class->expose_event = expose;
