@@ -21,10 +21,11 @@
  * 
  */
 
-#include "libpostfish.h"
+#include "internal.h"
 
-struct postfish_instance {
-  int rate;
-  int blocksize;
-  float ***window_func;
-};
+void postfish_instance_init(postfish_instance *p, int samplerate, int blocksize){
+  memset(p,0,sizeof(*p));
+  p->rate=samplerate;
+  p->blocksize=blocksize;
+
+}
