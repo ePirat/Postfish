@@ -56,7 +56,7 @@ typedef struct {
 static void trigger_slider_change(GtkWidget *w,gpointer in){
   char buffer[80];
   clipslider *p=(clipslider *)in;
-  gdouble linear=gtk_range_get_value(GTK_RANGE(p->slider));
+  gdouble linear=gtk_range_get_value(GTK_RANGE(p->slider))*.01;
   
   sprintf(buffer,"%1.2f",linear);
   readout_set(READOUT(p->readout),buffer);
@@ -257,7 +257,7 @@ void clippanel_create(postfish_mainpanel *mp,
     char buffer[80];
     clipslider *cs=calloc(1,sizeof(*cs));
     GtkWidget *label;
-    GtkWidget *slider=gtk_hscale_new_with_range(.01,1.,.01);
+    GtkWidget *slider=gtk_hscale_new_with_range(1,100,1);
     GtkWidget *readout=readout_new("0.00");
     GtkWidget *readoutdB=readout_new("-40 dB");
     GtkWidget *barframe=gtk_frame_new(NULL);
@@ -272,7 +272,7 @@ void clippanel_create(postfish_mainpanel *mp,
     gtk_widget_set_size_request (slider,200,-1);
     gtk_widget_set_name(bar,"clipbar");
     gtk_scale_set_draw_value(GTK_SCALE(slider),FALSE);
-    gtk_range_set_value(GTK_RANGE(slider),1.);
+    gtk_range_set_value(GTK_RANGE(slider),100.);
     gtk_frame_set_shadow_type(GTK_FRAME(barframe),GTK_SHADOW_ETCHED_IN);
 
     switch(input_ch){
