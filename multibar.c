@@ -57,7 +57,7 @@ static float compute_dampening(float width, float target,float current,float del
 
 
 /* call me roughly 10-20fps */
-static void compute(Multibar *m,float *lowvals, float *highvals, int n){
+static void compute(Multibar *m,float *lowvals, float *highvals, int n, int draw){
   int i,j,xpad;
   GtkWidget *widget=GTK_WIDGET(m);
   float max=-400;
@@ -117,7 +117,7 @@ static void compute(Multibar *m,float *lowvals, float *highvals, int n){
       m->peakdelta=0;
     }
     
-    {
+    if(draw){
       int *pixhi=alloca(n*sizeof(*pixhi));
       int *pixlo=alloca(n*sizeof(*pixlo));
       
@@ -179,7 +179,6 @@ static void compute(Multibar *m,float *lowvals, float *highvals, int n){
 	m->bartrackers[i].pixeldeltalo=dello;
 	
       }
-      
     }
   }
 }
@@ -779,7 +778,7 @@ static gboolean configure(GtkWidget *widget, GdkEventConfigure *event){
   gdk_draw_rectangle(m->backing,widget->style->white_gc,1,0,0,widget->allocation.width,
 		     widget->allocation.height);
   
-  compute(m,0,0,0);
+  compute(m,0,0,0,1);
   for(i=0;i<m->thumbs;i++)
     m->thumbpixel[i]=val_to_pixel(m,m->thumbval[i]);
   m->thumblo_x=val_to_pixel(m,m->thumblo);
@@ -1129,8 +1128,7 @@ GtkWidget* multibar_slider_new (int n, char **labels, float *levels,
 
 void multibar_set(Multibar *m,float *lo, float *hi, int n, int draw){
   GtkWidget *widget=GTK_WIDGET(m);
-  compute(m,lo,hi,n);
-
+  compute(m,lo,hi,n,draw);
   if(draw)draw_and_expose(widget);
 }
 
