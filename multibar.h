@@ -87,8 +87,10 @@ struct _Multibar{
   int    prev_thumbfocus;
   int    thumbgrab;
   int    thumbx;
-  double    thumblo;
-  double    thumbhi;
+  double thumblo;
+  double thumbhi;
+  double thumbsmall;
+  double thumblarge;
 
   int    thumblo_x;
   int    thumbhi_x;
@@ -122,6 +124,7 @@ void           multibar_callback        (Multibar *m,
 					 gpointer);
 double multibar_get_value(Multibar *m,int n);
 void multibar_thumb_bounds(Multibar *m,double lo, double hi);
+void multibar_thumb_increment(Multibar *m,double small, double large);
 
 G_END_DECLS
 

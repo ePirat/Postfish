@@ -57,9 +57,9 @@ static double compute_dampening(double width, double target,double current,doubl
 
 
 /* call me roughly 10-20fps */
-static void compute(GtkWidget *widget,double *lowvals, double *highvals, int n){
+static void compute(Multibar *m,double *lowvals, double *highvals, int n){
   int i,j,xpad;
-  Multibar *m=MULTIBAR(widget);
+  GtkWidget *widget=GTK_WIDGET(m);
   double max=-400;
   int height=widget->allocation.height;
   int width=widget->allocation.width;
@@ -355,7 +355,7 @@ static void draw(GtkWidget *widget,int n){
   }
 
   for(i=0;i<m->labels+1;i++){
-    int x=rint(((double)i)/m->labels*(widget->allocation.width-xpad*2))+xpad);
+    int x=rint(((double)i)/m->labels*(widget->allocation.width-xpad*2))+xpad;
     int y=widget->allocation.height-lpad-upad;
     int px,py;
     int gc=0;
@@ -686,8 +686,8 @@ static gboolean multibar_focus (GtkWidget         *widget,
   return ret;
 }
 
-static gint determine_thumb(GtkWidget *widget,int ix, int iy){
-  Multibar *m=MULTIBAR(widget);
+static gint determine_thumb(Multibar *m,int ix, int iy){
+  GtkWidget *widget=GTK_WIDGET(m);
   int height=widget->allocation.height;
   double distances[3]={-1,-1,-1};
   int thumb=-1;
@@ -725,16 +725,16 @@ static gint determine_thumb(GtkWidget *widget,int ix, int iy){
   return thumb;
 }
 
-static int pixel_bound(GtkWidget *w,int x){
-  Multibar *m=MULTIBAR(w);
+static int pixel_bound(Multibar *m,int x){
+  GtkWidget *w=GTK_WIDGET(m);
   if(x<0)return 0;
   if(x>w->allocation.width-m->xpad*2)
     return w->allocation.width-m->xpad*2;
   return x;
 }
 
-static double pixel_to_val(GtkWidget *w,int x){
-  Multibar *m=MULTIBAR(w);
+static double pixel_to_val(Multibar *m,int x){
+  GtkWidget *w=GTK_WIDGET(m);
   int j;
 
   for(j=0;j<=m->labels;j++){
@@ -750,8 +750,8 @@ static double pixel_to_val(GtkWidget *w,int x){
   return 0.;
 }
 
-static int val_to_pixel(GtkWidget *w,double v){
-  Multibar *m=MULTIBAR(w);
+static int val_to_pixel(Multibar *m,double v){
+  GtkWidget *w=GTK_WIDGET(m);
   int j,ret=0;
 
   if(v<m->levels[0]){
@@ -770,7 +770,7 @@ static int val_to_pixel(GtkWidget *w,double v){
     }
   }
 
-  ret=pixel_bound(w,ret);
+  ret=pixel_bound(m,ret);
   return ret;
 }
 
@@ -788,11 +788,11 @@ static gboolean configure(GtkWidget *widget, GdkEventConfigure *event){
   gdk_draw_rectangle(m->backing,widget->style->white_gc,1,0,0,widget->allocation.width,
 		     widget->allocation.height);
   
-  compute(widget,0,0,0);
+  compute(m,0,0,0);
   for(i=0;i<m->thumbs;i++)
-    m->thumbpixel[i]=val_to_pixel(widget,m->thumbval[i]);
-  m->thumblo_x=val_to_pixel(widget,m->thumblo);
-  m->thumbhi_x=val_to_pixel(widget,m->thumbhi);
+    m->thumbpixel[i]=val_to_pixel(m,m->thumbval[i]);
+  m->thumblo_x=val_to_pixel(m,m->thumblo);
+  m->thumbhi_x=val_to_pixel(m,m->thumbhi);
 
   draw_and_expose(widget);
 
@@ -801,16 +801,55 @@ static gboolean configure(GtkWidget *widget, GdkEventConfigure *event){
 
 static void vals_bound(Multibar *m){
   int i;
+
+  if(m->thumbsmall>0 && m->thumblarge>0)
+    for(i=0;i<m->thumbs;i++)
+      m->thumbval[i]=rint(m->thumbval[i]/m->thumbsmall)*m->thumbsmall;
+
   for(i=0;i<m->thumbs;i++){
-    if(m->thumbval[i]<m->thumblo){
-      m->thumbval[i]=m->thumblo;
-      m->thumbpixel[i]=val_to_pixel(GTK_WIDGET(m),m->thumblo);
+    if(m->thumbval[i]<m->thumblo)m->thumbval[i]=m->thumblo;
+    if(m->thumbval[i]>m->thumbhi)m->thumbval[i]=m->thumbhi;
+    m->thumbpixel[i]=val_to_pixel(m,m->thumbval[i]);
+  }
+
+  if(m->thumbfocus>=0){
+    double v=m->thumbval[m->thumbfocus];
+    int    x=m->thumbpixel[m->thumbfocus];
+    
+    if(m->thumbfocus==2){
+      if(m->thumbpixel[1]>x){
+	m->thumbpixel[1]=x;
+	m->thumbval[1]=v;
+      }
+      if(m->thumbpixel[0]>x){
+	m->thumbpixel[0]=x;
+	m->thumbval[0]=v;
+      }
     }
-    if(m->thumbval[i]>m->thumbhi){
-      m->thumbval[i]=m->thumbhi;
-      m->thumbpixel[i]=val_to_pixel(GTK_WIDGET(m),m->thumbhi);
+    
+    if(m->thumbfocus==1){
+      if(m->thumbpixel[2]<x){
+	m->thumbpixel[2]=x;
+	m->thumbval[2]=v;
+      }
+      if(m->thumbpixel[0]>x){
+	m->thumbpixel[0]=x;
+	m->thumbval[0]=v;
+      }
+    }
+    
+    if(m->thumbfocus==0){
+      if(m->thumbpixel[2]<x){
+	m->thumbpixel[2]=x;
+	m->thumbval[2]=v;
+      }
+      if(m->thumbpixel[1]<x){
+	m->thumbpixel[1]=x;
+	m->thumbval[1]=v;
+      }
     }
   }
+
 }
 
 static gint multibar_motion(GtkWidget        *w,
@@ -823,51 +862,18 @@ static gint multibar_motion(GtkWidget        *w,
     int x=event->x+m->thumbx;
     double v;
 
-    x=pixel_bound(w,x);
-    m->thumbval[m->thumbgrab]=pixel_to_val(w,x);
+    x=pixel_bound(m,x);
+    m->thumbval[m->thumbgrab]=pixel_to_val(m,x);
     vals_bound(m);
     v=m->thumbval[m->thumbgrab];
-    x=m->thumbpixel[m->thumbgrab]=val_to_pixel(w,v);
-
-    if(m->thumbgrab==2){
-      if(m->thumbpixel[1]>x){
-	m->thumbpixel[1]=x;
-	m->thumbval[1]=v;
-      }
-      if(m->thumbpixel[0]>x){
-	m->thumbpixel[0]=x;
-	m->thumbval[0]=v;
-      }
-    }
-
-    if(m->thumbgrab==1){
-      if(m->thumbpixel[2]<x){
-	m->thumbpixel[2]=x;
-	m->thumbval[2]=v;
-      }
-      if(m->thumbpixel[0]>x){
-	m->thumbpixel[0]=x;
-	m->thumbval[0]=v;
-      }
-    }
-
-    if(m->thumbgrab==0){
-      if(m->thumbpixel[2]<x){
-	m->thumbpixel[2]=x;
-	m->thumbval[2]=v;
-      }
-      if(m->thumbpixel[1]<x){
-	m->thumbpixel[1]=x;
-	m->thumbval[1]=v;
-      }
-    }
+    x=m->thumbpixel[m->thumbgrab]=val_to_pixel(m,v);
 
     if(m->callback)m->callback(GTK_WIDGET(m),m->callbackp);
     draw_and_expose(w);
 
   }else{
     /* nothing grabbed right now; determine if we're in a a thumb's area */
-    int thumb=determine_thumb(w,event->x-m->xpad,event->y);
+    int thumb=determine_thumb(m,event->x-m->xpad,event->y);
     GtkStateType thumbstate[3];
     thumbstate[0]=GTK_STATE_NORMAL;
     thumbstate[1]=GTK_STATE_NORMAL;
@@ -957,27 +963,59 @@ gboolean key_press(GtkWidget *w,GdkEventKey *event){
   if(event->state&GDK_CONTROL_MASK) return FALSE;
 
   if(m->thumbfocus>=0){
-    switch(event->keyval){
-    case GDK_minus:
-      x=m->thumbpixel[m->thumbfocus]-1;
-      break;
-    case GDK_underscore:
-      x=m->thumbpixel[m->thumbfocus]-10;
-      break;
-    case GDK_equal:
-      x=m->thumbpixel[m->thumbfocus]+1;
-      break;
-    case GDK_plus:
-      x=m->thumbpixel[m->thumbfocus]+10;
-      break;
-    default:
-      return FALSE;
+    if(m->thumbsmall>0 && m->thumblarge>0){
+
+      switch(event->keyval){
+      case GDK_minus:
+	m->thumbval[m->thumbfocus]-=m->thumbsmall;
+	break;
+      case GDK_underscore:
+	m->thumbval[m->thumbfocus]-=m->thumblarge;
+	break;
+      case GDK_equal:
+	m->thumbval[m->thumbfocus]+=m->thumbsmall;
+	break;
+      case GDK_plus:
+	m->thumbval[m->thumbfocus]+=m->thumblarge;
+	break;
+      default:
+	return FALSE;
+      }
+
+      vals_bound(m);
+      x=val_to_pixel(m,m->thumbval[m->thumbfocus]);
+      x=pixel_bound(m,x);
+      m->thumbpixel[m->thumbfocus]=x;
+
+    }else{
+
+      switch(event->keyval){
+      case GDK_minus:
+	x=m->thumbpixel[m->thumbfocus]-1;
+	break;
+      case GDK_underscore:
+	x=m->thumbpixel[m->thumbfocus]-10;
+	break;
+      case GDK_equal:
+	x=m->thumbpixel[m->thumbfocus]+1;
+	break;
+      case GDK_plus:
+	x=m->thumbpixel[m->thumbfocus]+10;
+	break;
+      default:
+	return FALSE;
+      }
+
+      x=pixel_bound(m,x);
+      m->thumbpixel[m->thumbfocus]=x;
+      m->thumbval[m->thumbfocus]=pixel_to_val(m,x);
+      vals_bound(m);
+
     }
 
-    x=pixel_bound(w,x);
-    m->thumbpixel[m->thumbfocus]=x;
-    m->thumbval[m->thumbfocus]=pixel_to_val(w,x);
-    vals_bound(m);
+
+
+
     if(m->callback)m->callback(GTK_WIDGET(m),m->callbackp);
 
     draw_and_expose(w);
@@ -1059,8 +1097,8 @@ GtkWidget* multibar_new (int n, char **labels, double *levels, int thumbs,
   m->thumbgrab=-1;
   m->thumblo=levels[0];
   m->thumbhi=levels[n];
-  m->thumblo_x=val_to_pixel(ret,m->thumblo);
-  m->thumbhi_x=val_to_pixel(ret,m->thumbhi);
+  m->thumblo_x=val_to_pixel(m,m->thumblo);
+  m->thumbhi_x=val_to_pixel(m,m->thumbhi);
 
   if(thumbs<0)thumbs=0;
   if(thumbs>3)thumbs=3;
@@ -1097,18 +1135,22 @@ GtkWidget* multibar_slider_new (int n, char **labels, double *levels,
 
 void multibar_set(Multibar *m,double *lo, double *hi, int n){
   GtkWidget *widget=GTK_WIDGET(m);
-  compute(widget,lo,hi,n);
+  compute(m,lo,hi,n);
   draw_and_expose(widget);
 }
 
 void multibar_thumb_set(Multibar *m,double v, int n){
   GtkWidget *w=GTK_WIDGET(m);
+  int x;
 
   if(n<0)return;
   if(n>=m->thumbs)return;
 
   {
-    int x=m->thumbpixel[n]=val_to_pixel(w,v);
+    m->thumbval[n]=v;
+    vals_bound(m);
+    v=m->thumbval[n];
+    x=m->thumbpixel[n]=val_to_pixel(m,v);
     m->thumbval[n]=v;
   
     if(n==0){
@@ -1191,8 +1233,20 @@ void multibar_thumb_bounds(Multibar *m,double lo, double hi){
   m->thumblo=lo;
   m->thumbhi=hi;
 
-  m->thumblo_x=val_to_pixel(w,lo);
-  m->thumbhi_x=val_to_pixel(w,hi);
+  m->thumblo_x=val_to_pixel(m,lo);
+  m->thumbhi_x=val_to_pixel(m,hi);
+
+  vals_bound(m);
+  if(m->callback)m->callback(GTK_WIDGET(m),m->callbackp);
+  draw_and_expose(w);
+}
+
+void multibar_thumb_increment(Multibar *m,double small, double large){
+  GtkWidget *w=GTK_WIDGET(m);
+  if(small>large)return;
+
+  m->thumbsmall=small;
+  m->thumblarge=large;
 
   vals_bound(m);
   if(m->callback)m->callback(GTK_WIDGET(m),m->callbackp);

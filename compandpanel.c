@@ -31,6 +31,7 @@
 #include "feedback.h"
 #include "freq.h"
 #include "compand.h"
+#include "compandpanel.h"
 
 extern sig_atomic_t compand_active;
 extern sig_atomic_t compand_visible;
@@ -53,18 +54,18 @@ static void slider_change(GtkWidget *w,gpointer in){
   cbar *b=(cbar *)in;
 
   gdouble val=multibar_get_value(MULTIBAR(b->slider),0);
-  sprintf(buffer,"%+5.1f dB",val);
+  sprintf(buffer,"%+4.0f dB",val);
   readout_set(READOUT(b->readoutg),buffer);
   compand_g_set(b->number,val);
   
   val=multibar_get_value(MULTIBAR(b->slider),1);
-  sprintf(buffer,"%+5.1f dB",val);
+  sprintf(buffer,"%+4.0f dB",val);
   readout_set(READOUT(b->readoute),buffer);
   compand_e_set(b->number,val);
 
   val=multibar_get_value(MULTIBAR(b->slider),2);
-  sprintf(buffer,"%+5.1f dB",val);
-  readout_set(READOUT(b->readoute),buffer);
+  sprintf(buffer,"%+4.0f dB",val);
+  readout_set(READOUT(b->readoutc),buffer);
   compand_c_set(b->number,val);
 
 }
@@ -91,9 +92,9 @@ void compandpanel_create(postfish_mainpanel *mp,
     GtkWidget *label=gtk_label_new(labeltext);
     gtk_widget_set_name(label,"smallmarker");
 
-    bars[i].readoutg=readout_new("+000 dB");
-    bars[i].readoute=readout_new("+000 dB");
-    bars[i].readoutc=readout_new("+000 dB");
+    bars[i].readoutg=readout_new("  +0 dB");
+    bars[i].readoute=readout_new("  +0 dB");
+    bars[i].readoutc=readout_new("  +0 dB");
     bars[i].slider=multibar_new(14,labels,levels,3,
 				LO_DECAY|HI_DECAY|LO_ATTACK|HI_ATTACK);
     bars[i].number=i;
@@ -103,16 +104,17 @@ void compandpanel_create(postfish_mainpanel *mp,
     multibar_thumb_set(MULTIBAR(bars[i].slider),-140.,1);
     multibar_thumb_set(MULTIBAR(bars[i].slider),0.,2);
     multibar_thumb_bounds(MULTIBAR(bars[i].slider),-140,0);
+    multibar_thumb_increment(MULTIBAR(bars[i].slider),1.,10.);
 
     gtk_misc_set_alignment(GTK_MISC(label),1,.5);
 
     gtk_table_attach(GTK_TABLE(slidertable),label,0,1,i,i+1,
 		     GTK_FILL,0,10,0);
-    gtk_table_attach(GTK_TABLE(slidertable),bars[i].readout,2,3,i,i+1,
+    gtk_table_attach(GTK_TABLE(slidertable),bars[i].readoutg,2,3,i,i+1,
 		     GTK_FILL,0,0,0);
-    gtk_table_attach(GTK_TABLE(slidertable),bars[i].readout,3,4,i,i+1,
+    gtk_table_attach(GTK_TABLE(slidertable),bars[i].readoute,3,4,i,i+1,
 		     GTK_FILL,0,0,0);
-    gtk_table_attach(GTK_TABLE(slidertable),bars[i].readout,4,5,i,i+1,
+    gtk_table_attach(GTK_TABLE(slidertable),bars[i].readoutc,4,5,i,i+1,
 		     GTK_FILL,0,0,0);
     gtk_table_attach(GTK_TABLE(slidertable),bars[i].slider,1,2,i,i+1,
 		     GTK_FILL|GTK_EXPAND,GTK_FILL|GTK_EXPAND,0,0);
@@ -148,9 +150,4 @@ void compandpanel_reset(void){
   for(i=0;i<freqs;i++)
     multibar_reset(MULTIBAR(bars[i].slider));
 }
-
-
-
-
-
 

@@ -666,6 +666,7 @@ void mainpanel_create(postfish_mainpanel *panel,char **chlabels){
       panel->masterdB_s=multibar_slider_new(10,sliderlabels,sliderlevels,1);
       
       multibar_thumb_set(MULTIBAR(panel->masterdB_s),0.,0);
+      multibar_thumb_increment(MULTIBAR(panel->masterdB_s),.1,1.);
 
       gtk_misc_set_alignment(GTK_MISC(masterlabel),1,.5);
     
@@ -854,7 +855,7 @@ void mainpanel_create(postfish_mainpanel *panel,char **chlabels){
 
   mainpanel_panelentry(panel,"_Declip ","[d]",0,clippanel_create);
   mainpanel_panelentry(panel,"Cross_Talk ","[t]",1,0);
-  mainpanel_panelentry(panel,"_Compand/Gate ","[c]",2,0);
+  mainpanel_panelentry(panel,"_Compand/Gate ","[c]",2,compandpanel_create);
   mainpanel_panelentry(panel,"_Equalizer ","[e]",3,eqpanel_create);
   mainpanel_panelentry(panel,"_Limiter ","[l]",4,0);
   mainpanel_panelentry(panel,"_Output Cal. ","[o]",5,0);

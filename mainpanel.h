@@ -28,6 +28,7 @@ typedef struct postfish_mainpanel postfish_mainpanel;
 
 #include "clippanel.h"
 #include "eqpanel.h"
+#include "compandpanel.h"
 
 struct postfish_mainpanel{
   GtkWidget *topframe;

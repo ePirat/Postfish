@@ -48,7 +48,7 @@ int eq_reset(){
   return freq_reset(&eq);
 }
 
-sig_atomic_t settings[freqs];
+static sig_atomic_t settings[freqs];
 
 void eq_set(int freq, double value){
   settings[freq]=rint(value*10.);
