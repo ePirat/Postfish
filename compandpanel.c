@@ -90,7 +90,7 @@ typedef struct multi_panel_state{
 
   callback_arg_mi octave_full;
   callback_arg_mi octave_half;
-  callback_arg_mi octave_third;
+  callback_arg_mi octave_two;
 
   int bank_active;
   int inactive_updatep;
@@ -141,6 +141,8 @@ void compandpanel_state_to_config(int bank){
 }
 
 static void static_octave(GtkWidget *w,gpointer in);
+static void propogate_bank_changes_full(multicompand_settings *ms,int from_bank);
+
 static void compandpanel_state_from_config_helper(int bank,multicompand_settings *s,
 						  multi_panel_state *p,int A){
 
@@ -200,6 +202,7 @@ static void compandpanel_state_from_config_helper(int bank,multicompand_settings
   config_get_sigat("multicompand_base_set",bank,A,0,0,4,&s->base_decay);
   multibar_thumb_set(p->base_timing.s,s->base_decay*.1,1);
 
+  propogate_bank_changes_full(s,s->active_bank);
   /* setting the active bank also redisplays all the sliders */
   gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->octave[s->active_bank]),1);
   /* safe to call blindly; if the above already triggered the work, this is a no op */
@@ -211,7 +214,7 @@ static void compandpanel_state_from_config_helper(int bank,multicompand_settings
     static_octave(0,&p->octave_half);
     break;
   case 2:
-    static_octave(0,&p->octave_third);
+    static_octave(0,&p->octave_two);
     break;
   }
 }
@@ -295,58 +298,64 @@ static void lookahead_change(GtkWidget *w,gpointer in){
   *ca->v=rint(val*10.);
 }
 
-static void average_change(GtkWidget *w,gpointer in){
-  multi_panel_state *mp=(multi_panel_state *)in;
+static int determine_average(multi_panel_state *mp,int x){
   multicompand_settings *ms=mp->ms;
   banked_multicompand_settings *bc=ms->bc;
-  cbar *b=mp->bars+multicomp_freqs_max;
-  cbar *bars=mp->bars;
   int bank_active=mp->bank_active;
-  
+  float acc=0;
   int i;
-  float o,u;
-  float oav=0,uav=0;
-  
-  u=rint(multibar_get_value(MULTIBAR(b->slider),0));
-  o=rint(multibar_get_value(MULTIBAR(b->slider),1));
 
-  /* compute the current average */
   for(i=0;i<multicomp_freqs[bank_active];i++){
-    oav+=rint(bc[bank_active].static_o[i]);
-    uav+=rint(bc[bank_active].static_u[i]);
+    if(x==1)
+      acc+=rint(bc[bank_active].static_o[i]);
+    else
+      acc+=rint(bc[bank_active].static_u[i]);
   }
-  oav=rint(oav/multicomp_freqs[bank_active]);
-  uav=rint(uav/multicomp_freqs[bank_active]);
+  return rint(acc/multicomp_freqs[bank_active]);
+}
 
-  u-=uav;
-  o-=oav;
-
+static void average_change(GtkWidget *w,gpointer in){
+  multi_panel_state *mp=(multi_panel_state *)in;
   if(!mp->updating_av_slider){
+    multicompand_settings *ms=mp->ms;
+    banked_multicompand_settings *bc=ms->bc;
+    cbar *b=mp->bars+multicomp_freqs_max;
+    cbar *bars=mp->bars;
+    int bank_active=mp->bank_active;
+    
+    int i;
+    int o,u;
+    int ud,od;
+
+    u=rint(multibar_get_value(MULTIBAR(b->slider),0));
+    o=rint(multibar_get_value(MULTIBAR(b->slider),1));
+        
+    ud = u-determine_average(mp,0);
+    od = o-determine_average(mp,1);
+    
     mp->updating_av_slider=1;
-    if(o!=0.){
+
+    if(od<0 && ud<0)ud=0;
+    if(od>0 && ud>0)od=0;
+
+    if(multibar_thumb_focus(MULTIBAR(w))==1){
       /* update o sliders */
       for(i=0;i<multicomp_freqs[bank_active];i++){
 	float val=multibar_get_value(MULTIBAR(bars[i].slider),1);
-	multibar_thumb_set(MULTIBAR(bars[i].slider),val+o,1);
+	multibar_thumb_set(MULTIBAR(bars[i].slider),val+od,1);
       }
-      /* update u average (might have pushed it) */
-      uav=0;
-      for(i=0;i<multicomp_freqs[bank_active];i++)
-	uav+=rint(bc[bank_active].static_u[i]);
-      uav=rint(uav/multicomp_freqs[bank_active]);
-      multibar_thumb_set(MULTIBAR(bars[multicomp_freqs_max].slider),uav,0);
-    }else{
+      /* update u average (might have pushed it via its sliders) */
+      u = determine_average(mp,0);
+      multibar_thumb_set(MULTIBAR(bars[multicomp_freqs_max].slider),u,0);
+    }else if(multibar_thumb_focus(MULTIBAR(w))==0){
       /* update u sliders */
       for(i=0;i<multicomp_freqs[bank_active];i++){
 	float val=multibar_get_value(MULTIBAR(bars[i].slider),0);
-	multibar_thumb_set(MULTIBAR(bars[i].slider),val+u,0);
+	multibar_thumb_set(MULTIBAR(bars[i].slider),val+ud,0);
       }
-      /* update o average (might have pushed it) */
-      oav=0;
-      for(i=0;i<multicomp_freqs[bank_active];i++)
-	oav+=rint(bc[bank_active].static_o[i]);
-      oav=rint(oav/multicomp_freqs[bank_active]);
-      multibar_thumb_set(MULTIBAR(bars[multicomp_freqs_max].slider),oav,1);
+      /* update o average (might have pushed it via its sliders) */
+      o = determine_average(mp,1);
+      multibar_thumb_set(MULTIBAR(bars[multicomp_freqs_max].slider),o,1);
     }
     mp->updating_av_slider=0;
   }
@@ -374,189 +383,109 @@ static void slider_change(GtkWidget *w,gpointer in){
   readout_set(READOUT(b->readouto),buffer);
   bc[bank_active].static_o[b->number]=o;
 
-  if(mp->inactive_updatep){
-    /* keep the inactive banks also tracking settings */
-    
-    switch(bank_active){
-    case 0:
-      if(b->number==0){
-	bc[2].static_o[0]+=o-bc[2].static_o[1];
-	bc[2].static_u[0]+=u-bc[2].static_u[1];
-      }
-      
-      /* convolutions for roundoff behavior */
-      if(b->number>0){
-	adj=(bc[1].static_o[b->number*2-1]*2 -
-	     bc[1].static_o[b->number*2-2]-bc[1].static_o[b->number*2])/2;
-	bc[1].static_o[b->number*2-1]=
-	    (bc[1].static_o[b->number*2-2]+o)/2+adj;
-	
-	adj=(bc[1].static_u[b->number*2-1]*2 -
-	     bc[1].static_u[b->number*2-2]-bc[1].static_u[b->number*2])/2;
-	bc[1].static_u[b->number*2-1]=
-	  (bc[1].static_u[b->number*2-2]+u)/2+adj;
-	
-	adj=(bc[2].static_o[b->number*3-1]*3 -
-	     bc[2].static_o[b->number*3-2] - 
-	     bc[2].static_o[b->number*3-2] - 
-	     bc[2].static_o[b->number*3+1])/3;
-	bc[2].static_o[b->number*3-1]=
-	  (bc[2].static_o[b->number*3-2]+
-	   bc[2].static_o[b->number*3-2]+
-	   o)/3+adj;
-	
-	adj=(bc[2].static_o[b->number*3]*3 -
-	     bc[2].static_o[b->number*3-2] - 
-	     bc[2].static_o[b->number*3+1] - 
-	     bc[2].static_o[b->number*3+1])/3;
-	bc[2].static_o[b->number*3]=
-	  (bc[2].static_o[b->number*3-2]+o+o)/3+adj;
-	
-	adj=(bc[2].static_u[b->number*3-1]*3 -
-	     bc[2].static_u[b->number*3-2] - 
-	     bc[2].static_u[b->number*3-2] - 
-	     bc[2].static_u[b->number*3+1])/3;
-	bc[2].static_u[b->number*3-1]=
-	  (bc[2].static_u[b->number*3-2]+
-	   bc[2].static_u[b->number*3-2]+
-	   u)/3+adj;
-	
-	adj=(bc[2].static_u[b->number*3]*3 -
-	     bc[2].static_u[b->number*3-2] - 
-	     bc[2].static_u[b->number*3+1] - 
-	     bc[2].static_u[b->number*3+1])/3;
-	bc[2].static_u[b->number*3]=
-	  (bc[2].static_u[b->number*3-2]+u+u)/3+adj;
-	
-      }
-      
-      if(b->number<9){
-	adj=(bc[1].static_o[b->number*2+1]*2-
-	     bc[1].static_o[b->number*2+2]-bc[1].static_o[b->number*2])/2;
-	bc[1].static_o[b->number*2+1]=
-	  (bc[1].static_o[b->number*2+2]+o)/2+adj;
-	
-	adj=(bc[1].static_u[b->number*2+1]*2-
-	     bc[1].static_u[b->number*2+2]-bc[1].static_u[b->number*2])/2;
-	bc[1].static_u[b->number*2+1]=
-	  (bc[1].static_u[b->number*2+2]+u)/2+adj;
-	
-	adj=(bc[2].static_o[b->number*3+3]*3 -
-	     bc[2].static_o[b->number*3+4] - 
-	     bc[2].static_o[b->number*3+4] - 
-	     bc[2].static_o[b->number*3+1])/3;
-	bc[2].static_o[b->number*3+3]=
-	  (bc[2].static_o[b->number*3+4]+
-	   bc[2].static_o[b->number*3+4]+
-	   o)/3+adj;
-	
-	adj=(bc[2].static_o[b->number*3+2]*3 -
-	     bc[2].static_o[b->number*3+4] - 
-	     bc[2].static_o[b->number*3+1] - 
-	     bc[2].static_o[b->number*3+1])/3;
-	bc[2].static_o[b->number*3+2]=
-	  (bc[2].static_o[b->number*3+4]+o+o)/3+adj;
-	
-	adj=(bc[2].static_u[b->number*3+3]*3 -
-	     bc[2].static_u[b->number*3+4] - 
-	     bc[2].static_u[b->number*3+4] - 
-	     bc[2].static_u[b->number*3+1])/3;
-	bc[2].static_u[b->number*3+3]=
-	  (bc[2].static_u[b->number*3+4]+
-	   bc[2].static_u[b->number*3+4]+
-	   u)/3+adj;
-	
-	adj=(bc[2].static_u[b->number*3+2]*3 -
-	     bc[2].static_u[b->number*3+4] - 
-	     bc[2].static_u[b->number*3+1] - 
-	     bc[2].static_u[b->number*3+1])/3;
-	bc[2].static_u[b->number*3+2]=
-	  (bc[2].static_u[b->number*3+4]+u+u)/3+adj;
-	
-      }
-      
-      if(b->number==9){
-	bc[1].static_o[19]+=o-bc[1].static_o[18];
-	bc[1].static_u[19]+=u-bc[1].static_u[18];
-	bc[2].static_o[29]+=o-bc[2].static_o[28];
-	bc[2].static_u[29]+=u-bc[2].static_u[28];
-      }
-
-      bc[1].static_o[b->number*2]=o;
-      bc[1].static_u[b->number*2]=u;
-      bc[2].static_o[b->number*3+1]=o;
-      bc[2].static_u[b->number*3+1]=u;
-
-      break;
-    case 1:
-
-      if(b->number==0){
-	bc[2].static_o[0]+=o-bc[2].static_o[1];
-	bc[2].static_u[0]+=u-bc[2].static_u[1];
-      }
-      if((b->number&1)==0){
-	bc[0].static_o[b->number>>1]=o;
-	bc[0].static_u[b->number>>1]=u;
-	bc[2].static_o[b->number/2*3+1]=o;
-	bc[2].static_u[b->number/2*3+1]=u;
-      }else{
-	if(b->number<19){
-	  int val=(bc[2].static_o[b->number/2*3+2]+
-		     bc[2].static_o[b->number/2*3+3])/2;
-	  bc[2].static_o[b->number/2*3+2]+=(o-val);
-	  bc[2].static_o[b->number/2*3+3]+=(o-val);
-	  
-	  val=(bc[2].static_u[b->number/2*3+2]+
-	       bc[2].static_u[b->number/2*3+3])/2;
-	  bc[2].static_u[b->number/2*3+2]+=(u-val);
-	  bc[2].static_u[b->number/2*3+3]+=(u-val);
-	  
-	}else{
-	  bc[2].static_o[b->number/2*3+2]=o;
-	  bc[2].static_u[b->number/2*3+2]=u;
-	}
-      }
-
-      break;
-    case 2:
-      if((b->number%3)==1){
-	bc[0].static_o[b->number/3]=o;
-	bc[0].static_u[b->number/3]=u;
-	bc[1].static_o[b->number/3*2]=o;
-	bc[1].static_u[b->number/3*2]=u;
-      }else if(b->number>1){
-	if(b->number<29){
-	  bc[1].static_o[(b->number-1)/3*2+1]=
-	    (bc[2].static_o[(b->number-1)/3*3+2]+
-	     bc[2].static_o[(b->number-1)/3*3+3])/2;
-	  bc[1].static_u[(b->number-1)/3*2+1]=
-	    (bc[2].static_u[(b->number-1)/3*3+2]+
-	     bc[2].static_u[(b->number-1)/3*3+3])/2;
-	}else{
-	  bc[1].static_o[(b->number-1)/3*2+1]=o;
-	  bc[1].static_u[(b->number-1)/3*2+1]=u;
-	}
-      }
-      break;
-    }
-  }
-
   /* update average slider */
   if(!mp->updating_av_slider && mp->bars[multicomp_freqs_max].slider){
     float oav=0,uav=0;
     mp->updating_av_slider=1;
     
     /* compute the current average */
-    for(i=0;i<multicomp_freqs[bank_active];i++){
-      oav+=rint(bc[bank_active].static_o[i]);
-      uav+=rint(bc[bank_active].static_u[i]);
-    }
-    oav=rint(oav/multicomp_freqs[bank_active]);
-    uav=rint(uav/multicomp_freqs[bank_active]);
+    uav = determine_average(mp,0);
+    oav = determine_average(mp,1);
     
     multibar_thumb_set(MULTIBAR(mp->bars[multicomp_freqs_max].slider),uav,0);
     multibar_thumb_set(MULTIBAR(mp->bars[multicomp_freqs_max].slider),oav,1);
     mp->updating_av_slider=0;
+  }
+}
+
+static void propogate_bank_changes(multicompand_settings *ms,int bank_active, int to_bank){
+  banked_multicompand_settings *bc=ms->bc;
+  int i;
+
+  /* propogate changes from current bank to new bank */
+  switch(bank_active*10+to_bank){
+  case 1:  /* full octave to half octave */
+  case 20: /* two octave to full octave */
+    
+    for(i=0;i<multicomp_freqs[bank_active];i++){
+      float u0d=bc[bank_active].static_u[i]-bc[to_bank].static_u[i*2];
+      float u2d=(i+1<multicomp_freqs[bank_active] ? 
+		 bc[bank_active].static_u[i+1]-bc[to_bank].static_u[i*2+2] : u0d);
+      
+      float o0d=bc[bank_active].static_o[i]-bc[to_bank].static_o[i*2];
+      float o2d=(i+1<multicomp_freqs[bank_active] ? 
+		 bc[bank_active].static_o[i+1]-bc[to_bank].static_o[i*2+2] : o0d);
+      
+      bc[to_bank].static_u[i*2+1] += (u0d+u2d)/2;
+      bc[to_bank].static_o[i*2+1] += (o0d+o2d)/2;
+    }
+    
+    for(i=0;i<multicomp_freqs[bank_active];i++){
+      bc[to_bank].static_u[i*2]=bc[bank_active].static_u[i];
+      bc[to_bank].static_o[i*2]=bc[bank_active].static_o[i];
+    }
+    break;
+    
+  case 2: /* full octave to two octave */
+  case 10: /* half octave to full octave */
+    
+    for(i=0;i<multicomp_freqs[to_bank];i++){
+      bc[to_bank].static_u[i]=bc[bank_active].static_u[i*2];
+      bc[to_bank].static_o[i]=bc[bank_active].static_o[i*2];
+    }
+    break;
+    
+  case 12: /* half octave to two octave */
+    
+    for(i=0;i<multicomp_freqs[to_bank];i++){
+      bc[to_bank].static_u[i]=bc[bank_active].static_u[i*4];
+      bc[to_bank].static_o[i]=bc[bank_active].static_o[i*4];
+    }
+    break;
+    
+  case 21: /* two octave to half octave */
+    
+    for(i=0;i<multicomp_freqs[bank_active];i++){
+      float u0d=bc[bank_active].static_u[i]-bc[to_bank].static_u[i*4];
+      float u2d=(i+1<multicomp_freqs[bank_active] ? 
+		 bc[bank_active].static_u[i+1]-bc[to_bank].static_u[i*4+4] : u0d);
+      
+      float o0d=bc[bank_active].static_o[i]-bc[to_bank].static_o[i*4];
+      float o2d=(i+1<multicomp_freqs[bank_active] ? 
+		 bc[bank_active].static_o[i+1]-bc[to_bank].static_o[i*4+4] : o0d);
+      
+      bc[to_bank].static_u[i*4+1] += (u0d*3+u2d)/4;
+      bc[to_bank].static_o[i*4+1] += (o0d*3+o2d)/4;
+      
+      bc[to_bank].static_u[i*4+2] += (u0d+u2d)/2;
+      bc[to_bank].static_o[i*4+2] += (o0d+o2d)/2;
+      
+      bc[to_bank].static_u[i*4+3] += (u0d+u2d*3)/4;
+      bc[to_bank].static_o[i*4+3] += (o0d+o2d*3)/4;
+    }
+    
+    for(i=0;i<multicomp_freqs[bank_active];i++){
+      bc[to_bank].static_u[i*4]=bc[bank_active].static_u[i];
+      bc[to_bank].static_o[i*4]=bc[bank_active].static_o[i];
+    }
+    break;
+  }
+}
+
+static void propogate_bank_changes_full(multicompand_settings *ms,int from_bank){
+  switch(from_bank){
+  case 0:
+    propogate_bank_changes(ms,0,1);
+    propogate_bank_changes(ms,0,2);
+    break;
+  case 1:
+    propogate_bank_changes(ms,1,0);
+    propogate_bank_changes(ms,1,2);
+    break;
+  case 2:
+    propogate_bank_changes(ms,2,0);
+    propogate_bank_changes(ms,2,1);
+    break;
   }
 }
 
@@ -569,7 +498,10 @@ static void static_octave(GtkWidget *w,gpointer in){
 
   if(!w || gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(w))){
     if(mp->bank_active!=octave || w==NULL){
-      int bank_active=mp->bank_active=octave;
+      int bank_active;
+      propogate_bank_changes(ms,mp->bank_active,octave);
+
+      bank_active=mp->bank_active=octave;
       
       /* map, unmap, relabel */
       for(i=0;i<multicomp_freqs_max;i++){
@@ -675,13 +607,13 @@ static multi_panel_state *compandpanel_create(postfish_mainpanel *mp,
   {
   
     GtkWidget *octave_box=gtk_hbox_new(0,0);
-    GtkWidget *octave_a=gtk_radio_button_new_with_label(NULL,"full-octave");
+    GtkWidget *octave_a=gtk_radio_button_new_with_label(NULL,"two-octave");
     GtkWidget *octave_b=
       gtk_radio_button_new_with_label_from_widget(GTK_RADIO_BUTTON(octave_a),
-						  "half-octave");
+						  "full-octave");
     GtkWidget *octave_c=
       gtk_radio_button_new_with_label_from_widget(GTK_RADIO_BUTTON(octave_b),
-						  "third-octave");
+						  "half-octave");
     GtkWidget *label2=gtk_label_new("under");
     GtkWidget *label3=gtk_label_new("over");
 
@@ -697,15 +629,15 @@ static multi_panel_state *compandpanel_create(postfish_mainpanel *mp,
     ps->octave_full.val=0;
     ps->octave_half.mp=ps;
     ps->octave_half.val=1;
-    ps->octave_third.mp=ps;
-    ps->octave_third.val=2;
+    ps->octave_two.mp=ps;
+    ps->octave_two.val=2;
 
     g_signal_connect (G_OBJECT (octave_a), "clicked",
-		      G_CALLBACK (static_octave), &ps->octave_full);
+		      G_CALLBACK (static_octave), &ps->octave_two);
     g_signal_connect (G_OBJECT (octave_b), "clicked",
-		      G_CALLBACK (static_octave), &ps->octave_half);
+		      G_CALLBACK (static_octave), &ps->octave_full);
     g_signal_connect (G_OBJECT (octave_c), "clicked",
-		      G_CALLBACK (static_octave), &ps->octave_third);
+		      G_CALLBACK (static_octave), &ps->octave_half);
    
     gtk_table_attach(GTK_TABLE(slidertable),label2,1,2,0,1,GTK_FILL,GTK_FILL|GTK_EXPAND,2,0);
     gtk_table_attach(GTK_TABLE(slidertable),label3,3,4,0,1,GTK_FILL,GTK_FILL|GTK_EXPAND,2,0);
@@ -723,9 +655,9 @@ static multi_panel_state *compandpanel_create(postfish_mainpanel *mp,
     
     gtk_container_set_border_width(GTK_CONTAINER(sliderframe),4);
 
-    ps->octave[0]=octave_a;
-    ps->octave[1]=octave_b;
-    ps->octave[2]=octave_c;
+    ps->octave[0]=octave_b;
+    ps->octave[1]=octave_c;
+    ps->octave[2]=octave_a;
 
   }
 

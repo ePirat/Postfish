@@ -794,7 +794,7 @@ static gboolean configure(GtkWidget *widget, GdkEventConfigure *event){
   return TRUE;
 }
 
-static void vals_bound(Multibar *m){
+static void partial_vals_bound(Multibar *m){
   int i;
 
   if(m->thumbsmall>0 && m->thumblarge>0)
@@ -806,6 +806,10 @@ static void vals_bound(Multibar *m){
     if(m->thumbval[i]>m->thumbhi)m->thumbval[i]=m->thumbhi;
     m->thumbpixel[i]=val_to_pixel(m,m->thumbval[i]);
   }
+}
+
+static void vals_bound(Multibar *m){
+  partial_vals_bound(m);
 
   if(m->thumbfocus>=0){
     float v=m->thumbval[m->thumbfocus];
@@ -1160,7 +1164,7 @@ void multibar_thumb_set(Multibar *m,float v, int n){
 
   {
     m->thumbval[n]=v;
-    vals_bound(m);
+    partial_vals_bound(m);
     v=m->thumbval[n];
     x=m->thumbpixel[n]=val_to_pixel(m,v);
     m->thumbval[n]=v;
@@ -1265,3 +1269,10 @@ void multibar_thumb_increment(Multibar *m,float small, float large){
   draw_and_expose(w);
 }
 
+int multibar_thumb_grab_p(Multibar *m){
+  return m->widgetfocus;
+}
+
+int multibar_thumb_focus(Multibar *m){
+  return m->thumbfocus;
+}

@@ -124,9 +124,11 @@ void           multibar_callback        (Multibar *m,
 					 void (*callback)
 					 (GtkWidget *,gpointer),
 					 gpointer);
-float multibar_get_value(Multibar *m,int n);
-void multibar_thumb_bounds(Multibar *m,float lo, float hi);
-void multibar_thumb_increment(Multibar *m,float small, float large);
+float          multibar_get_value       (Multibar *m,int n);
+void           multibar_thumb_bounds    (Multibar *m,float lo, float hi);
+void           multibar_thumb_increment (Multibar *m,float small, float large);
+int            multibar_thumb_grab_p    (Multibar *m);
+int            multibar_thumb_focus     (Multibar *m);
 
 G_END_DECLS
 
