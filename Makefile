@@ -20,9 +20,9 @@ CC=gcc
 LD=gcc
 INSTALL=install
 PREFIX=/usr/local
-BINDIR=$PREFIX/bin
+BINDIR=$(PREFIX)/bin
 ETCDIR=/etc/postfish
-MANDIR=$PREFIX/man
+MANDIR=$(PREFIX)/man
 
 SRC = main.c mainpanel.c multibar.c readout.c input.c output.c clippanel.c \
 	declip.c reconstruct.c multicompand.c windowbutton.c subpanel.c \
