@@ -42,6 +42,7 @@ struct postfish_mainpanel{
   GdkBitmap *pb[2];
 
   /* we need these widgets */
+  GtkAccelGroup *group;
   GtkWidget *toplevel;
 
   GtkWidget *masterdB_r;
@@ -49,12 +50,9 @@ struct postfish_mainpanel{
   GtkWidget *masterdB_a;
 
   GtkWidget *buttonactive[7];
-
-  GtkWidget *cue_act[2];
-  GtkWidget *cue_set[2];
-  GtkWidget *cue_reset[2];
-
   GtkWidget *deckactive[7];
+
+  GtkWidget *cue_b;
 
   GtkWidget *inbar;
   GtkWidget *outbar;
@@ -64,7 +62,10 @@ struct postfish_mainpanel{
   float inpeak;
   float outpeak;
 
-  GtkWidget *channelshow[10]; /* support only up to 8 + mid/side */
+  GtkWidget *channelshow[18]; /* support only up to 16 + mid/side */
+  int channelrotate[10]; /* up to 16 channels, but only base 10 digits on the keyboard */
+  GtkWidget ***channel_wa;
+  int channeleffects;
 
   GtkWidget *cue;
   GtkWidget *entry_a;
@@ -75,7 +76,8 @@ struct postfish_mainpanel{
   int fishframe;
   int fishframe_init;
   guint fishframe_timer;
- 
+  int *ch_rotate;
+
 };
 
 extern gboolean slider_keymodify(GtkWidget *w,GdkEventKey *event,gpointer in);
