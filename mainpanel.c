@@ -51,6 +51,8 @@ typedef struct {
   GtkWidget *channelshow[10]; /* support only up to 8 + mid/side */
 
   GtkWidget *cue;
+  GtkWidget *entry_a;
+  GtkWidget *entry_b;
 
   /* ui state */
   int fishframe;
@@ -58,6 +60,18 @@ typedef struct {
   guint fishframe_timer;
  
 } postfish_mainpanel;
+
+static void action_zero(GtkWidget *widget,postfish_mainpanel *p){
+  const char *time=gtk_entry_get_text(GTK_ENTRY(p->entry_a));
+  off_t cursor=input_time_to_cursor(time);
+
+  output_halt_playback();
+  
+  input_seek(cursor);
+  readout_set(READOUT(p->cue),(char *)time);
+  multibar_reset(MULTIBAR(p->inbar));
+  multibar_reset(MULTIBAR(p->outbar));
+}
 
 static void action_play(GtkWidget *widget,postfish_mainpanel *p){
   if(gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(widget))){
@@ -68,16 +82,7 @@ static void action_play(GtkWidget *widget,postfish_mainpanel *p){
       pthread_create(&playback_thread_id,NULL,&playback_thread,NULL);
     }
   }else{
-    if(playback_active){
-      playback_exit=1;
-      sched_yield();
-      while(1){
-	if(playback_active){
-	  sched_yield();
-	}else
-	  break;
-      }
-    }
+    output_pause_playback();
   }
 }
 
@@ -603,6 +608,8 @@ void mainpanel_create(postfish_mainpanel *panel,char **chlabels){
 		       0,0);
 
 
+      g_signal_connect (G_OBJECT (panel->deckactive[0]), "clicked",
+			G_CALLBACK (action_zero), panel);
       g_signal_connect (G_OBJECT (panel->deckactive[3]), "clicked",
 			G_CALLBACK (action_play), panel);
 
@@ -613,13 +620,14 @@ void mainpanel_create(postfish_mainpanel *panel,char **chlabels){
     {
       GtkWidget *cuebox=gtk_hbox_new(0,0);
       GtkWidget *cuelabel=gtk_label_new("cue:");
-      GtkWidget *entry_a=gtk_entry_new();
-      GtkWidget *entry_b=gtk_entry_new();
 
       GtkWidget *framea=gtk_vseparator_new();
       GtkWidget *frameb=gtk_vseparator_new();
 
       GtkWidget *panelb=gtk_check_button_new_with_mnemonic("c_ue list");
+
+      panel->entry_a=gtk_entry_new();
+      panel->entry_b=gtk_entry_new();
 
       panel->cue=readout_new("    :  :00.00");
 
@@ -630,19 +638,19 @@ void mainpanel_create(postfish_mainpanel *panel,char **chlabels){
       panel->cue_reset[1]=gtk_button_new_with_label("[B]");
 
 
-      gtk_entry_set_width_chars(GTK_ENTRY(entry_a),13);
-      gtk_entry_set_width_chars(GTK_ENTRY(entry_b),13);
-      gtk_entry_set_text(GTK_ENTRY(entry_a),"    :  :00.00");
-      gtk_entry_set_text(GTK_ENTRY(entry_b),"    :  :00.00");
+      gtk_entry_set_width_chars(GTK_ENTRY(panel->entry_a),13);
+      gtk_entry_set_width_chars(GTK_ENTRY(panel->entry_b),13);
+      gtk_entry_set_text(GTK_ENTRY(panel->entry_a),"    :  :00.00");
+      gtk_entry_set_text(GTK_ENTRY(panel->entry_b),"    :  :00.00");
 
 
-      g_signal_connect (G_OBJECT (entry_a), "key-press-event",
+      g_signal_connect (G_OBJECT (panel->entry_a), "key-press-event",
 			G_CALLBACK (timeevent_keybinding), panel->toplevel);
-      g_signal_connect (G_OBJECT (entry_b), "key-press-event",
+      g_signal_connect (G_OBJECT (panel->entry_b), "key-press-event",
 			G_CALLBACK (timeevent_keybinding), panel->toplevel);
-      g_signal_connect_after(G_OBJECT (entry_a), "grab_focus",
+      g_signal_connect_after(G_OBJECT (panel->entry_a), "grab_focus",
 			G_CALLBACK (timeevent_unselect), NULL);
-      g_signal_connect_after(G_OBJECT (entry_b), "grab_focus",
+      g_signal_connect_after(G_OBJECT (panel->entry_b), "grab_focus",
 			G_CALLBACK (timeevent_unselect), NULL);
 
       g_signal_connect (G_OBJECT (panel->cue_set[1]), "clicked",
@@ -663,13 +671,13 @@ void mainpanel_create(postfish_mainpanel *panel,char **chlabels){
       gtk_box_pack_start(GTK_BOX(cuebox),framea,1,1,3);
 
       gtk_box_pack_start(GTK_BOX(cuebox),panel->cue_set[0],0,0,0);
-      gtk_box_pack_start(GTK_BOX(cuebox),entry_a,0,0,0);
+      gtk_box_pack_start(GTK_BOX(cuebox),panel->entry_a,0,0,0);
       gtk_box_pack_start(GTK_BOX(cuebox),panel->cue_reset[0],0,0,0);
 
       gtk_box_pack_start(GTK_BOX(cuebox),frameb,1,1,3);
 
       gtk_box_pack_start(GTK_BOX(cuebox),panel->cue_set[1],0,0,0);
-      gtk_box_pack_start(GTK_BOX(cuebox),entry_b,0,0,0);
+      gtk_box_pack_start(GTK_BOX(cuebox),panel->entry_b,0,0,0);
       gtk_box_pack_start(GTK_BOX(cuebox),panel->cue_reset[1],0,0,0);
 
     }
@@ -700,13 +708,7 @@ void mainpanel_create(postfish_mainpanel *panel,char **chlabels){
 
 }
 
-static gboolean async_event_handle(GIOChannel *channel,
-				   GIOCondition condition,
-				   gpointer data){
-  postfish_mainpanel *panel=data;
-  int i;
-  char buf[1];
-  read(eventpipe[0],buf,1);
+static gboolean feedback_process(postfish_mainpanel *panel){
 
   /* first order of business: release the play button if playback is
      no longer in progress */
@@ -723,6 +725,7 @@ static gboolean async_event_handle(GIOChannel *channel,
     double *peak=alloca(sizeof(*peak)*(input_ch+2));
     if(pull_input_feedback(peak,rms,&time_cursor,&n)){
       char buffer[14];
+      int i;
       for(i=0;i<n;i++){
 	if(gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(panel->channelshow[i]))){
 	  peak[i]=todB(peak[i]);
@@ -755,6 +758,17 @@ static gboolean async_event_handle(GIOChannel *channel,
     }
   }
 
+}
+
+static gboolean async_event_handle(GIOChannel *channel,
+				   GIOCondition condition,
+				   gpointer data){
+  postfish_mainpanel *panel=data;
+  int i;
+  char buf[1];
+  read(eventpipe[0],buf,1);
+
+  feedback_process(panel);
   return TRUE;
 }
 

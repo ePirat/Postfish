@@ -65,6 +65,7 @@ GtkWidget*     multibar_new             (int n, char **labels, double *levels,
 					 int flags);
 void	       multibar_clear           (Multibar *m);
 void	       multibar_set             (Multibar *m,double *lo,double *hi, int n);
+void           multibar_reset           (Multibar *m);
 
 G_END_DECLS
 

@@ -75,7 +75,7 @@ void input_Bcursor_set(off_t c){
   pthread_mutex_unlock(&master_mutex);
 }
 
-off_t input_time_to_cursor(char *t){
+off_t input_time_to_cursor(const char *t){
   char temp[14];
   char *c;
 
@@ -392,10 +392,10 @@ static void push_input_feedback(double *peak,double *rms, off_t cursor){
   pthread_mutex_unlock(&master_mutex);
 }
 
-int pull_input_feedback(double *peak,double *rms,off_t *cursor,int *n){
+int pull_input_feedback(double *peak,double *rms,off_t *cursor,int *nn){
   input_feedback *f;
-  int i,j;
-  *n=input_ch+2;
+  int i,j,n=input_ch+2;
+  if(nn)*nn=n;
 
   pthread_mutex_lock(&master_mutex);
   if(feedback_list_tail){
@@ -410,9 +410,12 @@ int pull_input_feedback(double *peak,double *rms,off_t *cursor,int *n){
   }
   pthread_mutex_unlock(&master_mutex);
 
-  memcpy(rms,f->rms,sizeof(*rms)* *n);
-  memcpy(peak,f->peak,sizeof(*peak)* *n);
-  *cursor=f->cursor;
+  if(rms)
+    memcpy(rms,f->rms,sizeof(*rms)*n);
+  if(peak)
+    memcpy(peak,f->peak,sizeof(*peak)*n);
+  if(cursor)
+    *cursor=f->cursor;
 
   pthread_mutex_lock(&master_mutex);
   f->next=feedback_pool;
@@ -551,6 +554,11 @@ time_linkage *input_read(void){
   push_input_feedback(peak,rms,cursor);
 
   return &out;
+}
+
+void input_reset(void){
+  while(pull_input_feedback(NULL,NULL,NULL,NULL));
+  return;
 }
 
 

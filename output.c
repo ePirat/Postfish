@@ -78,10 +78,10 @@ static void push_output_feedback(double *peak,double *rms){
   pthread_mutex_unlock(&master_mutex);
 }
 
-int pull_output_feedback(double *peak,double *rms,int *n){
+int pull_output_feedback(double *peak,double *rms,int *nn){
   output_feedback *f;
-  int i,j;
-  *n=input_ch+2;
+  int i,j,n=input_ch+2;
+  if(nn)*nn=n;
 
   pthread_mutex_lock(&master_mutex);
   if(feedback_list_tail){
@@ -96,8 +96,10 @@ int pull_output_feedback(double *peak,double *rms,int *n){
   }
   pthread_mutex_unlock(&master_mutex);
 
-  memcpy(rms,f->rms,sizeof(*rms)* *n);
-  memcpy(peak,f->peak,sizeof(*peak)* *n);
+  if(rms)
+    memcpy(rms,f->rms,sizeof(*rms)*n);
+  if(peak)
+    memcpy(peak,f->peak,sizeof(*peak)*n);
 
   pthread_mutex_lock(&master_mutex);
   f->next=feedback_pool;
@@ -323,5 +325,33 @@ void *playback_thread(void *dummy){
   if(audiobuf)free(audiobuf);
   write(eventpipe[1],"",1);
   return(NULL);
+}
+
+void output_pause_playback(void){
+  if(playback_active){
+    playback_exit=1;
+    
+    while(1){
+      if(playback_active){
+	sched_yield();
+      }else
+	break;
+    }
+  }
+}
+
+void output_reset(void){
+  /* empty feedback queues */
+  while(pull_output_feedback(NULL,NULL,NULL));
+  return;
+}
+
+/* safe to call from UI only because we wait for playback to halt and
+   it can't be restarted until we return */
+void output_halt_playback(void){
+  output_pause_playback();
+  input_reset();  /* clear any persistent lapping state */
+  output_reset(); /* clear any persistent lapping state */
+
 }
 

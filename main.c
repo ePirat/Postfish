@@ -30,6 +30,7 @@
 #include "postfish.h"
 #include "mainpanel.h"
 #include "input.h"
+#include "output.h"
 
 pthread_mutex_t master_mutex=PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
 
@@ -69,14 +70,7 @@ int main(int argc, char **argv){
   input_seek(0);
   mainpanel_go(argc,argv,input_ch);
 
-  playback_exit=1;
-
-  while(1){
-    if(playback_active){
-      sched_yield();
-    }else
-      break;
-  }
+  output_halt_playback();
 
   //save_settings(configfd);
   if(configfd>=0)close(configfd);

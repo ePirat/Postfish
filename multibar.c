@@ -407,3 +407,11 @@ void multibar_set(Multibar *m,double *lo, double *hi, int n){
 		    widget->allocation.height);
   
 }
+
+void multibar_reset(Multibar *m){
+  m->peak=-400;
+  m->peakdelta=0;
+  m->peakdelay=0;
+  m->clipdelay=0;
+  multibar_set(m,NULL,NULL,0);
+}
