@@ -4,6 +4,11 @@
 
 CC=gcc
 LD=gcc
+INSTALL=install
+PREFIX=/usr/local
+BINDIR=$PREFIX/bin
+ETCDIR=/etc
+MANDIR=$PREFIX/man
 
 SRC = main.c mainpanel.c multibar.c readout.c input.c output.c clippanel.c declip.c \
 	reconstruct.c smallft.c windowbutton.c subpanel.c feedback.c
@@ -32,3 +37,11 @@ target: $(OBJ)
 	./touch-version
 	$(LD) $(OBJ) $(CFLAGS) -o postfish `pkg-config --libs gtk+-2.0` -lpthread -lm
 
+install:
+	$(INSTALL) -d -m 0755 $(BINDIR)
+	$(INSTALL) -m 0755 postfish $(BINDIR)
+	$(INSTALL) -d -m 0755 $(ETCDIR)
+	$(INSTALL) -m 0644 postfish-gtkrc $(ETCDIR)
+#	$(INSTALL) -d -m 0755 $(MANDIR)
+#	$(INSTALL) -d -m 0755 $(MANDIR)/man1
+#	$(INSTALL) -m 0644 postfish.1 $(MANDIR)/man1

@@ -44,6 +44,8 @@ GtkWidget *hzreadout;
 GtkWidget *creadout;
 GtkWidget *ireadout;
 
+GtkWidget *mainpanel_inbar;
+
 typedef struct {
   GtkWidget *slider;
   GtkWidget *readout;
@@ -87,7 +89,7 @@ static void converge_slider_change(GtkWidget *w,gpointer in){
   char buffer[80];
   double percent=gtk_range_get_value(GTK_RANGE(w));
   double sigfigs=percent*.05+2.8;
-  double epsilon=pow(1.,-sigfigs);
+  double epsilon=pow(10.,-sigfigs);
 
   sprintf(buffer,"%3.1f",sigfigs);
   readout_set(READOUT(creadout),buffer);
@@ -96,15 +98,15 @@ static void converge_slider_change(GtkWidget *w,gpointer in){
   readout_set(READOUT(ireadout),buffer);
 
   declip_setconvergence(epsilon);
-  declip_setiterations(percent);
+  declip_setiterations(percent*.01);
 }
 
 void clippanel_create(postfish_mainpanel *mp,
 		      GtkWidget *windowbutton,
 		      GtkWidget *activebutton){
   int i;
-  char *labels[3]={"1%","10%","100%"};
-  double levels[4]={0.,1.,10.,100.};
+  char *labels[2]={"10%","100%"};
+  double levels[3]={0.,10.,100.};
   int block_choices=0;
 
   subpanel_generic *panel=subpanel_create(mp,windowbutton,activebutton,
@@ -113,7 +115,7 @@ void clippanel_create(postfish_mainpanel *mp,
   
   GtkWidget *framebox=gtk_hbox_new(1,0);
   GtkWidget *blocksize_box=gtk_vbox_new(0,0);
-  GtkWidget *blocksize_frame=gtk_frame_new (" filter width / approx. lowest response ");
+  GtkWidget *blocksize_frame=gtk_frame_new (" filter width ");
   GtkWidget *converge_frame=gtk_frame_new (" filter convergence ");
   GtkWidget *converge_box=gtk_vbox_new(0,0);
   GtkWidget *channel_table=gtk_table_new(input_ch,4,0);
@@ -135,7 +137,7 @@ void clippanel_create(postfish_mainpanel *mp,
     GtkWidget *slider=gtk_hscale_new_with_range(0,block_choices-1,1);
     GtkWidget *samplelabel=gtk_label_new("window sample width");
     GtkWidget *mslabel=gtk_label_new("window time width");
-    GtkWidget *hzlabel=gtk_label_new("approx. lowest response");
+    GtkWidget *hzlabel=gtk_label_new("approximate lowest response");
     samplereadout=readout_new("00000   ");
     msreadout=readout_new("00000 ms");
     hzreadout=readout_new("00000 Hz");
@@ -175,8 +177,8 @@ void clippanel_create(postfish_mainpanel *mp,
     GtkWidget *fastlabel=gtk_label_new("fastest");
     GtkWidget *qualitylabel=gtk_label_new("best");
     GtkWidget *slider=gtk_hscale_new_with_range(10,200,1);
-    GtkWidget *clabel=gtk_label_new("significant figure target");
-    GtkWidget *ilabel=gtk_label_new("iteration bound");
+    GtkWidget *clabel=gtk_label_new("significant figures target");
+    GtkWidget *ilabel=gtk_label_new("limit predicted iterations");
     creadout=readout_new("000 ");
     ireadout=readout_new("000%");
 
@@ -217,7 +219,7 @@ void clippanel_create(postfish_mainpanel *mp,
     GtkWidget *readout=readout_new("0.00");
     GtkWidget *readoutdB=readout_new("-40 dB");
     GtkWidget *barframe=gtk_frame_new(NULL);
-    GtkWidget *bar=multibar_new(3,labels,levels,0);
+    GtkWidget *bar=multibar_new(2,labels,levels,HI_DECAY|ZERO_DAMP);
 
     cs->slider=slider;
     cs->readout=readout;
@@ -266,7 +268,9 @@ void clippanel_create(postfish_mainpanel *mp,
     
     trigger_slider_change(NULL,cs);
   }
-  
+
+  mainpanel_inbar=mp->inbar;
+
 }
 
 void clippanel_feedback(void){
@@ -274,8 +278,15 @@ void clippanel_feedback(void){
   if(pull_declip_feedback(clip,&count)){
     int i;
     for(i=0;i<input_ch;i++){
-      double val=clip[i]*100./count,zero=0;
-      multibar_set(MULTIBAR(feedback_bars[i]),&zero,&val,1);
+      double val[2],zero[2];
+      val[0]=-1.,zero[0]=-1.;
+      val[1]=(count?clip[i]*100./count-.1:-1);
+      zero[1]=-1.;
+      multibar_set(MULTIBAR(feedback_bars[i]),zero,val,2);
+      if(clip[i]){
+	multibar_setwarn(MULTIBAR(mainpanel_inbar));
+	multibar_setwarn(MULTIBAR(feedback_bars[i]));
+      }
     }
   }
 }

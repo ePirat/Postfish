@@ -439,14 +439,14 @@ time_linkage *input_read(void){
      cursor>=current_file_entry->end &&
      current_file_entry->end!=-1){
     pthread_mutex_unlock(&master_mutex);
-    return &out; /* EOF */
+    goto tidy_up;
   }
 
   /* the streaming case */
   if(feof(current_file_entry->f) && 
      current_file_entry_number+1>=file_entries){
     pthread_mutex_unlock(&master_mutex);
-    return &out;
+    goto tidy_up;
   }
   pthread_mutex_unlock(&master_mutex);
 
@@ -549,6 +549,14 @@ time_linkage *input_read(void){
   }
 
   push_input_feedback(peak,rms,cursor);
+
+ tidy_up:
+  {
+    int tozero=out.size-out.samples;
+    if(tozero)
+      for(j=0;j<out.channels;j++)
+	memset(out.data[j]+out.samples,0,sizeof(**out.data)*tozero);
+  }
 
   return &out;
 }

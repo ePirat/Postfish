@@ -72,6 +72,23 @@ static int activebutton_action(GtkWidget *widget,
   return FALSE;
 }
 
+static gboolean rebind_space(GtkWidget *widget,
+			     GdkEventKey *event,
+			     gpointer in){
+  /* do not capture Alt accellerators */
+  if(event->state&GDK_MOD1_MASK) return FALSE;
+  if(event->state&GDK_CONTROL_MASK) return FALSE;
+
+  if(event->keyval==GDK_space){
+    subpanel_generic *p=in;
+    GdkEvent copy=*(GdkEvent *)event;
+    copy.any.window=p->mainpanel->toplevel->window;
+    gtk_main_do_event((GdkEvent *)(&copy));
+    return TRUE;
+  }
+  return FALSE;
+}
+
 static gboolean forward_events(GtkWidget *widget,
 			       GdkEvent *event,
 			       gpointer in){
@@ -130,6 +147,10 @@ subpanel_generic *subpanel_create(postfish_mainpanel *mp,
   gtk_frame_set_label_widget(GTK_FRAME(topframe),toplabelbox);
 
     
+  /* space *always* means play/pause */
+  g_signal_connect (G_OBJECT (panel->subpanel_toplevel), "key-press-event",
+		    G_CALLBACK (rebind_space), 
+		    panel);
   /* forward unhandled events to the main window */
   g_signal_connect_after (G_OBJECT (panel->subpanel_toplevel), "key-press-event",
 			  G_CALLBACK (forward_events), 

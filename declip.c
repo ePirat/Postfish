@@ -27,42 +27,10 @@
 #include "smallft.h"
 #include "reconstruct.h"
 #include "feedback.h"
-#include <stdio.h>
 
 extern int input_rate;
 extern int input_ch;
 extern int input_size;
-
-void _analysis(char *base,int i,double *v,int n,int bark,int dB){
-  int j;
-  FILE *of;
-  char buffer[80];
-
-  sprintf(buffer,"%s_%d.m",base,i);
-  of=fopen(buffer,"w");
-  
-  if(!of)perror("failed to open data dump file");
-  
-  for(j=0;j<n;j++){
-    if(bark){
-      float b=toBark((4000.f*j/n)+.25);
-      fprintf(of,"%f ",b);
-    }else
-      fprintf(of,"%f ",(double)j);
-    
-    if(dB){
-      if(j==0||j==n-1)
-        fprintf(of,"%f\n",todB(v[j]));
-      else{
-        fprintf(of,"%f\n",todB(hypot(v[j],v[j+1])));
-        j++;
-      }
-    }else{
-      fprintf(of,"%f\n",v[j]);
-    }
-  }
-  fclose(of);
-}
 
 /* accessed only in playback thread/setup */
 static drft_lookup fft;
@@ -258,11 +226,11 @@ static void declip(double *data,double *lap,double *out,
     if(data[i]>=trigger || data[i]<=-trigger){
       flag[i]=1;
       count++;
-      *runningcount++;
     }
   }
   
   *runningtotal+=blocksize*3/4;
+  *runningcount+=count;
 
   if(declip_active){
 
@@ -279,14 +247,14 @@ static void declip(double *data,double *lap,double *out,
     }
     if(iterbound<20)iterbound=20;
     
-    reconstruct(&fft,data,freq,flag,epsilon*count,iterbound,blocksize);
+    if(count)reconstruct(&fft,data,freq,flag,epsilon*count,iterbound,blocksize);
 
     if(out)
       for(i=0;i<blocksize/2;i++)
 	out[i]=lap[i]+data[i]*window[i];
     
     for(i=blocksize/2,j=0;i<blocksize;i++)
-      lap[j]=data[i]*window[i];
+      lap[j++]=data[i]*window[i];
 
   }else{
 
@@ -295,15 +263,15 @@ static void declip(double *data,double *lap,double *out,
 	out[i]=data[i];
   
     for(i=blocksize/2,j=0;i<blocksize;i++)
-      lap[j]=data[i]*window[i]*window[i];
-
+      lap[j++]=data[i]*window[i]*window[i];
   }
+  for(i=blocksize/2;i<input_size;i++)
+    lap[i]=0.;
 }
 
 /* called only by playback thread */
 time_linkage *declip_read(time_linkage *in){
   int i;
-  double work[blocksize];
   double local_trigger[input_ch];
   int total=0;
   int count[input_ch];
@@ -328,83 +296,95 @@ time_linkage *declip_read(time_linkage *in){
     }
     blocksize=pending_blocksize;
 
-    widthlookup=malloc((blocksize>>1)*sizeof(*widthlookup));
+    lopad=1-rint(fromBark(toBark(0.)-width)*blocksize/input_rate);
+    hipad=rint(fromBark(toBark(input_rate*.5)+width)*blocksize/input_rate)+lopad;
+    widthlookup=malloc((hipad+1)*sizeof(*widthlookup));
     for(i=0;i<blocksize/2;i++){
       double bark=toBark(input_rate*i/blocksize);
       int hi=rint(fromBark(bark-width)*blocksize/input_rate)-1+lopad;
       int lo=rint(fromBark(bark+width)*blocksize/input_rate)+1+lopad;
-      
-      if(hi<0 || lo<0 || hi>65535 || lo<65535) return 0;
       widthlookup[i]=(hi<<16)+lo;
     }
-    lopad=1-rint(fromBark(toBark(0.)-width)*blocksize/input_rate);
-    hipad=rint(fromBark(toBark(input_rate*.5)+width)*blocksize/input_rate)+lopad;
     
     drft_init(&fft,blocksize);
 
     window=malloc(blocksize*sizeof(*window));
     for(i=0;i<blocksize/8;i++) window[i]=0.;
-    for(;i<blocksize*3/8;i++) window[i]=sin( (double)(i-blocksize/8)/blocksize*M_PIl );
+    for(;i<blocksize*3/8;i++) window[i]=sin( (double)(i-blocksize/8)/blocksize*M_PIl*2. );
     for(;i<blocksize*5/8;i++) window[i]=1.;
-    for(;i<blocksize*7/8;i++) window[i]=sin( (double)(blocksize*7/8-i)/blocksize*M_PIl );
+    for(;i<blocksize*7/8;i++) window[i]=sin( (double)(blocksize*7/8-i)/blocksize*M_PIl*2. );
     for(;i<blocksize;i++) window[i]=0.;    
     for(i=0;i<blocksize;i++) window[i]*=window[i];
-    for(i=0;i<blocksize;i++) window[i]=sin(window[i]*M_PIl);
+    for(i=0;i<blocksize;i++) window[i]=sin(window[i]*M_PIl*.5);
 
   }
 
-
-  switch(fillstate){
-  case 0: /* prime the lapping and cache */
-    for(i=0;i<input_ch;i++){
-      int j;
-      double *temp=in->data[i];
-      total=0;
-      memset(work,0,sizeof(*work)*blocksize/2);
-      memcpy(work+blocksize/2,temp,sizeof(*work)*blocksize/2);
-      declip(work,lap[i],0,blocksize,
-	     local_trigger[i],local_convergence,local_iterations,
-	     &total,count+i);
-
-      memset(cache[i],0,sizeof(**cache)*input_size);
-      in->data[i]=cache[i];
-      cache[i]=temp;
-    }
-    cache_samples=in->samples;
-    fillstate=1;
-    if(in->samples==in->size)return 0;
-    in->samples=0;
-    /* fall through */
-  case 1: /* nominal processing */
-    for(i=0;i<input_ch;i++){
-      double *temp=cache[i];
-      int j;
-      total=0;
-      for(j=0;j+blocksize<out.size;j+=blocksize/2){
-	memcpy(work,temp+j,sizeof(*work)*blocksize);
+  {
+    double work[blocksize];
+    
+    switch(fillstate){
+    case 0: /* prime the lapping and cache */
+      for(i=0;i<input_ch;i++){
+	int j;
+	double *temp=in->data[i];
+	total=0;
+	memset(work,0,sizeof(*work)*blocksize/2);
+	memcpy(work+blocksize/2,temp,sizeof(*work)*blocksize/2);
+	declip(work,lap[i],0,blocksize,
+	       local_trigger[i],local_convergence,local_iterations,
+	       &total,count+i);
+	
+	memset(cache[i],0,sizeof(**cache)*input_size);
+	in->data[i]=cache[i];
+	cache[i]=temp;
+      }
+      cache_samples=in->samples;
+      fillstate=1;
+      out.samples=0;
+      if(in->samples==in->size)goto tidy_up;
+	
+      for(i=0;i<input_ch;i++)
+	memset(in->data[i],0,sizeof(**in->data)*in->size);
+      in->samples=0;
+      /* fall through */
+    case 1: /* nominal processing */
+      for(i=0;i<input_ch;i++){
+	double *temp=cache[i];
+	int j;
+	total=0;
+	for(j=0;j+blocksize<=out.size;j+=blocksize/2){
+	  memcpy(work,temp+j,sizeof(*work)*blocksize);
+	  declip(work,lap[i],out.data[i]+j,blocksize,
+		 local_trigger[i],local_convergence,local_iterations,
+		 &total,count+i);
+	}
+	memcpy(work,temp+j,sizeof(*work)*blocksize/2);
+	memcpy(work+blocksize/2,in->data[i],sizeof(*work)*blocksize/2);
 	declip(work,lap[i],out.data[i]+j,blocksize,
 	       local_trigger[i],local_convergence,local_iterations,
 	       &total,count+i);
+	
+	cache[i]=in->data[i];
+	in->data[i]=temp;
       }
-      memcpy(work,temp+j,sizeof(*work)*blocksize/2);
-      memcpy(work+blocksize/2,in->data[i],sizeof(*work)*blocksize/2);
-      declip(work,lap[i],out.data[i]+j,blocksize,
-	     local_trigger[i],local_convergence,local_iterations,
-	     &total,count+i);
-      
-      in->data[i]=cache[i];
-      cache[i]=temp;
+      out.samples=cache_samples;
+      cache_samples=in->samples;
+      if(out.samples<out.size)fillstate=2;
+      break;
+    case 2: /* we've pushed out EOF already */
+      out.samples=0;
     }
-    out.samples=cache_samples;
-    cache_samples=in->samples;
-    if(out.samples<out.size)fillstate=2;
-    break;
-  case 2: /* we've pushed out EOF already */
-    return 0;
   }
 
-  /* we're returning data, push feedback */
   push_declip_feedback(count,total);
+
+ tidy_up:
+  {
+    int tozero=out.size-out.samples;
+    if(tozero)
+      for(i=0;i<out.channels;i++)
+	memset(out.data[i]+out.samples,0,sizeof(**out.data)*tozero);
+  }
 
   return &out;
 }

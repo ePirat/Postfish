@@ -3,10 +3,23 @@ style "button-poppy" {
 	bg[ACTIVE]="#c0f0ff" 
 	bg[PRELIGHT]="#c0f0ff" 
 
-	font_name = "sans 8"	
+	font_name = "sans 8"
+	GtkButton::relief = none
+
 	GtkButton::focus-padding = 0
 	GtkButton::focus-line-width = 1
 	GtkButton::interior-focus = 0
+}
+
+style "panel-label" {
+	font_name = "sans bold 11"
+}
+
+style "frame-label" {
+	font_name = "sans bold 10"
+}
+style "frame-text" {
+	font_name = "sans 9"
 }
 
 style "check-poppy" {
@@ -33,13 +46,21 @@ style "multibar" {
 	font_name = "sans 8"	
 }
 
+style "clipbar" {
+	fg[NORMAL]="#404040" 
+	fg[ACTIVE]="#ff8080" 
+	text[NORMAL]="#c0c0d0" 
+	text[ACTIVE]="#c0c0d0" 
+	font_name = "sans 8"	
+}
+
 style "readout" {
 	base[NORMAL]="#ffffff" 
 	base[ACTIVE]="#ffffff" 
 	bg[NORMAL]="#ffffff" 
 	bg[ACTIVE]="#ffffff" 
 
-	font_name = "fixed"	
+	font_name = "fixed 8"	
 	GtkMisc::xpad = 10
 	GtkMisc::xalign = 1.0
 	GtkWidget::width-request=100
@@ -95,17 +116,30 @@ widget "*.color1" style "right"
 widget "*.color2" style "mid"
 widget "*.color3" style "side"
 
+widget "*.panelbox*" style "darkpanel"
 widget "*.winpanel" style "darkpanel"
+
+widget "*.choiceframe.*" style "frame-text"
+widget "*.GtkFrame.GtkLabel" style "frame-label"
 
 widget "*.Readout*" style "readout"
 widget "*.GtkEntry" style "readout"
 widget "*.GtkHScale" style "slider"
-widget "*.GtkToggleButton.*" style "button-poppy"
-widget "*.GtkToggleButton" style "button-poppy"
-widget "*.GtkButton.*" style "button-poppy"
+widget "*.GtkToggleButton*" style "button-poppy"
 widget "*.reset*" style "quitbutton"
-widget "*.GtkButton" style "button-poppy"
+widget "*.GtkButton*" style "button-poppy"
 widget "*.GtkCheckButton" style "check-poppy"
+widget "*.Windowbutton*" style "button-poppy"
 widget "*.quitbutton" style "quitbutton"
 widget "*.quitbutton.GtkLabel" style "quitbutton"
+
+widget "*.panelbutton*" style "button-poppy"
+widget "*.panelbutton*.GtkLabel" style "panel-label"
 widget "*.Multibar*" style "multibar"
+
+widget "*.clipbar*" style "clipbar"
+
+
+
+
+

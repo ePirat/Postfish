@@ -31,6 +31,7 @@ typedef struct bartack {
 #define LO_ATTACK (1<<1)
 #define HI_DECAY  (1<<2)
 #define LO_DECAY  (1<<3)
+#define ZERO_DAMP (1<<4)
 
 struct _Multibar{
 
@@ -65,6 +66,7 @@ GtkWidget*     multibar_new             (int n, char **labels, double *levels,
 					 int flags);
 void	       multibar_clear           (Multibar *m);
 void	       multibar_set             (Multibar *m,double *lo,double *hi, int n);
+void	       multibar_setwarn         (Multibar *m);
 void           multibar_reset           (Multibar *m);
 
 G_END_DECLS

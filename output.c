@@ -124,7 +124,7 @@ static int isachr(FILE *f){
   return 0;
 }
 
-static FILE *playback_startup(int outfileno, int ch, int r){
+static FILE *playback_startup(int outfileno, int ch, int r, int *bep){
   FILE *playback_fd=NULL;
   int format=AFMT_S16_NE;
   int rate=r,channels=ch,ret;
@@ -168,6 +168,7 @@ static FILE *playback_startup(int outfileno, int ch, int r){
     }
   }else{
     WriteWav(playback_fd,ch,r,16,-1);
+    *bep=0;
   }
 
   return playback_fd;
@@ -180,7 +181,8 @@ void *playback_thread(void *dummy){
   int bigendianp=(AFMT_S16_NE==AFMT_S16_BE?1:0);
   FILE *playback_fd=NULL;
   int setupp=0;
-  time_linkage *ret;
+  time_linkage *link;
+  int result;
   off_t count=0;
   long last=-1;
 
@@ -200,34 +202,37 @@ void *playback_thread(void *dummy){
     if(playback_exit)break;
 
     /* get data */
-    if(!(ret=input_read()))break;
-    //!(ret=declip_read()))break;
-
+    link=input_read();
+    result=link->samples;
+    link=declip_read(link);
+    result|=link->samples;
+    
+    if(!result)break;
     /************/
-
-
-
+    
+    
+    
     /* temporary; this would be frequency domain in the finished postfish */
-    if(ret && ret->samples>0){
+    if(link->samples>0){
       double scale=fromdB(master_att/10.);
-      for(i=0;i<ret->samples;i++)
-	for(j=0;j<ret->channels;j++)
-	  ret->data[j][i]*=scale;
+      for(i=0;i<link->samples;i++)
+	for(j=0;j<link->channels;j++)
+	  link->data[j][i]*=scale;
     }    
 
 
     /************/
 
-    if(ret && ret->samples>0){
+    if(link->samples>0){
       memset(rms,0,sizeof(*rms)*(input_ch+2));
       memset(peak,0,sizeof(*peak)*(input_ch+2));
-      ch=ret->channels;
-      rate=ret->rate;
-
+      ch=link->channels;
+      rate=link->rate;
+      
       /* lazy playbak setup; we couldn't do it until we had rate and
 	 channel information from the pipeline */
       if(!setupp){
-	playback_fd=playback_startup(outfileno,ch,rate);
+	playback_fd=playback_startup(outfileno,ch,rate,&bigendianp);
 	if(!playback_fd){
 	  playback_active=0;
 	  playback_exit=0;
@@ -235,21 +240,21 @@ void *playback_thread(void *dummy){
 	}
 	setupp=1;
       }
-
-      if(audiobufsize<ret->channels*ret->samples*2){
-	audiobufsize=ret->channels*ret->samples*2;
+      
+      if(audiobufsize<link->channels*link->samples*2){
+	audiobufsize=link->channels*link->samples*2;
 	audiobuf=realloc(audiobuf,sizeof(*audiobuf)*audiobufsize);
       }
       
       /* final limiting and conversion */
       
-      for(k=0,i=0;i<ret->samples;i++){
+      for(k=0,i=0;i<link->samples;i++){
 	double mean=0.;
 	double div=0.;
 	double divrms=0.;
-
-	for(j=0;j<ret->channels;j++){
-	  double dval=ret->data[j][i];
+	
+	for(j=0;j<link->channels;j++){
+	  double dval=link->data[j][i];
 	  int val=rint(dval*32767.);
 	  if(val>32767)val=32767;
 	  if(val<-32768)val=-32768;
@@ -260,41 +265,40 @@ void *playback_thread(void *dummy){
 	    audiobuf[k++]=val;
 	    audiobuf[k++]=val>>8;
 	  }
-
+	  
 	  if(fabs(dval)>peak[j])peak[j]=fabs(dval);
 	  rms[j]+= dval*dval;
 	  mean+=dval;
-
+	  
 	}
-
+	
 	/* mean */
 	mean/=j;
 	if(fabs(mean)>peak[input_ch])peak[input_ch]=fabs(mean);
 	rms[input_ch]+= mean*mean;
-
+	
 	/* div */
-	for(j=0;j<ret->channels;j++){
-	  double dval=mean-ret->data[j][i];
+	for(j=0;j<link->channels;j++){
+	  double dval=mean-link->data[j][i];
 	  if(fabs(dval)>peak[input_ch+1])peak[input_ch+1]=fabs(dval);
 	  divrms+=dval*dval;
 	}
-	rms[input_ch+1]+=divrms/ret->channels;
-
+	rms[input_ch+1]+=divrms/link->channels;
+	
       }
 
       for(j=0;j<input_ch+2;j++){
-	rms[j]/=ret->samples;
+	rms[j]/=link->samples;
 	rms[j]=sqrt(rms[j]);
       }
       
-      count+=fwrite(audiobuf,1,ret->channels*ret->samples*2,playback_fd);
-
+      count+=fwrite(audiobuf,1,link->channels*link->samples*2,playback_fd);
+      
       /* inform Lord Vader his shuttle is ready */
       push_output_feedback(peak,rms);
       write(eventpipe[1],"",1);
-
-    }else
-      break; /* eof */
+      
+    }
   }
 
   if(playback_fd){

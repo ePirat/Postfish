@@ -2,13 +2,13 @@
 #include <stdlib.h>
 #include "multibar.h"
 
-static double compute_dampening(double target,double current,double delta){
+static double compute_dampening(double target,double current,double delta,int zerodamp){
   double raw_delta=target-current;
-
-  if(target<0){
+  
+  if(target<0 && !zerodamp){
     if(current>0)
       raw_delta=target-current;
-  }else if(current<0){
+  }else if(current<0 && !zerodamp){
     raw_delta=target-current;
   }else if(raw_delta<0){
     if(delta>0){
@@ -28,15 +28,10 @@ static double compute_dampening(double target,double current,double delta){
 
 
 /* call me roughly 10-20fps */
-static void draw(GtkWidget *widget,double *lowvals, double *highvals, int n){
+static void compute(GtkWidget *widget,double *lowvals, double *highvals, int n){
   int i,j;
   Multibar *m=MULTIBAR(widget);
   double max=-400;
-
-  if(!m->boxcolor){
-    m->boxcolor=gdk_gc_new(m->backing);
-    gdk_gc_copy(m->boxcolor,widget->style->black_gc);
-  }
 
   if(n>m->bars){
     if(!m->bartrackers)
@@ -59,12 +54,6 @@ static void draw(GtkWidget *widget,double *lowvals, double *highvals, int n){
   }else if(n<m->bars)
     m->bars=n;
   
-  for(i=0;i<n;i++)
-    if(highvals[i]>=0.){
-      m->clipdelay=15*10; /* ~ ten second hold */
-      break;
-    }
-
    for(i=0;i<n;i++)
     if(highvals[i]>max)max=highvals[i];
 
@@ -88,7 +77,6 @@ static void draw(GtkWidget *widget,double *lowvals, double *highvals, int n){
   }
 
   {
-    int x=-1;
     int *pixhi=alloca(n*sizeof(*pixhi));
     int *pixlo=alloca(n*sizeof(*pixlo));
     
@@ -130,7 +118,7 @@ static void draw(GtkWidget *widget,double *lowvals, double *highvals, int n){
       double dello=m->bartrackers[i].pixeldeltalo;
 
       /* hi */
-      delhi = compute_dampening(pixhi[i],trackhi,delhi);
+      delhi = compute_dampening(pixhi[i],trackhi,delhi,m->dampen_flags & ZERO_DAMP);
 
       if(pixhi[i]>trackhi){
 	if(m->dampen_flags & HI_ATTACK)pixhi[i]=trackhi+delhi;
@@ -141,7 +129,7 @@ static void draw(GtkWidget *widget,double *lowvals, double *highvals, int n){
       m->bartrackers[i].pixeldeltahi=delhi;
 
       /* lo */
-      dello = compute_dampening(pixlo[i],tracklo,dello);
+      dello = compute_dampening(pixlo[i],tracklo,dello,m->dampen_flags & ZERO_DAMP);
       if(pixlo[i]>tracklo){
 	if(m->dampen_flags & LO_ATTACK)pixlo[i]=tracklo+dello;
       }else{
@@ -152,129 +140,143 @@ static void draw(GtkWidget *widget,double *lowvals, double *highvals, int n){
 
     }
 
-    /* draw the pixel positions */
-    while(x<widget->allocation.width){
-      int r=0xffff,g=0xffff,b=0xffff;
-      GdkColor rgb={0,0,0,0};
-      int next=widget->allocation.width;
-      for(i=0;i<n;i++){
-	if(pixlo[i]>x && pixlo[i]<next)next=pixlo[i];
-	if(pixhi[i]>x && pixhi[i]<next)next=pixhi[i];
-      }
+  }
+}
+
+static void draw(GtkWidget *widget,int n){
+  int i,j,x=-1;
+  Multibar *m=MULTIBAR(widget);
+
+  if(!m->boxcolor){
+    m->boxcolor=gdk_gc_new(m->backing);
+    gdk_gc_copy(m->boxcolor,widget->style->black_gc);
+  }
+
+  /* draw the pixel positions */
+  while(x<widget->allocation.width){
+    int r=0xffff,g=0xffff,b=0xffff;
+    GdkColor rgb={0,0,0,0};
+    int next=widget->allocation.width;
+    for(i=0;i<n;i++){
+      if(m->bartrackers[i].pixelposlo>x && m->bartrackers[i].pixelposlo<next)
+	next=m->bartrackers[i].pixelposlo;
+      if(m->bartrackers[i].pixelposhi>x && m->bartrackers[i].pixelposhi<next)
+	next=m->bartrackers[i].pixelposhi;
+    }
       
-      for(i=0;i<n;i++){
-	if(pixlo[i]<=x && pixhi[i]>=next){
-	  switch(i%8){
-	  case 0:
-	    r*=.65;
-	    g*=.65;
-	    b*=.65;
-	    break;
-	  case 1:
-	    r*=1.;
-	    g*=.5;
-	    b*=.5;
-	    break;
-	  case 2:
-	    r*=.6;
-	    g*=.6;
-	    b*=1.;
-	    break;
-	  case 3:
-	    r*=.4;
-	    g*=.9;
-	    b*=.4;
-	    break;
-	  case 4:
-	    r*=.7;
-	    g*=.6;
-	    b*=.3;
-	    break;
-	  case 5:
-	    r*=.7;
-	    g*=.4;
-	    b*=.8;
-	    break;
-	  case 6:
-	    r*=.3;
-	    g*=.7;
-	    b*=.7;
-	    break;
-	  case 7:
-	    r*=.4;
-	    g*=.4;
-	    b*=.4;
-	    break;
-	  }
+    for(i=0;i<n;i++){
+      if(m->bartrackers[i].pixelposlo<=x && m->bartrackers[i].pixelposhi>=next){
+	switch(i%8){
+	case 0:
+	  r*=.65;
+	  g*=.65;
+	  b*=.65;
+	  break;
+	case 1:
+	  r*=1.;
+	  g*=.5;
+	  b*=.5;
+	  break;
+	case 2:
+	  r*=.6;
+	  g*=.6;
+	  b*=1.;
+	  break;
+	case 3:
+	  r*=.4;
+	  g*=.9;
+	  b*=.4;
+	  break;
+	case 4:
+	  r*=.7;
+	  g*=.6;
+	  b*=.3;
+	  break;
+	case 5:
+	  r*=.7;
+	  g*=.4;
+	  b*=.8;
+	  break;
+	case 6:
+	  r*=.3;
+	  g*=.7;
+	  b*=.7;
+	  break;
+	case 7:
+	  r*=.4;
+	  g*=.4;
+	  b*=.4;
+	  break;
 	}
       }
-      rgb.red=r;
-      rgb.green=g;
-      rgb.blue=b;
-      gdk_gc_set_rgb_fg_color(m->boxcolor,&rgb);
-      gdk_draw_rectangle(m->backing,m->boxcolor,1,x+1,1,next-x,widget->allocation.height-3);
-
-      x=next;
     }
-  
-
-    if(m->clipdelay){
-      gdk_draw_line (m->backing,
-		     widget->style->fg_gc[1],
-		     0, 0, widget->allocation.width-1, 0);
-      
-      gdk_draw_line (m->backing,
-		     widget->style->fg_gc[1],
-		     0, widget->allocation.height-2, 
-		     widget->allocation.width-1, widget->allocation.height-2);
-    }else{
-      gdk_draw_line (m->backing,
-		     widget->style->white_gc,
-		     0, 0, widget->allocation.width-1, 0);
-      
-      gdk_draw_line (m->backing,
-		     widget->style->white_gc,
-		     0, widget->allocation.height-2, 
-		     widget->allocation.width-1, widget->allocation.height-2);
-    }
+    rgb.red=r;
+    rgb.green=g;
+    rgb.blue=b;
+    gdk_gc_set_rgb_fg_color(m->boxcolor,&rgb);
+    gdk_draw_rectangle(m->backing,m->boxcolor,1,x+1,1,next-x,widget->allocation.height-3);
     
-    /* peak follower */
-    {
-      int x=-10;
-      for(j=0;j<=m->labels+1;j++)
-	if(m->peak>=m->levels[j]){
-	  if(m->peak<=m->levels[j+1]){
-	    double del=(m->peak-m->levels[j])/(m->levels[j+1]-m->levels[j]);
-	    x=(j+del)/m->labels*widget->allocation.width;
-	    break;
-	  }else if (j==m->labels){
-	    x=widget->allocation.width+1;
-	  }
-	}else
+    x=next;
+  }
+  
+  
+  if(m->clipdelay){
+    gdk_draw_line (m->backing,
+		   widget->style->fg_gc[1],
+		   0, 0, widget->allocation.width-1, 0);
+    
+    gdk_draw_line (m->backing,
+		   widget->style->fg_gc[1],
+		   0, widget->allocation.height-2, 
+		   widget->allocation.width-1, widget->allocation.height-2);
+  }else{
+    gdk_draw_line (m->backing,
+		   widget->style->white_gc,
+		   0, 0, widget->allocation.width-1, 0);
+    
+    gdk_draw_line (m->backing,
+		   widget->style->white_gc,
+		   0, widget->allocation.height-2, 
+		   widget->allocation.width-1, widget->allocation.height-2);
+  }
+  
+  /* peak follower */
+  {
+    int x=-10;
+    for(j=0;j<=m->labels+1;j++)
+      if(m->peak>=m->levels[j]){
+	if(m->peak<=m->levels[j+1]){
+	  double del=(m->peak-m->levels[j])/(m->levels[j+1]-m->levels[j]);
+	  x=(j+del)/m->labels*widget->allocation.width;
 	  break;
+	}else if (j==m->labels){
+	  x=widget->allocation.width+1;
+	}
+      }else
+	break;
+    
+    for(j=0;j<n;j++)
+      if(x<m->bartrackers[j].pixelposhi)
+	x=m->bartrackers[j].pixelposhi;
+    
+    {
+      int y=widget->allocation.height-1;
       
-      for(j=0;j<n;j++)
-	if(x<pixhi[j])x=pixhi[j];
+      gdk_draw_line(m->backing,widget->style->fg_gc[0],
+		    x-3,0,x+3,0);
+      gdk_draw_line(m->backing,widget->style->fg_gc[0],
+		    x-2,1,x+2,1);
+      gdk_draw_line(m->backing,widget->style->fg_gc[0],
+		    x-1,2,x+1,2);
+      gdk_draw_line(m->backing,widget->style->fg_gc[0],
+		    x-3,y-1,x+3,y-1);
+      gdk_draw_line(m->backing,widget->style->fg_gc[0],
+		    x-2,y-2,x+2,y-2);
+      gdk_draw_line(m->backing,widget->style->fg_gc[0],
+		    x-1,y-3,x+1,y-3);
       
-      {
-	int y=widget->allocation.height-1;
-
-	gdk_draw_line(m->backing,widget->style->fg_gc[0],
-		      x-3,0,x+3,0);
-	gdk_draw_line(m->backing,widget->style->fg_gc[0],
-		      x-2,1,x+2,1);
-	gdk_draw_line(m->backing,widget->style->fg_gc[0],
-		      x-1,2,x+1,2);
-	gdk_draw_line(m->backing,widget->style->fg_gc[0],
-		      x-3,y-1,x+3,y-1);
-	gdk_draw_line(m->backing,widget->style->fg_gc[0],
-		      x-2,y-2,x+2,y-2);
-	gdk_draw_line(m->backing,widget->style->fg_gc[0],
-		      x-1,y-3,x+1,y-3);
-      
-	gdk_draw_line(m->backing,widget->style->fg_gc[1],
-		      x,1,x,y-2);
-      }
+      gdk_draw_line(m->backing,widget->style->fg_gc[1],
+		    x,1,x,y-2);
     }
   }
 
@@ -285,11 +287,11 @@ static void draw(GtkWidget *widget,double *lowvals, double *highvals, int n){
     int gc=0;
     
     if(m->levels[i+1]>=0)gc=1;
-
+    
     gdk_draw_line (m->backing,
 		   widget->style->text_gc[gc],
 		   x, 0, x, y);
-
+    
     pango_layout_get_pixel_size(m->layout[i],&px,&py);
     x-=px+2;
     y-=py;
@@ -301,7 +303,6 @@ static void draw(GtkWidget *widget,double *lowvals, double *highvals, int n){
 		     m->layout[i]);
 
   }
-
 }
 
 static gboolean configure(GtkWidget *widget, GdkEventConfigure *event){
@@ -317,7 +318,15 @@ static gboolean configure(GtkWidget *widget, GdkEventConfigure *event){
   gdk_draw_rectangle(m->backing,widget->style->white_gc,1,0,0,widget->allocation.width,
 		     widget->allocation.height);
   
-  draw(widget,0,0,0);
+  compute(widget,0,0,0);
+  draw(widget,0);
+  gdk_draw_drawable(widget->window,
+		    widget->style->fg_gc[GTK_WIDGET_STATE (widget)],
+		    m->backing,
+		    0, 0,
+		    0, 0,
+		    widget->allocation.width,		  
+		    widget->allocation.height);
   return TRUE;
 }
 
@@ -410,7 +419,13 @@ GtkWidget* multibar_new (int n, char **labels, double *levels, int flags){
 
 void multibar_set(Multibar *m,double *lo, double *hi, int n){
   GtkWidget *widget=GTK_WIDGET(m);
-  draw(widget,lo,hi,n);
+  compute(widget,lo,hi,n);
+
+  if(!GTK_WIDGET_DRAWABLE(widget))return;
+  if(!GDK_IS_DRAWABLE(widget->window))return;
+  if(!GDK_IS_DRAWABLE(m->backing))return;
+  
+  draw(widget,n);
   gdk_draw_drawable(widget->window,
 		    widget->style->fg_gc[GTK_WIDGET_STATE (widget)],
 		    m->backing,
@@ -418,7 +433,6 @@ void multibar_set(Multibar *m,double *lo, double *hi, int n){
 		    0, 0,
 		    widget->allocation.width,		  
 		    widget->allocation.height);
-  
 }
 
 void multibar_reset(Multibar *m){
@@ -427,4 +441,24 @@ void multibar_reset(Multibar *m){
   m->peakdelay=0;
   m->clipdelay=0;
   multibar_set(m,NULL,NULL,0);
+}
+
+void multibar_setwarn(Multibar *m){
+  GtkWidget *widget=GTK_WIDGET(m);
+  if(!m->clipdelay){
+    m->clipdelay=15*10;
+
+    if(!GTK_WIDGET_DRAWABLE(widget))return;
+    if(!GDK_IS_DRAWABLE(widget->window))return;
+    if(!GDK_IS_DRAWABLE(m->backing))return;
+    draw(widget,m->bars);
+    gdk_draw_drawable(widget->window,
+		      widget->style->fg_gc[GTK_WIDGET_STATE (widget)],
+		      m->backing,
+		      0, 0,
+		      0, 0,
+		      widget->allocation.width,		  
+		      widget->allocation.height);
+  }else
+    m->clipdelay=15*10; /* ~ ten second hold */
 }

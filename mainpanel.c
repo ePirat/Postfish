@@ -581,43 +581,6 @@ void mainpanel_create(postfish_mainpanel *panel,char **chlabels){
   gtk_widget_set_name(panel->leftback,"winpanel");
 
   /* left side of main panel */
-
-  //gtk_container_set_border_width (GTK_CONTAINER (panel->leftframe), 3);
-  gtk_container_set_border_width (GTK_CONTAINER (panel->wintable), 3);
-  gtk_frame_set_shadow_type(GTK_FRAME(panel->leftframe),GTK_SHADOW_ETCHED_IN);
-  gtk_container_add(GTK_CONTAINER(panel->leftframe),panel->wintable);
-
-  gtk_table_set_row_spacings(GTK_TABLE(panel->wintable),1);
-
-  {
-    GtkWidget *temp=gtk_label_new(NULL);
-    gtk_label_set_markup(GTK_LABEL(temp),"<span size=\"x-small\">visible</span>");
-    gtk_misc_set_alignment(GTK_MISC(temp),0,.5);
-    gtk_table_attach_defaults(GTK_TABLE(panel->wintable),temp,0,1,0,1);
-
-    temp=gtk_label_new(NULL);
-    gtk_label_set_markup(GTK_LABEL(temp),"<span size=\"x-small\">active</span>");
-    gtk_misc_set_alignment(GTK_MISC(temp),1,.5);
-    gtk_table_attach_defaults(GTK_TABLE(panel->wintable),temp,1,2,0,1);
-  }
-
-  mainpanel_panelentry(panel,"_Declip ","[d]",0,clippanel_create);
-  mainpanel_panelentry(panel,"Cross_Talk ","[t]",1,0);
-  mainpanel_panelentry(panel,"_Noise Filter ","[n]",2,0);
-  mainpanel_panelentry(panel,"_Equalizer ","[e]",3,0);
-  mainpanel_panelentry(panel,"_Compander ","[c]",4,0);
-  mainpanel_panelentry(panel,"_Limiter ","[l]",5,0);
-  mainpanel_panelentry(panel,"_Output Cal. ","[o]",6,0);
-
-
-  g_signal_connect (G_OBJECT (panel->toplevel), "delete_event",
-		    G_CALLBACK (shutdown), NULL);
-    
-  g_signal_connect (G_OBJECT (panel->toplevel), "delete_event",
-		    G_CALLBACK (shutdown), NULL);
-
-    
-  /* right side of main panel */
   {
     char *labels[12]={"-96","-72","-60","-48","-36","-24",
 		      "-16","-8","-3","0","+3","+6"};
@@ -844,6 +807,43 @@ void mainpanel_create(postfish_mainpanel *panel,char **chlabels){
 
   }
 
+  /* right side of main panel */
+
+  //gtk_container_set_border_width (GTK_CONTAINER (panel->leftframe), 3);
+  gtk_container_set_border_width (GTK_CONTAINER (panel->wintable), 3);
+  gtk_frame_set_shadow_type(GTK_FRAME(panel->leftframe),GTK_SHADOW_ETCHED_IN);
+  gtk_container_add(GTK_CONTAINER(panel->leftframe),panel->wintable);
+
+  gtk_table_set_row_spacings(GTK_TABLE(panel->wintable),1);
+
+  {
+    GtkWidget *temp=gtk_label_new(NULL);
+    gtk_label_set_markup(GTK_LABEL(temp),"<span size=\"x-small\">visible</span>");
+    gtk_misc_set_alignment(GTK_MISC(temp),0,.5);
+    gtk_table_attach_defaults(GTK_TABLE(panel->wintable),temp,0,1,0,1);
+
+    temp=gtk_label_new(NULL);
+    gtk_label_set_markup(GTK_LABEL(temp),"<span size=\"x-small\">active</span>");
+    gtk_misc_set_alignment(GTK_MISC(temp),1,.5);
+    gtk_table_attach_defaults(GTK_TABLE(panel->wintable),temp,1,2,0,1);
+  }
+
+  mainpanel_panelentry(panel,"_Declip ","[d]",0,clippanel_create);
+  mainpanel_panelentry(panel,"Cross_Talk ","[t]",1,0);
+  mainpanel_panelentry(panel,"_Noise Filter ","[n]",2,0);
+  mainpanel_panelentry(panel,"_Equalizer ","[e]",3,0);
+  mainpanel_panelentry(panel,"_Compander ","[c]",4,0);
+  mainpanel_panelentry(panel,"_Limiter ","[l]",5,0);
+  mainpanel_panelentry(panel,"_Output Cal. ","[o]",6,0);
+
+
+  g_signal_connect (G_OBJECT (panel->toplevel), "delete_event",
+		    G_CALLBACK (shutdown), NULL);
+    
+  g_signal_connect (G_OBJECT (panel->toplevel), "delete_event",
+		    G_CALLBACK (shutdown), NULL);
+
+    
   gtk_widget_show_all(panel->toplevel);
   gtk_window_set_resizable(GTK_WINDOW(panel->toplevel),0);
 
@@ -865,9 +865,11 @@ static gboolean feedback_process(postfish_mainpanel *panel){
     int     n=input_ch+2;
     double *rms=alloca(sizeof(*rms)*(input_ch+2));
     double *peak=alloca(sizeof(*peak)*(input_ch+2));
-    if(pull_input_feedback(peak,rms,&time_cursor)){
+
+    if(pull_output_feedback(peak,rms)){
       char buffer[14];
       int i;
+	
       for(i=0;i<n;i++){
 	if(gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(panel->channelshow[i]))){
 	  peak[i]=todB(peak[i]);
@@ -876,15 +878,13 @@ static gboolean feedback_process(postfish_mainpanel *panel){
 	  peak[i]=-400;
 	  rms[i]=-400;
 	}
+
+	if(i<input_ch && peak[i]>=0.)multibar_setwarn(MULTIBAR(panel->outbar));
       }
       
-      multibar_set(MULTIBAR(panel->inbar),rms,peak,n);
-      input_cursor_to_time(time_cursor,buffer);
-      readout_set(READOUT(panel->cue),buffer);
+      multibar_set(MULTIBAR(panel->outbar),rms,peak,n);
 
-      clippanel_feedback();
-
-      if(pull_output_feedback(peak,rms)){
+      if(pull_input_feedback(peak,rms,&time_cursor)){
 	for(i=0;i<n;i++){
 	  if(gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(panel->channelshow[i]))){
 	    peak[i]=todB(peak[i]);
@@ -895,13 +895,16 @@ static gboolean feedback_process(postfish_mainpanel *panel){
 	  }
 	}
 	
-	multibar_set(MULTIBAR(panel->outbar),rms,peak,n);
+	multibar_set(MULTIBAR(panel->inbar),rms,peak,n);
+	input_cursor_to_time(time_cursor,buffer);
+	readout_set(READOUT(panel->cue),buffer);
       }
 
-
+      clippanel_feedback();
+      
     }
   }
-
+  
 }
 
 static gboolean async_event_handle(GIOChannel *channel,
@@ -933,6 +936,8 @@ void mainpanel_go(int argc,char *argv[], int ch){
     strcat(homerc,rcfile);
     gtk_rc_add_default_file(homerc);
   }
+  gtk_rc_add_default_file(".postfish-gtkrc");
+  gtk_rc_add_default_file("postfish-gtkrc");
   gtk_init (&argc, &argv);
 
   memset(labels,0,sizeof(labels));
