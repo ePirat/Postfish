@@ -217,11 +217,13 @@ void singlepanel_create(postfish_mainpanel *mp,
   float per_levels[9]={0,12.5,25,37.5,50,62.5,75,87.5,100};
   char  *per_labels[8]={"","25%","","50%","","75%","","100%"};
 
+  char *shortcut[]={" o "};
 
-  subpanel_generic *panel=subpanel_create(mp,windowbutton,activebutton,
+  subpanel_generic *panel=subpanel_create(mp,windowbutton,&activebutton,
 					  &singlecomp_active,
 					  &singlecomp_visible,
-					  "_Oneband Compand"," o ");
+					  "_Oneband Compand",shortcut,
+					  0,1);
   
   GtkWidget *sliderframe=gtk_frame_new(NULL);
   GtkWidget *allbox=gtk_vbox_new(0,0);

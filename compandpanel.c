@@ -510,11 +510,13 @@ void compandpanel_create(postfish_mainpanel *mp,
   float per_levels[9]={0,12.5,25,37.5,50,62.5,75,87.5,100};
   char  *per_labels[8]={"","25%","","50%","","75%","","100%"};
 
+  char *shortcut[]={" m "};
 
-  subpanel_generic *panel=subpanel_create(mp,windowbutton,activebutton,
+  subpanel_generic *panel=subpanel_create(mp,windowbutton,&activebutton,
 					  &compand_active,
 					  &compand_visible,
-					  "_Multiband Compand"," [m] ");
+					  "_Multiband Compand",shortcut,
+					  0,1);
   
   GtkWidget *hbox=gtk_hbox_new(0,0);
   GtkWidget *sliderbox=gtk_vbox_new(0,0);

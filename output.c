@@ -232,7 +232,7 @@ void *playback_thread(void *dummy){
     /* get data */
     link=input_read();
     result=link->samples;
-    //link=declip_read(link);
+    link=declip_read(link);
     result|=link->samples;
     link=multicompand_read(link);
     result|=link->samples;

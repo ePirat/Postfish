@@ -52,7 +52,7 @@ static int fillstate=0; /* 0: uninitialized
 static time_linkage out;
 
 /* accessed across threads */
-sig_atomic_t declip_active=0;
+sig_atomic_t *declip_active;
 sig_atomic_t declip_visible=0;
 sig_atomic_t declip_converge=2; /* 0=over, 1=full, 2=half, 3=partial, 4=approx */
 
@@ -105,6 +105,7 @@ int pull_declip_feedback(int *clip,float *peak,int *total){
 /* called only by initial setup */
 int declip_load(void){
   int i;
+  declip_active=calloc(input_ch,sizeof(*declip_active));
   chtrigger=malloc(input_ch*sizeof(*chtrigger));
   for(i=0;i<input_ch;i++)
     chtrigger[i]=1.;
@@ -205,7 +206,8 @@ static void sliding_bark_average(float *f,int n,float width){
 static void declip(float *lap,float *out,
 		   int blocksize,float trigger,
 		   float epsilon, float iteration,
-		   int *runningtotal, int *runningcount,float *peak){
+		   int *runningtotal, int *runningcount,float *peak,
+		   int active){
   float flag[blocksize*2];
   int    iterbound,i,j,count=0;
   
@@ -221,7 +223,7 @@ static void declip(float *lap,float *out,
   *runningtotal+=blocksize;
   *runningcount+=count;
 
-  if(declip_active){
+  if(active){
 
     for(i=0;i<blocksize/2;i++)flag[i]=0.;
     for(i=blocksize*3/2;i<blocksize*2;i++)flag[i]=0.;
@@ -323,7 +325,7 @@ time_linkage *declip_read(time_linkage *in){
       memcpy(work+blocksize,temp,sizeof(*work)*blocksize/2);
       declip(lap[i],0,blocksize,
 	     local_trigger[i],local_convergence,local_iterations,
-	     &total,count+i,peak+i);
+	     &total,count+i,peak+i,declip_active[i]);
       
       memset(cache[i],0,sizeof(**cache)*input_size);
       in->data[i]=cache[i];
@@ -347,14 +349,14 @@ time_linkage *declip_read(time_linkage *in){
 	memcpy(work+blocksize/2,temp+j,sizeof(*work)*blocksize);
 	declip(lap[i],out.data[i]+j,blocksize,
 	       local_trigger[i],local_convergence,local_iterations,
-	       &total,count+i,peak+i);
+	       &total,count+i,peak+i,declip_active[i]);
       }
       memcpy(work+blocksize/2,temp+j,sizeof(*work)*blocksize/2);
       memcpy(work+blocksize,in->data[i],sizeof(*work)*blocksize/2);
       
       declip(lap[i],out.data[i]+j,blocksize,
 	     local_trigger[i],local_convergence,local_iterations,
-	     &total,count+i,peak+i);
+	     &total,count+i,peak+i,declip_active[i]);
       
       cache[i]=in->data[i];
       in->data[i]=temp;

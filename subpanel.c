@@ -63,17 +63,23 @@ static int windowbutton_action(GtkWidget *widget,
 static int activebutton_action(GtkWidget *widget,
 			gpointer in){
   subpanel_generic *p=in;
-  int active;
+  int active,i;
 
-  if(widget==p->subpanel_activebutton){
-    active=gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(p->subpanel_activebutton));
-    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->mainpanel_activebutton),active);
-  }else{
-    active=gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(p->mainpanel_activebutton));
-    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->subpanel_activebutton),active);
+  for(i=0;i<p->active_button_count;i++){
+    if(widget==p->subpanel_activebutton[i]){
+      active=gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(p->subpanel_activebutton[i]));
+      gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->mainpanel_activebutton[i]),active);
+      p->activevar[i]=active;
+      break;
+    }
+    if(widget==p->mainpanel_activebutton[i]){
+      active=gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(p->mainpanel_activebutton[i]));
+      gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->subpanel_activebutton[i]),active);
+      p->activevar[i]=active;
+      break;
+    }
   }
   
-  *p->activevar=active;
   return FALSE;
 }
 
@@ -97,6 +103,14 @@ static gboolean rebind_space(GtkWidget *widget,
 static gboolean forward_events(GtkWidget *widget,
 			       GdkEvent *event,
 			       gpointer in){
+
+  /* if this is a shortcutless panel, check first for a numeral
+     keypress; the intent of this mechanism is to handle focus
+     rotation on the activation buttons on a panel handling > 10
+     channels with multiple activation buttons. */
+
+
+
   subpanel_generic *p=in;
   GdkEvent copy=*(GdkEvent *)event;
   copy.any.window=p->mainpanel->toplevel->window;
@@ -110,10 +124,11 @@ void subpanel_show_all_but_toplevel(subpanel_generic *s){
 
 subpanel_generic *subpanel_create(postfish_mainpanel *mp,
 				  GtkWidget *windowbutton,
-				  GtkWidget *activebutton,
+				  GtkWidget **activebutton,
 				  sig_atomic_t *activevar,
 				  sig_atomic_t *mappedvar,
-				  char *prompt,char *shortcut){
+				  char *prompt,char **shortcut,
+				  int start,int num){
 
   subpanel_generic *panel=calloc(1,sizeof(*panel));
 
@@ -121,22 +136,36 @@ subpanel_generic *subpanel_create(postfish_mainpanel *mp,
   GtkWidget *toplabelframe=gtk_frame_new(NULL);
   GtkWidget *toplabel=gtk_hbox_new(0,0);
   GtkWidget *toplabelwb=windowbutton_new(prompt);
-  GtkWidget *toplabelab=0;
+  GtkWidget *toplabelab[num];
+  int i;
   
-  if(activebutton && activevar)
-    toplabelab=gtk_toggle_button_new_with_label(shortcut);
-  
-  panel->subpanel_topframe=gtk_frame_new (NULL);
+  for(i=0;i<num;i++){
+    if(shortcut && shortcut[i]){
+      toplabelab[i]=gtk_toggle_button_new_with_label(shortcut[i]);
+    }else{
+      char buf[80];
+      sprintf(buf," %d ",i+start+1);
+	toplabelab[i]=gtk_toggle_button_new_with_label(buf);
+    }
+  }
+
+  panel->active_button_count=num;
+  panel->active_button_start=start;
+
+  panel->subpanel_topframe=gtk_frame_new(NULL);
   panel->subpanel_windowbutton=toplabelwb;
-  panel->subpanel_activebutton=toplabelab;
+  panel->subpanel_activebutton=malloc(num*sizeof(*panel->subpanel_activebutton));
+  memcpy(panel->subpanel_activebutton,toplabelab,num*sizeof(*toplabelab));
 
   panel->mainpanel_windowbutton=windowbutton;
-  panel->mainpanel_activebutton=activebutton;
+  panel->mainpanel_activebutton=calloc(num,sizeof(*activebutton));
+  memcpy(panel->mainpanel_activebutton,activebutton,num*sizeof(*activebutton));
   panel->activevar=activevar;
   panel->mappedvar=mappedvar;
   
   gtk_box_pack_start(GTK_BOX(toplabel),toplabelwb,0,0,5);
-  gtk_box_pack_end(GTK_BOX(toplabel),toplabelab,0,0,5);
+  for(i=num-1;i>=0;i--)
+    gtk_box_pack_end(GTK_BOX(toplabel),toplabelab[i],0,0,5);
 
   gtk_widget_set_name(toplabelwb,"panelbutton");
   gtk_widget_set_name(toplabelbox,"panelbox");
@@ -176,10 +205,11 @@ subpanel_generic *subpanel_create(postfish_mainpanel *mp,
 			  G_CALLBACK (windowbutton_action), panel);
   g_signal_connect_after (G_OBJECT (panel->subpanel_windowbutton), "clicked",
 			  G_CALLBACK (windowbutton_action), panel);
-  if(activebutton && activevar){
-    g_signal_connect_after (G_OBJECT (panel->mainpanel_activebutton), "clicked",
+
+  for(i=0;i<num;i++){
+    g_signal_connect_after (G_OBJECT (panel->mainpanel_activebutton[i]), "clicked",
 			    G_CALLBACK (activebutton_action), panel);
-    g_signal_connect_after (G_OBJECT (panel->subpanel_activebutton), "clicked",
+    g_signal_connect_after (G_OBJECT (panel->subpanel_activebutton[i]), "clicked",
 			    G_CALLBACK (activebutton_action), panel);
   }
 

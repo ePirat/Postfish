@@ -30,7 +30,7 @@
 #include "subpanel.h"
 #include "declip.h"
 
-extern sig_atomic_t declip_active;
+extern sig_atomic_t *declip_active;
 extern sig_atomic_t declip_visible;
 extern int input_ch;
 extern int input_size;
@@ -108,16 +108,17 @@ static void limit_slider_change(GtkWidget *w,gpointer in){
 }
 
 void clippanel_create(postfish_mainpanel *mp,
-		      GtkWidget *windowbutton,
-		      GtkWidget *activebutton){
+		      GtkWidget **windowbutton,
+		      GtkWidget **activebutton){
   int i;
   char *labels[2]={"10%","100%"};
   float levels[3]={0.,10.,100.};
   int block_choices=0;
 
-  subpanel_generic *panel=subpanel_create(mp,windowbutton,activebutton,
-					  &declip_active,&declip_visible,
-					  "_Declipping filter setup"," [d] ");
+  subpanel_generic *panel=subpanel_create(mp,windowbutton[0],activebutton,
+					  declip_active,&declip_visible,
+					  "_Declipping filter setup",NULL,
+					  0,input_ch);
   
   GtkWidget *framebox=gtk_hbox_new(1,0);
   GtkWidget *framebox_right=gtk_vbox_new(0,0);

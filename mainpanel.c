@@ -469,7 +469,7 @@ static void mainpanel_chentry(postfish_mainpanel *p,
 			      int channelwinp,
 			      void (*panel_create)
 			      (postfish_mainpanel *,
-			       GtkWidget *, GtkWidget *)){  
+			       GtkWidget **, GtkWidget **)){  
   
   int j;
   GtkWidget *wm[input_ch];
@@ -528,8 +528,7 @@ static void mainpanel_chentry(postfish_mainpanel *p,
 
   }
 
-  //p->buttonactive[i]=wa;
-  //if(panel_create)(*panel_create)(p,ww,wa);
+  if(panel_create)(*panel_create)(p,wm,wa);
 }
 
 static void mainpanel_masterentry(postfish_mainpanel *p,
@@ -977,7 +976,7 @@ void mainpanel_create(postfish_mainpanel *panel,char **chlabels){
   }
 
   mainpanel_chentry(panel,channeltable,"Mute ",0,0,0,0);
-  mainpanel_chentry(panel,channeltable,"_Declip ",1,1,0,0);
+  mainpanel_chentry(panel,channeltable,"_Declip ",1,1,0,clippanel_create);
   mainpanel_chentry(panel,channeltable,"_Multicomp ",2,0,1,0);
   mainpanel_chentry(panel,channeltable,"_Onecomp ",3,0,1,0);
   mainpanel_chentry(panel,channeltable,"De_verb ",4,1,0,0);

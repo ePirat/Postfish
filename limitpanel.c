@@ -105,10 +105,13 @@ void limitpanel_create(postfish_mainpanel *mp,
   float timing_levels[6]={.1,1,10,100,1000,10000};
   char  *timing_labels[5]={"1ms","10ms","100ms","1s","10s"};
 
-  subpanel_generic *panel=subpanel_create(mp,windowbutton,activebutton,
+  char *shortcut[]={" l "};
+
+  subpanel_generic *panel=subpanel_create(mp,windowbutton,&activebutton,
 					  &limit_active,
 					  &limit_visible,
-					  "Hard _Limiter"," [l] ");
+					  "Hard _Limiter",shortcut,
+					  0,1);
   
   GtkWidget *slidertable=gtk_table_new(4,4,0);
 

@@ -66,11 +66,13 @@ void eqpanel_create(postfish_mainpanel *mp,
 		    "30","20","10","0","+10","+20","+30"};
   float levels[16]={-120,-110,-100,-90,-80,-70,-60,-50,-40,
 		     -30,-20,-10,0,10,20,30};
+  char *shortcut[]={" e "};
 
-  subpanel_generic *panel=subpanel_create(mp,windowbutton,activebutton,
+  subpanel_generic *panel=subpanel_create(mp,windowbutton,&activebutton,
 					  &eq_active,
 					  &eq_visible,
-					  "_Equalization filter"," [e] ");
+					  "_Equalization filter",shortcut,
+					  0,1);
   
   GtkWidget *slidertable=gtk_table_new(eq_freqs,3,0);
 

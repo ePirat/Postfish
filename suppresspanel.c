@@ -126,11 +126,14 @@ void suppresspanel_create(postfish_mainpanel *mp,
 
   float timing_levels[5]={1, 10, 100, 1000, 10000};
   char  *timing_labels[4]={"10ms","     100ms","1s","10s"};
+
+  char *shortcut[]={" v "};
   
-  subpanel_generic *panel=subpanel_create(mp,windowbutton,activebutton,
+  subpanel_generic *panel=subpanel_create(mp,windowbutton,&activebutton,
 					  &suppress_active,
 					  &suppress_visible,
-					  "De_verberation filter"," [v] ");
+					  "De_verberation filter",shortcut,
+					  0,1);
   
 
   GtkWidget *table=gtk_table_new(suppress_freqs+4,5,0);
