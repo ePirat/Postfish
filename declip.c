@@ -31,6 +31,7 @@
 extern int input_rate;
 extern int input_ch;
 extern int input_size;
+extern int inbytes;
 
 /* accessed only in playback thread/setup */
 static drft_lookup fft;
@@ -133,7 +134,7 @@ int declip_setblock(int n){
 int declip_settrigger(double trigger,int ch){
   if(ch<0 || ch>=input_ch)return -1;
   pthread_mutex_lock(&master_mutex);
-  chtrigger[ch]=trigger-(1./32768);
+  chtrigger[ch]=trigger-(1./(1<<(inbytes*8-1)))-(1./(1<<(inbytes*8-2)));
   pthread_mutex_unlock(&master_mutex);
   return 0;
 }

@@ -34,7 +34,7 @@ int seekable;
 
 int input_rate;
 int input_ch;
-static int inbytes;
+int inbytes;
 static int signp;
 int input_size;
 
