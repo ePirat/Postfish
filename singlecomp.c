@@ -61,34 +61,12 @@ typedef struct{
   float **cache;
   int cache_samples;
 
+  u_int32_t mutemask0;
+
 } singlecomp_state;
 
 singlecomp_settings scset;
 singlecomp_state scs;
-
-static void _analysis(char *base,int i,float *v,int n,int dB,int offset){
-  int j;
-  FILE *of;
-  char buffer[80];
-
-  sprintf(buffer,"%s_%d.m",base,i);
-  of=fopen(buffer,"a");
-  
-  if(!of)perror("failed to open data dump file");
-  
-  for(j=0;j<n;j++){
-    fprintf(of,"%f ",(float)j+offset);
-    if(dB)
-      fprintf(of,"%f\n",todB(v[j]));
-    else
-      fprintf(of,"%f\n",(v[j]));
-  }
-  fprintf(of,"\n");
-  fclose(of);
-}
-
-static int offset=0;
-
 
 /* feedback! */
 typedef struct singlecomp_feedback{
@@ -361,6 +339,8 @@ time_linkage *singlecomp_read(time_linkage *in){
       scs.out.samples=0;
       return &scs.out;
     }
+    scs.mutemask0=in->active;
+
     for(i=0;i<input_ch;i++){
       float *temp=in->data[i];
       float adj[input_size]; // under will set it
@@ -514,8 +494,8 @@ time_linkage *singlecomp_read(time_linkage *in){
         memset(scs.out.data[i]+scs.out.samples,0,sizeof(**scs.out.data)*tozero);
   }
 
-  offset+=input_size;
-
+  scs.out.active=scs.mutemask0;
+  scs.mutemask0=in->active;
   return &scs.out;
 }
 

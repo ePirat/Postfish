@@ -115,14 +115,16 @@ int suppress_load(void){
   return 0;
 }
 
-static void suppress_work(float **peakfeed,float **rmsfeed){
+static void suppress_work(void *vs){
+  suppress_state *sss=(suppress_state *)vs;
+  subband_state *ss=&sss->ss;
   int i,j,k,l;
   float smoothms=sset.smooth*.1;
   float triggerms=sset.trigger*.1;
   float releasems=sset.release*.1;
-  iir_filter *trigger=&sss.trigger;
-  iir_filter *smooth=&sss.smooth;
-  iir_filter *release=&sss.release;
+  iir_filter *trigger=&sss->trigger;
+  iir_filter *smooth=&sss->smooth;
+  iir_filter *release=&sss->release;
   int ahead;
 
   if(smoothms!=smooth->ms)filter_set(smoothms,smooth,1,4);
@@ -132,48 +134,52 @@ static void suppress_work(float **peakfeed,float **rmsfeed){
   ahead=impulse_ahead4(smooth->alpha);
   
   for(i=0;i<suppress_freqs;i++){
-
-    if(suppress_active){
-      float fast[input_size];
-      float slow[input_size];
-      float multiplier = 1.-1000./sset.ratio[i];
-
-      for(j=0;j<input_ch;j++){
+    int firstlink=0;
+    float fast[input_size];
+    float slow[input_size];
+    float multiplier = 1.-1000./sset.ratio[i];
+    
+    for(j=0;j<input_ch;j++){
+      int active=(ss->effect_active1[j] || 
+		  ss->effect_active0[j] || 
+		  ss->effect_activeC[j]);
+      
+      if(active){
 	if(sset.linkp){
-	  if(j==0){
+	  if(!firstlink){
+	    firstlink++;
 	    memset(fast,0,sizeof(fast));
 	    float scale=1./input_ch;
 	    for(l=0;l<input_ch;l++){
-	      float *x=sss.ss.lap[i][l]+ahead;
+	      float *x=sss->ss.lap[i][l]+ahead;
 	      for(k=0;k<input_size;k++)
 		fast[k]+=x[k]*x[k];
 	    }
 	    for(k=0;k<input_size;k++)
 	      fast[k]*=scale;
-
-	    //_analysis("rms",i,fast,input_size,0,offset);
-
+	    
 	  }
 	  
 	}else{
-	  float *x=sss.ss.lap[i][j]+ahead;
+	  float *x=sss->ss.lap[i][j]+ahead;
 	  for(k=0;k<input_size;k++)
 	    fast[k]=x[k]*x[k];
 	}
-
 	
-	if(j==0 || sset.linkp==0){
-
-	  compute_iir_symmetric4(fast, input_size, &sss.iirS[i][j],
-				smooth);
+	
+	if(sset.linkp==0 || firstlink==1){
+	  firstlink++;
+	  
+	  compute_iir_symmetric4(fast, input_size, &sss->iirS[i][j],
+				 smooth);
 	  
 	  //_analysis("smooth",i,fast,input_size,1,offset);
 	  
-	  compute_iir_freefall1(fast, input_size, &sss.iirT[i][j],
-	  		 trigger);
+	  compute_iir_freefall1(fast, input_size, &sss->iirT[i][j],
+				trigger);
 	  memcpy(slow,fast,sizeof(slow));
-	  compute_iir_freefall1(slow, input_size, &sss.iirR[i][j],
-			       release);
+	  compute_iir_freefall1(slow, input_size, &sss->iirR[i][j],
+				release);
 	  
 	  //_analysis("fast",i,fast,input_size,1,offset);
 	  //_analysis("slow",i,slow,input_size,1,offset);
@@ -181,24 +187,35 @@ static void suppress_work(float **peakfeed,float **rmsfeed){
 	    fast[k]=fromdB_a((todB_a(slow+k)-todB_a(fast+k))*.5*multiplier);
 	  //_analysis("adj",i,fast,input_size,1,offset);
 	}
-
-
+	
+	
 	{
-	  float *x=sss.ss.lap[i][j];
+	  float *x=sss->ss.lap[i][j];
 	  for(k=0;k<input_size;k++)
 	    if(fast[k]<1.)
 	      x[k]*=fast[k];
 	}
+      }else{
+	/* reset filters to sane inactive default */
+	memset(&sss->iirS[i][j],0,sizeof(iir_state));
+	memset(&sss->iirT[i][j],0,sizeof(iir_state));
+	memset(&sss->iirR[i][j],0,sizeof(iir_state));
       }
     }
   }
 }
 
 time_linkage *suppress_read(time_linkage *in){
-  int bypass=!(suppress_active);
+  int visible[input_ch];
+  int active[input_ch];
+  int i;
+
+  for(i=0;i<input_ch;i++){
+    visible[i]=0;
+    active[i]=suppress_active;
+  }
   
-  return subband_read(in,&sss.ss,&sss.sw,
-		      suppress_work,bypass);
+  return subband_read(in, &sss.ss, &sss.sw, visible, active, suppress_work, &sss);
 }
 
 

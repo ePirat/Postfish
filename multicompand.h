@@ -73,12 +73,12 @@ typedef struct {
   sig_atomic_t under_lookahead;
   sig_atomic_t under_trim;
 
+  sig_atomic_t active_bank;
 } other_compand_settings;
 
 extern void multicompand_reset();
 extern int multicompand_load(void);
 extern time_linkage *multicompand_read(time_linkage *in);
-extern void multicompand_set_bank(int bank);
 extern int pull_multicompand_feedback(float **peak,float **rms,int *bands);
 
 extern int multicompand_over_attack_set(float msec);

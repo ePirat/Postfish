@@ -226,6 +226,7 @@ static void slider_change(GtkWidget *w,gpointer in){
   cbar *b=(cbar *)in;
   int o,u;
   int i;
+  int adj;
 
   u=multibar_get_value(MULTIBAR(b->slider),0);
   sprintf(buffer,"%+4ddB",u);
@@ -246,101 +247,98 @@ static void slider_change(GtkWidget *w,gpointer in){
 	bc[2].static_o[0]+=o-bc[2].static_o[1];
 	bc[2].static_u[0]+=u-bc[2].static_u[1];
       }
-      if (b->number<9){
-	int adj;
-
-	/* convolutions for roundoff behavior */
-	if(b->number>0){
-	  adj=(bc[1].static_o[b->number*2-1]*2 -
-	       bc[1].static_o[b->number*2-2]-bc[1].static_o[b->number*2])/2;
-	  bc[1].static_o[b->number*2-1]=
+      
+      /* convolutions for roundoff behavior */
+      if(b->number>0){
+	adj=(bc[1].static_o[b->number*2-1]*2 -
+	     bc[1].static_o[b->number*2-2]-bc[1].static_o[b->number*2])/2;
+	bc[1].static_o[b->number*2-1]=
 	    (bc[1].static_o[b->number*2-2]+o)/2+adj;
-
-	  adj=(bc[1].static_u[b->number*2-1]*2 -
-	       bc[1].static_u[b->number*2-2]-bc[1].static_u[b->number*2])/2;
-	  bc[1].static_u[b->number*2-1]=
-	    (bc[1].static_u[b->number*2-2]+u)/2+adj;
-
-	  adj=(bc[2].static_o[b->number*3-1]*3 -
-	       bc[2].static_o[b->number*3-2] - 
-	       bc[2].static_o[b->number*3-2] - 
-	       bc[2].static_o[b->number*3+1])/3;
-	  bc[2].static_o[b->number*3-1]=
-	    (bc[2].static_o[b->number*3-2]+
-	     bc[2].static_o[b->number*3-2]+
-	     o)/3+adj;
-
-	  adj=(bc[2].static_o[b->number*3]*3 -
-	       bc[2].static_o[b->number*3-2] - 
-	       bc[2].static_o[b->number*3+1] - 
-	       bc[2].static_o[b->number*3+1])/3;
-	  bc[2].static_o[b->number*3]=
-	    (bc[2].static_o[b->number*3-2]+o+o)/3+adj;
-
-	  adj=(bc[2].static_u[b->number*3-1]*3 -
-	       bc[2].static_u[b->number*3-2] - 
-	       bc[2].static_u[b->number*3-2] - 
-	       bc[2].static_u[b->number*3+1])/3;
-	  bc[2].static_u[b->number*3-1]=
-	    (bc[2].static_u[b->number*3-2]+
-	     bc[2].static_u[b->number*3-2]+
-	     u)/3+adj;
-
-	  adj=(bc[2].static_u[b->number*3]*3 -
-	       bc[2].static_u[b->number*3-2] - 
-	       bc[2].static_u[b->number*3+1] - 
-	       bc[2].static_u[b->number*3+1])/3;
-	  bc[2].static_u[b->number*3]=
-	    (bc[2].static_u[b->number*3-2]+u+u)/3+adj;
-
-	}
-
-	if(b->number<9){
-	  adj=(bc[1].static_o[b->number*2+1]*2-
-	       bc[1].static_o[b->number*2+2]-bc[1].static_o[b->number*2])/2;
-	  bc[1].static_o[b->number*2+1]=
-	    (bc[1].static_o[b->number*2+2]+o)/2+adj;
-	  
-	  adj=(bc[1].static_u[b->number*2+1]*2-
-	       bc[1].static_u[b->number*2+2]-bc[1].static_u[b->number*2])/2;
-	  bc[1].static_u[b->number*2+1]=
-	    (bc[1].static_u[b->number*2+2]+u)/2+adj;
-
-	  adj=(bc[2].static_o[b->number*3+3]*3 -
-	       bc[2].static_o[b->number*3+4] - 
-	       bc[2].static_o[b->number*3+4] - 
-	       bc[2].static_o[b->number*3+1])/3;
-	  bc[2].static_o[b->number*3+3]=
-	    (bc[2].static_o[b->number*3+4]+
-	     bc[2].static_o[b->number*3+4]+
-	     o)/3+adj;
-
-	  adj=(bc[2].static_o[b->number*3+2]*3 -
-	       bc[2].static_o[b->number*3+4] - 
-	       bc[2].static_o[b->number*3+1] - 
-	       bc[2].static_o[b->number*3+1])/3;
-	  bc[2].static_o[b->number*3+2]=
-	    (bc[2].static_o[b->number*3+4]+o+o)/3+adj;
-
-	  adj=(bc[2].static_u[b->number*3+3]*3 -
-	       bc[2].static_u[b->number*3+4] - 
-	       bc[2].static_u[b->number*3+4] - 
-	       bc[2].static_u[b->number*3+1])/3;
-	  bc[2].static_u[b->number*3+3]=
-	    (bc[2].static_u[b->number*3+4]+
-	     bc[2].static_u[b->number*3+4]+
-	     u)/3+adj;
-
-	  adj=(bc[2].static_u[b->number*3+2]*3 -
-	       bc[2].static_u[b->number*3+4] - 
-	       bc[2].static_u[b->number*3+1] - 
-	       bc[2].static_u[b->number*3+1])/3;
-	  bc[2].static_u[b->number*3+2]=
-	    (bc[2].static_u[b->number*3+4]+u+u)/3+adj;
-
-	}
+	
+	adj=(bc[1].static_u[b->number*2-1]*2 -
+	     bc[1].static_u[b->number*2-2]-bc[1].static_u[b->number*2])/2;
+	bc[1].static_u[b->number*2-1]=
+	  (bc[1].static_u[b->number*2-2]+u)/2+adj;
+	
+	adj=(bc[2].static_o[b->number*3-1]*3 -
+	     bc[2].static_o[b->number*3-2] - 
+	     bc[2].static_o[b->number*3-2] - 
+	     bc[2].static_o[b->number*3+1])/3;
+	bc[2].static_o[b->number*3-1]=
+	  (bc[2].static_o[b->number*3-2]+
+	   bc[2].static_o[b->number*3-2]+
+	   o)/3+adj;
+	
+	adj=(bc[2].static_o[b->number*3]*3 -
+	     bc[2].static_o[b->number*3-2] - 
+	     bc[2].static_o[b->number*3+1] - 
+	     bc[2].static_o[b->number*3+1])/3;
+	bc[2].static_o[b->number*3]=
+	  (bc[2].static_o[b->number*3-2]+o+o)/3+adj;
+	
+	adj=(bc[2].static_u[b->number*3-1]*3 -
+	     bc[2].static_u[b->number*3-2] - 
+	     bc[2].static_u[b->number*3-2] - 
+	     bc[2].static_u[b->number*3+1])/3;
+	bc[2].static_u[b->number*3-1]=
+	  (bc[2].static_u[b->number*3-2]+
+	   bc[2].static_u[b->number*3-2]+
+	   u)/3+adj;
+	
+	adj=(bc[2].static_u[b->number*3]*3 -
+	     bc[2].static_u[b->number*3-2] - 
+	     bc[2].static_u[b->number*3+1] - 
+	     bc[2].static_u[b->number*3+1])/3;
+	bc[2].static_u[b->number*3]=
+	  (bc[2].static_u[b->number*3-2]+u+u)/3+adj;
+	
       }
-
+      
+      if(b->number<9){
+	adj=(bc[1].static_o[b->number*2+1]*2-
+	     bc[1].static_o[b->number*2+2]-bc[1].static_o[b->number*2])/2;
+	bc[1].static_o[b->number*2+1]=
+	  (bc[1].static_o[b->number*2+2]+o)/2+adj;
+	
+	adj=(bc[1].static_u[b->number*2+1]*2-
+	     bc[1].static_u[b->number*2+2]-bc[1].static_u[b->number*2])/2;
+	bc[1].static_u[b->number*2+1]=
+	  (bc[1].static_u[b->number*2+2]+u)/2+adj;
+	
+	adj=(bc[2].static_o[b->number*3+3]*3 -
+	     bc[2].static_o[b->number*3+4] - 
+	     bc[2].static_o[b->number*3+4] - 
+	     bc[2].static_o[b->number*3+1])/3;
+	bc[2].static_o[b->number*3+3]=
+	  (bc[2].static_o[b->number*3+4]+
+	   bc[2].static_o[b->number*3+4]+
+	   o)/3+adj;
+	
+	adj=(bc[2].static_o[b->number*3+2]*3 -
+	     bc[2].static_o[b->number*3+4] - 
+	     bc[2].static_o[b->number*3+1] - 
+	     bc[2].static_o[b->number*3+1])/3;
+	bc[2].static_o[b->number*3+2]=
+	  (bc[2].static_o[b->number*3+4]+o+o)/3+adj;
+	
+	adj=(bc[2].static_u[b->number*3+3]*3 -
+	     bc[2].static_u[b->number*3+4] - 
+	     bc[2].static_u[b->number*3+4] - 
+	     bc[2].static_u[b->number*3+1])/3;
+	bc[2].static_u[b->number*3+3]=
+	  (bc[2].static_u[b->number*3+4]+
+	   bc[2].static_u[b->number*3+4]+
+	   u)/3+adj;
+	
+	adj=(bc[2].static_u[b->number*3+2]*3 -
+	     bc[2].static_u[b->number*3+4] - 
+	     bc[2].static_u[b->number*3+1] - 
+	     bc[2].static_u[b->number*3+1])/3;
+	bc[2].static_u[b->number*3+2]=
+	  (bc[2].static_u[b->number*3+4]+u+u)/3+adj;
+	
+      }
+      
       if(b->number==9){
 	bc[1].static_o[19]+=o-bc[1].static_o[18];
 	bc[1].static_u[19]+=u-bc[1].static_u[18];
@@ -461,7 +459,8 @@ static void static_octave(GtkWidget *w,gpointer in){
 	  gtk_widget_hide(bars[i].readoutu);
 	}
       }
-      multicompand_set_bank(bank_active);
+
+      c.active_bank=bank_active;
       
     }
   }
