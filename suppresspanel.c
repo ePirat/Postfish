@@ -45,17 +45,15 @@ typedef struct{
   Multibar *s;
   Readout *r0;
   Readout *r1;
-  Readout *r2;
   sig_atomic_t *v0;
   sig_atomic_t *v1;
-  sig_atomic_t *v2;
-} callback_arg_rv3;
+} callback_arg_rv2;
 
 typedef struct suppress_panel_state{
   subpanel_generic *panel;
 
   GtkWidget        *link;
-  callback_arg_rv3  timing;
+  callback_arg_rv2  timing;
   tbar              bars[suppress_freqs];
 } suppress_panel_state;
 
@@ -66,7 +64,6 @@ void suppresspanel_state_to_config(int bank){
   config_set_vector("suppresspanel_ratio",bank,0,0,0,suppress_freqs,suppress_channel_set.ratio);
   config_set_integer("suppresspanel_set",bank,0,0,0,0,suppress_channel_set.linkp);
   config_set_integer("suppresspanel_set",bank,0,0,0,1,suppress_channel_set.smooth);
-  config_set_integer("suppresspanel_set",bank,0,0,0,2,suppress_channel_set.trigger);
   config_set_integer("suppresspanel_set",bank,0,0,0,3,suppress_channel_set.release);
 }
 
@@ -89,11 +86,8 @@ void suppresspanel_state_from_config(int bank){
   config_get_sigat("suppresspanel_set",bank,0,0,0,1,&suppress_channel_set.smooth);
   multibar_thumb_set(MULTIBAR(channel_panel->timing.s),suppress_channel_set.smooth*.1,0);
 
-  config_get_sigat("suppresspanel_set",bank,0,0,0,2,&suppress_channel_set.trigger);
-  multibar_thumb_set(MULTIBAR(channel_panel->timing.s),suppress_channel_set.trigger*.1,1);
-
   config_get_sigat("suppresspanel_set",bank,0,0,0,3,&suppress_channel_set.release);
-  multibar_thumb_set(MULTIBAR(channel_panel->timing.s),suppress_channel_set.release*.1,2);
+  multibar_thumb_set(MULTIBAR(channel_panel->timing.s),suppress_channel_set.release*.1,1);
 }
 
 static void compand_change(GtkWidget *w,gpointer in){
@@ -112,11 +106,10 @@ static void compand_change(GtkWidget *w,gpointer in){
 }
 
 static void timing_change(GtkWidget *w,gpointer in){
-  callback_arg_rv3 *ca=(callback_arg_rv3 *)in;
+  callback_arg_rv2 *ca=(callback_arg_rv2 *)in;
   char buffer[80];
   float smooth=multibar_get_value(MULTIBAR(w),0);
-  float trigger=multibar_get_value(MULTIBAR(w),1);
-  float release=multibar_get_value(MULTIBAR(w),2);
+  float release=multibar_get_value(MULTIBAR(w),1);
   
   if(smooth<100){
     sprintf(buffer,"%4.1fms",smooth);
@@ -129,17 +122,6 @@ static void timing_change(GtkWidget *w,gpointer in){
   }
   readout_set(ca->r0,buffer);
 
-  if(trigger<100){
-    sprintf(buffer,"%4.1fms",trigger);
-  }else if (trigger<1000){
-    sprintf(buffer,"%4.0fms",trigger);
-  }else if (trigger<10000){
-    sprintf(buffer," %4.2fs",trigger/1000.);
-  }else{
-    sprintf(buffer," %4.1fs",trigger/1000.);
-  }
-  readout_set(ca->r1,buffer);
-
   if(release<100){
     sprintf(buffer,"%4.1fms",release);
   }else if (release<1000){
@@ -149,11 +131,10 @@ static void timing_change(GtkWidget *w,gpointer in){
   }else{
     sprintf(buffer," %4.1fs",release/1000.);
   }
-  readout_set(ca->r2,buffer);
+  readout_set(ca->r1,buffer);
 
   *ca->v0=rint(smooth*10.);
-  *ca->v1=rint(trigger*10.);
-  *ca->v2=rint(release*10.);
+  *ca->v1=rint(release*10.);
 }
 
 static void suppress_link(GtkToggleButton *b,gpointer in){
@@ -171,11 +152,10 @@ static suppress_panel_state *suppresspanel_create_helper(postfish_mainpanel *mp,
   float timing_levels[5]={1, 10, 100, 1000, 10000};
   char  *timing_labels[5]={"","10ms","     100ms","1s","10s"};
 
-  GtkWidget *table=gtk_table_new(suppress_freqs+4,5,0);
+  GtkWidget *table=gtk_table_new(suppress_freqs+4,4,0);
   GtkWidget *timinglabel=gtk_label_new("suppressor filter timing");
   GtkWidget *releaselabel=gtk_label_new("release");
   GtkWidget *smoothlabel=gtk_label_new("smooth");
-  GtkWidget *triggerlabel=gtk_label_new("trigger");
   GtkWidget *compandlabel=gtk_label_new("suppression depth");
 
   GtkWidget *linkbutton=
@@ -197,20 +177,16 @@ static suppress_panel_state *suppresspanel_create_helper(postfish_mainpanel *mp,
 		   GTK_EXPAND|GTK_FILL,
 		   GTK_EXPAND|GTK_FILL,
 		   0,0);
-  gtk_table_attach(GTK_TABLE(table),triggerlabel,3,4,0,1,
+  gtk_table_attach(GTK_TABLE(table),releaselabel,3,4,0,1,
 		   GTK_EXPAND|GTK_FILL,
 		   GTK_EXPAND|GTK_FILL,
 		   0,0);
-  gtk_table_attach(GTK_TABLE(table),releaselabel,4,5,0,1,
-		   GTK_EXPAND|GTK_FILL,
-		   GTK_EXPAND|GTK_FILL,
-		   0,0);
-  gtk_table_attach(GTK_TABLE(table),compandlabel,0,4,2,3,
+  gtk_table_attach(GTK_TABLE(table),compandlabel,0,3,2,3,
 		   GTK_EXPAND|GTK_FILL,
 		   GTK_EXPAND|GTK_FILL,
 		   0,5);
   if(input_ch>1)
-    gtk_table_attach(GTK_TABLE(table),linkbox,0,5,suppress_freqs+3,
+    gtk_table_attach(GTK_TABLE(table),linkbox,0,4,suppress_freqs+3,
 		     suppress_freqs+4,GTK_FILL|GTK_EXPAND,0,0,10);
 
   gtk_table_set_row_spacing(GTK_TABLE(table),1,5);
@@ -219,8 +195,6 @@ static suppress_panel_state *suppresspanel_create_helper(postfish_mainpanel *mp,
   gtk_widget_set_name(timinglabel,"framelabel");
   gtk_misc_set_alignment(GTK_MISC(smoothlabel),.5,1.);
   gtk_widget_set_name(smoothlabel,"scalemarker");
-  gtk_misc_set_alignment(GTK_MISC(triggerlabel),.5,1.);
-  gtk_widget_set_name(triggerlabel,"scalemarker");
   gtk_misc_set_alignment(GTK_MISC(releaselabel),.5,1.);
   gtk_widget_set_name(releaselabel,"scalemarker");
   gtk_misc_set_alignment(GTK_MISC(compandlabel),0,1.);
@@ -233,31 +207,26 @@ static suppress_panel_state *suppresspanel_create_helper(postfish_mainpanel *mp,
 
   /* timing controls */
   {
-    GtkWidget *slider=multibar_slider_new(5,timing_labels,timing_levels,3);
+    GtkWidget *slider=multibar_slider_new(5,timing_labels,timing_levels,2);
 
     ps->timing.s=MULTIBAR(slider);
 
     ps->timing.r0=READOUT(readout_new("10.0ms"));
     ps->timing.r1=READOUT(readout_new("10.0ms"));
-    ps->timing.r2=READOUT(readout_new("10.0ms"));
 
     ps->timing.v0=&sset->smooth;
-    ps->timing.v1=&sset->trigger;
-    ps->timing.v2=&sset->release;
+    ps->timing.v1=&sset->release;
 
     multibar_callback(MULTIBAR(slider),timing_change,&ps->timing);
     
     multibar_thumb_set(MULTIBAR(slider),80,0);
-    multibar_thumb_set(MULTIBAR(slider),100,1);
-    multibar_thumb_set(MULTIBAR(slider),2000,2);
+    multibar_thumb_set(MULTIBAR(slider),400,2);
 
     gtk_table_attach(GTK_TABLE(table),slider,1,2,1,2,
 		     GTK_FILL|GTK_EXPAND,GTK_EXPAND,5,0);
     gtk_table_attach(GTK_TABLE(table),GTK_WIDGET(ps->timing.r0),2,3,1,2,
 		     0,0,0,0);
     gtk_table_attach(GTK_TABLE(table),GTK_WIDGET(ps->timing.r1),3,4,1,2,
-		     0,0,0,0);
-    gtk_table_attach(GTK_TABLE(table),GTK_WIDGET(ps->timing.r2),4,5,1,2,
 		     0,0,0,0);
   }
 
@@ -281,9 +250,9 @@ static suppress_panel_state *suppresspanel_create_helper(postfish_mainpanel *mp,
     gtk_table_attach(GTK_TABLE(table),label,0,1,i+3,i+4,
 		     GTK_FILL,0,0,0);
 
-    gtk_table_attach(GTK_TABLE(table),ps->bars[i].cslider,1,4,i+3,i+4,
+    gtk_table_attach(GTK_TABLE(table),ps->bars[i].cslider,1,3,i+3,i+4,
 		     GTK_FILL|GTK_EXPAND,GTK_EXPAND,5,0);
-    gtk_table_attach(GTK_TABLE(table),GTK_WIDGET(ps->bars[i].readoutc),4,5,
+    gtk_table_attach(GTK_TABLE(table),GTK_WIDGET(ps->bars[i].readoutc),3,4,
 		     i+3,i+4,0,0,0,0);
   }
   subpanel_show_all_but_toplevel(panel);

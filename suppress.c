@@ -49,11 +49,9 @@ typedef struct {
   subband_state ss;
   
   iir_filter smooth;
-  iir_filter trigger;
   iir_filter release;
   
   iir_state *iirS[suppress_freqs];
-  iir_state *iirT[suppress_freqs];
   iir_state *iirR[suppress_freqs];
 
   float prevratio[suppress_freqs];
@@ -72,7 +70,6 @@ void suppress_reset(){
   for(i=0;i<suppress_freqs;i++){
     for(j=0;j<input_ch;j++){
       memset(&channel_state.iirS[i][j],0,sizeof(iir_state));
-      memset(&channel_state.iirT[i][j],0,sizeof(iir_state));
       memset(&channel_state.iirR[i][j],0,sizeof(iir_state));
     }
   }
@@ -111,7 +108,6 @@ int suppress_load(void){
    
   for(i=0;i<suppress_freqs;i++){
     channel_state.iirS[i]=calloc(input_ch,sizeof(iir_state));
-    channel_state.iirT[i]=calloc(input_ch,sizeof(iir_state));
     channel_state.iirR[i]=calloc(input_ch,sizeof(iir_state));
   }
   return 0;
@@ -122,15 +118,12 @@ static void suppress_work_helper(void *vs, suppress_settings *sset){
   subband_state *ss=&sss->ss;
   int i,j,k,l;
   float smoothms=sset->smooth*.1;
-  float triggerms=sset->trigger*.1;
   float releasems=sset->release*.1;
-  iir_filter *trigger=&sss->trigger;
   iir_filter *smooth=&sss->smooth;
   iir_filter *release=&sss->release;
   int ahead;
 
   if(smoothms!=smooth->ms)filter_set(ss,smoothms,smooth,1,2);
-  if(triggerms!=trigger->ms)filter_set(ss,triggerms,trigger,0,2);
   if(releasems!=release->ms)filter_set(ss,releasems,release,0,2);
 
   ahead=impulse_ahead2(smooth->alpha);
@@ -174,8 +167,8 @@ static void suppress_work_helper(void *vs, suppress_settings *sset){
 	  memcpy(slow,fast,sizeof(slow));
 
 	  
-	  compute_iir_fast_attack2(fast, input_size, &sss->iirT[i][j],
-				smooth,trigger);
+	  compute_iir_symmetric2(fast, input_size, &sss->iirS[i][j],
+				smooth);
 	  compute_iir_fast_attack2(slow, input_size, &sss->iirR[i][j],
 				smooth,release);
 	  
@@ -205,7 +198,6 @@ static void suppress_work_helper(void *vs, suppress_settings *sset){
 	    for(l=0;l<input_ch;l++){
 	      if(l!=j){
 		memcpy(&sss->iirS[i][l],&sss->iirS[i][j],sizeof(iir_state));
-		memcpy(&sss->iirT[i][l],&sss->iirT[i][j],sizeof(iir_state));
 		memcpy(&sss->iirR[i][l],&sss->iirR[i][j],sizeof(iir_state));
 	      }
 	    }
@@ -224,7 +216,6 @@ static void suppress_work_helper(void *vs, suppress_settings *sset){
       }else{
 	/* reset filters to sane inactive default */
 	memset(&sss->iirS[i][j],0,sizeof(iir_state));
-	memset(&sss->iirT[i][j],0,sizeof(iir_state));
 	memset(&sss->iirR[i][j],0,sizeof(iir_state));
       }
     }
