@@ -42,6 +42,26 @@ static float *q;
 static float *s;
 static int blocksize=0;
 
+
+void reconstruct_init(int minblock,int maxblock){
+  int i;
+
+  q=fftwf_malloc((maxblock+2)*sizeof(*q));
+  s=fftwf_malloc((maxblock+2)*sizeof(*s));
+
+  /* fftw priming trick; run it thorugh the paces and prime a plan for
+     every size we may need.  fftw will cache the information and not
+     need to re-measure later */
+
+  for(i=minblock;i<=maxblock;i<<=1){
+    fftwf_qf=fftwf_plan_dft_r2c_1d(i,q,(fftwf_complex *)q,FFTW_MEASURE);
+    fftwf_qb=fftwf_plan_dft_c2r_1d(i,(fftwf_complex *)q,q,FFTW_MEASURE);
+    fftwf_destroy_plan(fftwf_qf);
+    fftwf_destroy_plan(fftwf_qb);
+  }
+}
+
+
 void reconstruct_reinit(int n){
   if(blocksize!=n){
     if(blocksize){

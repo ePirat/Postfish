@@ -240,6 +240,13 @@ void *playback_thread(void *dummy){
     link=declip_read(link);
     result|=link->samples;
 
+    /* XXXX Temporary! Until later plugins can handle mute, we zero out
+       muted channels here */
+    for(i=0;i<input_ch;i++)
+      if((link->active & (1<<i))==0)
+	memset(link->data[i],0,sizeof(*link->data[i])*input_size);
+
+
     link=multicompand_read(link);
     result|=link->samples;
     link=singlecomp_read(link);

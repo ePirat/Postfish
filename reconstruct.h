@@ -21,6 +21,7 @@
  * 
  */
 
+extern void reconstruct_init(int min,int max);
 extern void reconstruct_reinit(int n);
 extern void reconstruct(float *x, float *w, float *flag, 
 			float e,int max);

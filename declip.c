@@ -34,7 +34,9 @@ extern int input_size;
 extern int inbytes;
 
 /* accessed only in playback thread/setup */
+
 static fftwf_plan fftwf_weight;
+
 static float *work;
 static float *freq;
 
@@ -62,29 +64,6 @@ static float *chtrigger=0;
 static sig_atomic_t pending_blocksize=0;
 static float convergence=0.;
 static float iterations=0.;
-
-#include <stdio.h>
-static void _analysis(char *base,int i,float *v,int n,int dB,int offset){
-  int j;
-  FILE *of;
-  char buffer[80];
-
-  sprintf(buffer,"%s_%d.m",base,i);
-  of=fopen(buffer,"a");
-  
-  if(!of)perror("failed to open data dump file");
-  
-  for(j=0;j<n;j++){
-    fprintf(of,"%f ",(float)j+offset);
-    if(dB)
-      fprintf(of,"%f\n",todB(v[j]));
-    else
-      fprintf(of,"%f\n",(v[j]));
-  }
-  fprintf(of,"\n");
-  fclose(of);
-}
-
 
 /* feedback! */
 typedef struct declip_feedback{
@@ -149,14 +128,13 @@ static void setup_window(int left,int right){
 
 static void setup_blocksize(int newblocksize){
   int i;
+
   if(blocksize)fftwf_destroy_plan(fftwf_weight);
   blocksize=newblocksize;
-
-  fftwf_weight=fftwf_plan_dft_r2c_1d(blocksize*2,
-				     work,
-				     (fftwf_complex *)freq,
-				     FFTW_MEASURE);
-
+  fftwf_weight=fftwf_plan_dft_r2c_1d(blocksize*2,work,
+					(fftwf_complex *)freq,
+					FFTW_MEASURE);
+  
   lopad=1-rint(fromBark(toBark(0.)-width)*blocksize*2/input_rate);
   hipad=rint(fromBark(toBark(input_rate*.5)+width)*blocksize*2/input_rate)+lopad;
   for(i=0;i<blocksize;i++){
@@ -171,7 +149,7 @@ static void setup_blocksize(int newblocksize){
 
 /* called only by initial setup */
 int declip_load(void){
-  int i;
+  int i,j;
   declip_active=calloc(input_ch,sizeof(*declip_active));
   declip_prev_active=calloc(input_ch,sizeof(*declip_prev_active));
   chtrigger=malloc(input_ch*sizeof(*chtrigger));
@@ -204,8 +182,16 @@ int declip_load(void){
     widthlookup=malloc((hiestpad+1)*sizeof(*widthlookup));
     freq=fftwf_malloc((blocksize*2+2)*sizeof(freq));
     work=fftwf_malloc((blocksize*2)*sizeof(freq));
-  }
 
+    for(i=0,j=32;j<=blocksize*2;i++,j*=2){
+      fftwf_weight=fftwf_plan_dft_r2c_1d(j,work,
+					 (fftwf_complex *)freq,
+					 FFTW_MEASURE);
+      fftwf_destroy_plan(fftwf_weight);
+    }
+  }
+  reconstruct_init(32,input_size*4);
+  
   pending_blocksize=input_size*2;
   return(0);
 }
@@ -321,7 +307,6 @@ static void declip(int blocksize,float trigger,
 }
 
 /* called only by playback thread */
-static int offset=0;
 time_linkage *declip_read(time_linkage *in){
   int i,j,k;
   float local_trigger[input_ch];
@@ -359,7 +344,7 @@ time_linkage *declip_read(time_linkage *in){
       declip_prev_active[i]=channel_active;
 
       /* peak feedback */
-      if(declip_visible){
+      if(declip_visible && !mute_channel_muted(in->active,i)){
 	float *l=in->data[i];
 	for(j=0;j<in->samples;j++)
 	  if(fabs(l[j])>peak[i])peak[i]=fabs(l[j]);
@@ -435,7 +420,7 @@ time_linkage *declip_read(time_linkage *in){
       int channel_active=declip_active[i];
 
       /* peak feedback */
-      if(declip_visible){
+      if(declip_visible && !mute_channel_muted(in->active,i)){
 	float *l=in->data[i];
 	for(j=0;j<in->samples;j++)
 	  if(fabs(l[j])>peak[i])peak[i]=fabs(l[j]);
@@ -644,12 +629,6 @@ time_linkage *declip_read(time_linkage *in){
   }
 
   out.active=active;
-
-  /* XXXX Temporary! Until later plugins can handle mute, we zero out
-     muted channels here */
-  for(i=0;i<input_ch;i++)
-    if((active & (1<<i))==0)
-      memset(out.data[i],0,sizeof(*out.data[i])*input_size);
 
   return &out;
 }
