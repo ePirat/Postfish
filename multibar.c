@@ -68,10 +68,7 @@ static void compute(Multibar *m,float *lowvals, float *highvals, int n){
   if(m->thumbs<1){
     xpad=2;
   }else{
-    if(m->thumbs>1)
-      xpad=((height+1)/2)+(height/2-3)*3/2+1;
-    else
-      xpad=height/2+1;
+    xpad=((height+1)/2)+(height/2-3)*3/2+1;
   }
   m->xpad=xpad;
 
@@ -362,10 +359,15 @@ static void draw(GtkWidget *widget,int n){
     
     if(m->levels[i]>0.)gc=1;
     
-    gdk_draw_line (m->backing,
-		   widget->style->text_gc[gc],
-		   x, upad, x, y+upad);
-    
+    if(m->readout)
+      gdk_draw_line (m->backing,
+		     widget->style->text_gc[gc],
+		     x, upad, x, y+upad);
+    else
+      gdk_draw_line (m->backing,
+		     widget->style->text_gc[gc],
+		     x, y/4+upad, x, y+upad);
+
     if(i>0){
       pango_layout_get_pixel_size(m->layout[i-1],&px,&py);
       x-=px+2;
@@ -383,7 +385,7 @@ static void draw(GtkWidget *widget,int n){
   {
     int width=widget->allocation.width;
     int height=widget->allocation.height;
-    int apad=(m->thumbs<2?-height/2+2:3-xpad);
+    int apad=3-xpad;
     GdkGC *gc=parent->style->bg_gc[0];
     GdkGC *light_gc=parent->style->light_gc[0];
     GdkGC *dark_gc=parent->style->dark_gc[0];
@@ -455,12 +457,14 @@ static void draw(GtkWidget *widget,int n){
     int height=widget->allocation.height;
     GdkGC *black_gc=widget->style->black_gc;
     int y=height/2-3;
+    int y0=height/3-1;
     int y1=height-3;
-    int y0=y-(y1-y-1);
+    int yM=(y1+y0)/2-y0;
 
     GdkColor yellow={0,0xff00,0xd000,0};
-
-    if(m->thumbs>1){
+    
+    if(m->thumbs==1){
+      /* single thumb: wide center */
       GdkGC *gc=widget->style->bg_gc[m->thumbstate[0]];
       GdkGC *light_gc=widget->style->light_gc[m->thumbstate[0]];
       GdkGC *dark_gc=widget->style->dark_gc[m->thumbstate[0]];
@@ -470,123 +474,163 @@ static void draw(GtkWidget *widget,int n){
       int x1=x+(y1-y-2);
       int x2=x0-y*3/2;
       int x3=x1+y*3/2;
-
-      GdkPoint tp[6]={ {x-1,y},{x2+3,y},{x2,y+3},
-		       {x2,y1+1},{x0-1,y1+1},{x0-1,y1-2}};
-
-      gdk_draw_polygon(m->backing,gc,TRUE,tp,6);
-
-      gdk_draw_line(m->backing,light_gc,x-2,y,x2+3,y);
-      gdk_draw_line(m->backing,light_gc,x2+3,y,x2,y+3);
-      gdk_draw_line(m->backing,light_gc,x2,y+3,x2,y1);
-
-      gdk_draw_line(m->backing,dark_gc,x2+1,y1,x0-2,y1);
-      gdk_draw_line(m->backing,dark_gc,x0-2,y1,x0-2,y1-2);
-      gdk_draw_line(m->backing,dark_gc,x0-2,y1-2,x-3,y+1);
-
-      gdk_draw_line(m->backing,black_gc,x2,y1+1,x0-1,y1+1);
-      gdk_draw_line(m->backing,black_gc,x0-1,y1+1,x0-1,y1-2);
-      gdk_draw_line(m->backing,black_gc,x0,y1-3,x-2,y+1);
-
-      gdk_gc_set_rgb_fg_color(m->boxcolor,&yellow);
-      gdk_draw_line(m->backing,m->boxcolor,x,0,x,height-lpad);
-
+      
+      GdkPoint tp[7]={ {x,y0},{x-yM,y0+yM},{x2,y0+yM},{x2,y1+1},{x3,y1+1},{x3,y0+yM},{x+yM,y0+yM} };
+      
+      gdk_draw_polygon(m->backing,gc,TRUE,tp,7);
+      
+      gdk_draw_line(m->backing,dark_gc,x2+1,y1,x3-1,y1);
+      gdk_draw_line(m->backing,dark_gc,x3-1,y1,x3-1,y0+yM+1);
+      
       if(m->thumbfocus==0){
-	GdkPoint tp[6]={ {x-3,y+1},{x2+3,y+1},{x2+1,y+3},
-			 {x2+1,y1+1},{x0-1,y1+1},{x0-1,y1-2}};
-
 	if(x&1)
 	  gdk_gc_set_stipple(black_gc,stipple);
 	else
 	  gdk_gc_set_stipple(black_gc,stippleB);
 	gdk_gc_set_fill(black_gc,GDK_STIPPLED);
-	gdk_draw_polygon(m->backing,black_gc,TRUE,tp,6);
+	gdk_draw_polygon(m->backing,black_gc,TRUE,tp,7);
 	gdk_gc_set_fill(black_gc,GDK_SOLID);
       }
-
+      
+      gdk_draw_line(m->backing,light_gc,x3-1,y0+yM,x+yM,y0+yM);
+      gdk_draw_line(m->backing,light_gc,x+yM,y0+yM,x,y0);
+      gdk_draw_line(m->backing,light_gc,x,y0,x-yM,y0+yM);
+      gdk_draw_line(m->backing,light_gc,x-yM,y0+yM,x2,y0+yM);
+      gdk_draw_line(m->backing,light_gc,x2,y0+yM,x2,y1);
+      
+      gdk_draw_line(m->backing,black_gc,x2,y1+1,x3,y1+1);
+      gdk_draw_line(m->backing,black_gc,x3,y1+1,x3,y0+yM);
+      
+      gdk_gc_set_rgb_fg_color(m->boxcolor,&yellow);
+      gdk_draw_line(m->backing,m->boxcolor,x,y1-1,x,0);
+      
     }
-
+  
     if(m->thumbs>1){
-      int num=(m->thumbs>2?2:1);
-      GdkGC *gc=widget->style->bg_gc[m->thumbstate[num]];
-      GdkGC *light_gc=widget->style->light_gc[m->thumbstate[num]];
-      GdkGC *dark_gc=widget->style->dark_gc[m->thumbstate[num]];
       
-      int x=m->thumbpixel[num]+xpad;
-      int x0=x-(y1-y-2);
-      int x1=x+(y1-y-2);
-      int x2=x0-y*3/2;
-      int x3=x1+y*3/2;
+      /* two thumbs: left */
+      {
+	GdkGC *gc=widget->style->bg_gc[m->thumbstate[0]];
+	GdkGC *light_gc=widget->style->light_gc[m->thumbstate[0]];
+	GdkGC *dark_gc=widget->style->dark_gc[m->thumbstate[0]];
+	
+	int x=m->thumbpixel[0]+xpad;
+	int x0=x-(y1-y-2);
+	int x1=x+(y1-y-2);
+	int x2=x0-y*3/2;
+	int x3=x1+y*3/2;
+	
+	GdkPoint tp[5]={ {x,y0},{x-yM,y0+yM},{x2,y0+yM},{x2,y1+1},
+			 {x,y1+1}};
+	
+	gdk_draw_polygon(m->backing,gc,TRUE,tp,5);
 
-      GdkPoint tp[6]={ {x+1,y},{x3-3,y},{x3,y+3},
-		       {x3,y1+1},{x1+1,y1+1},{x1+1,y1-2}};
+	gdk_draw_line(m->backing,dark_gc,x2+1,y1,x-1,y1);
+	gdk_draw_line(m->backing,dark_gc,x-1,y1,x-1,y0+1);
 
-      gdk_draw_polygon(m->backing,gc,TRUE,tp,6);
+	if(m->thumbfocus==0){
+	  if(x&1)
+	    gdk_gc_set_stipple(black_gc,stipple);
+	  else
+	    gdk_gc_set_stipple(black_gc,stippleB);
+	  gdk_gc_set_fill(black_gc,GDK_STIPPLED);
+	  gdk_draw_polygon(m->backing,black_gc,TRUE,tp,5);
+	  gdk_gc_set_fill(black_gc,GDK_SOLID);
+	}
+	
+	gdk_draw_line(m->backing,light_gc,x,y0,x-yM,y0+yM);
+	gdk_draw_line(m->backing,light_gc,x-yM-1,y0+yM,x2,y0+yM);
+	gdk_draw_line(m->backing,light_gc,x2,y0+yM,x2,y1+1);
 
-      gdk_draw_line(m->backing,light_gc,x+1,y,x3-3,y);
-      gdk_draw_line(m->backing,light_gc,x3-3,y,x3-1,y+2);
-      gdk_draw_line(m->backing,light_gc,x1+1,y1-2,x1+1,y1);
-
-      gdk_draw_line(m->backing,dark_gc,x+3,y+1,x1+1,y1-3);
-      gdk_draw_point(m->backing,dark_gc,x1+1,y1-2);
-      gdk_draw_line(m->backing,dark_gc,x1+2,y1,x3-1,y1);
-      gdk_draw_line(m->backing,dark_gc,x3-1,y1,x3-1,y+3);
-
-      gdk_draw_line(m->backing,black_gc,x+2,y+1,x1,y1-3);
-      gdk_draw_line(m->backing,black_gc,x1+1,y1+1,x3,y1+1);
-      gdk_draw_line(m->backing,black_gc,x3,y1+1,x3,y+4);
-
-      gdk_gc_set_rgb_fg_color(m->boxcolor,&yellow);
-      gdk_draw_line(m->backing,m->boxcolor,x,0,x,height-lpad);
-
-      if(m->thumbfocus==num){
-	GdkPoint tp[6]={ {x+3,y+1},{x3-2,y+1},{x3,y+3},
-			 {x3,y1+1},{x1+1,y1+1},{x1+1,y1-2}};
-
-	if(x&1)
-	  gdk_gc_set_stipple(black_gc,stipple);
-	else
-	  gdk_gc_set_stipple(black_gc,stippleB);
-	gdk_gc_set_fill(black_gc,GDK_STIPPLED);
-	gdk_draw_polygon(m->backing,black_gc,TRUE,tp,6);
-	gdk_gc_set_fill(black_gc,GDK_SOLID);
+	gdk_draw_line(m->backing,black_gc,x2,y1+1,x,y1+1);
+	gdk_draw_line(m->backing,black_gc,x,y1+1,x,y0);
+	
+	gdk_gc_set_rgb_fg_color(m->boxcolor,&yellow);
+	gdk_draw_line(m->backing,m->boxcolor,x,y1-1,x,0);
+	
       }
-    }
+      /* two thumbs: right */
+      {
+	int num=(m->thumbs>2?2:1);
+	GdkGC *gc=widget->style->bg_gc[m->thumbstate[num]];
+	GdkGC *light_gc=widget->style->light_gc[m->thumbstate[num]];
+	GdkGC *dark_gc=widget->style->dark_gc[m->thumbstate[num]];
+	
+	int x=m->thumbpixel[num]+xpad;
+	int x0=x-(y1-y-2);
+	int x1=x+(y1-y-2);
+	int x2=x0-y*3/2;
+	int x3=x1+y*3/2;
+	
+	GdkPoint tp[5]={ {x,y0},{x+yM,y0+yM},{x3,y0+yM},{x3,y1+1},
+			 {x,y1+1}};
 
-    if(m->thumbs==1 || m->thumbs==3){
-      int num=(m->thumbs>1?1:0);
+	gdk_draw_polygon(m->backing,gc,TRUE,tp,5);
 
-      GdkGC *gc=widget->style->bg_gc[m->thumbstate[num]];
-      GdkGC *light_gc=widget->style->light_gc[m->thumbstate[num]];
-      GdkGC *dark_gc=widget->style->dark_gc[m->thumbstate[num]];
+	gdk_draw_line(m->backing,dark_gc,x+1,y1,x3-1,y1);
+	gdk_draw_line(m->backing,dark_gc,x3-1,y1,x3-1,y0+yM+1);
+
+	if(m->thumbfocus==num){
+	  if(x&1)
+	    gdk_gc_set_stipple(black_gc,stipple);
+	  else
+	    gdk_gc_set_stipple(black_gc,stippleB);
+	  gdk_gc_set_fill(black_gc,GDK_STIPPLED);
+	  gdk_draw_polygon(m->backing,black_gc,TRUE,tp,5);
+	  gdk_gc_set_fill(black_gc,GDK_SOLID);
+	}
+
+	gdk_draw_line(m->backing,light_gc,x3-1,y0+yM,x+yM,y0+yM);
+	gdk_draw_line(m->backing,light_gc,x+yM,y0+yM,x,y0);
+	gdk_draw_line(m->backing,light_gc,x,y0,x,y1);
+	
+	gdk_draw_line(m->backing,black_gc,x,y1+1,x3,y1+1);
+	gdk_draw_line(m->backing,black_gc,x3,y1+1,x3,y0+yM);
+	
+	gdk_gc_set_rgb_fg_color(m->boxcolor,&yellow);
+	gdk_draw_line(m->backing,m->boxcolor,x,y1-1,x,0);
+	
+      }
+
+      if(m->thumbs==3){
+	/* three thumbs: minimal center */
+	GdkGC *gc=widget->style->bg_gc[m->thumbstate[1]];
+	GdkGC *light_gc=widget->style->light_gc[m->thumbstate[1]];
+	GdkGC *dark_gc=widget->style->dark_gc[m->thumbstate[1]];
       
-      int x=m->thumbpixel[num]+xpad;
-      int x0=x-(y1-y-2);
-      int x1=x+(y1-y-2);
+	int x=m->thumbpixel[1]+xpad;
+	int x0=x-(y1-y0-3);
+	int x1=x+(y1-y0-3);
+	
+	GdkPoint tp[5]={ {x,y0},{x0,y1-3},{x0,y1+1},{x1,y1+1},{x1,y1-3} };
+	
+	gdk_draw_polygon(m->backing,gc,TRUE,tp,5);
+	
+	
+	gdk_draw_line(m->backing,dark_gc,x0+1,y1,x1-1,y1);
+	gdk_draw_line(m->backing,dark_gc,x1-1,y1,x1-1,y1-3);
+	
+	if(m->thumbfocus==1){
+	  for(i=0;i<(height-1)/2;i++)
+	    for(j=0;j<=i*2;j++)
+	      if(!(j&1))
+		gdk_draw_point(m->backing,black_gc,x-i+j,y0+i+2);
+	  for(j=0;j<=(i-1)*2;j++)
+	    if((j&1))
+	      gdk_draw_point(m->backing,black_gc,x-(i-1)+j,y0+i+2);
+	}
 
-      GdkPoint tp[5]={ {x,y},{x0,y1-2},{x0,y1+1},{x1,y1+1},{x1,y1-2} };
+	gdk_draw_line(m->backing,light_gc,x,y0,x1,y1-3);
+	gdk_draw_line(m->backing,light_gc,x,y0,x0,y1-3);
+	gdk_draw_line(m->backing,light_gc,x0,y1-3,x0,y1+1);
 
-      gdk_draw_polygon(m->backing,gc,TRUE,tp,5);
-
-      gdk_draw_line(m->backing,light_gc,x,y,x1,y1-2);
-      gdk_draw_line(m->backing,light_gc,x,y,x0,y1-2);
-      gdk_draw_line(m->backing,light_gc,x0,y1-2,x0,y1+1);
-
-      gdk_draw_line(m->backing,dark_gc,x0+1,y1,x1-1,y1);
-      gdk_draw_line(m->backing,dark_gc,x1-1,y1,x1-1,y1-2);
-
-      gdk_draw_line(m->backing,black_gc,x0,y1+1,x1,y1+1);
-      gdk_draw_line(m->backing,black_gc,x1,y1+1,x1,y1-1);
-
-      gdk_gc_set_rgb_fg_color(m->boxcolor,&yellow);
-      gdk_draw_line(m->backing,m->boxcolor,x,y+(y1-y)/2,x,0);
-
-      if(m->thumbfocus==num){
-	for(i=0;i<(height-1)/2;i++)
-	  for(j=0;j<=i*2;j++)
-	    if(!(j&1))
-	      gdk_draw_point(m->backing,black_gc,x-i+j,y+i+2);
-      } 
+	gdk_draw_line(m->backing,black_gc,x0,y1+1,x1,y1+1);
+	gdk_draw_line(m->backing,black_gc,x1,y1+1,x1,y1-2);
+	
+	gdk_gc_set_rgb_fg_color(m->boxcolor,&yellow);
+	gdk_draw_line(m->backing,m->boxcolor,x,y1-1,x,0);
+	
+      }
     }
   }
 }
@@ -635,10 +679,7 @@ static void size_request (GtkWidget *widget,GtkRequisition *requisition){
     xpad=2;
   }else{
     maxy+=3;
-    if(m->thumbs>1)
-      xpad=((maxy+1)/2)+(maxy/2-3)*3/2+1;
-    else
-      xpad=maxy/2+1+2;
+    xpad=((maxy+1)/2)+(maxy/2-3)*3/2+1;
   }
 
   requisition->width = (maxx*1.5+2)*m->labels+xpad*2;

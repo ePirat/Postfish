@@ -22,10 +22,12 @@ IEEE=-DNASTY_IEEE_FLOAT32_HACK_IS_FASTER_THAN_LOG=1
 
 SRC = main.c mainpanel.c multibar.c readout.c input.c output.c clippanel.c \
 	declip.c reconstruct.c multicompand.c windowbutton.c subpanel.c \
-	feedback.c freq.c eq.c eqpanel.c compandpanel.c subband.c lpc.c
+	feedback.c freq.c eq.c eqpanel.c compandpanel.c subband.c lpc.c \
+	bessel.c
 OBJ = main.o mainpanel.o multibar.o readout.o input.o output.o clippanel.o \
 	declip.o reconstruct.o multicompand.o windowbutton.o subpanel.o \
-	feedback.o freq.o eq.o eqpanel.o compandpanel.o subband.o lpc.o
+	feedback.o freq.o eq.o eqpanel.o compandpanel.o subband.o lpc.o \
+	bessel.o
 GCF = `pkg-config --cflags gtk+-2.0` -DG_DISABLE_DEPRECATED -DGDK_DISABLE_DEPRECATED -DGTK_DISABLE_DEPRECATED -DGDK_PIXBUF_DISABLE_DEPRECATED
 
 all:	

@@ -26,6 +26,7 @@
 #include "multicompand.h"
 #include <fftw3.h>
 #include "subband.h"
+#include "bessel.h"
 
 static int offset=0;
 static void _analysis(char *base,int i,float *v,int n,int bark,int dB){
@@ -80,37 +81,35 @@ extern int input_size;
 extern int input_rate;
 extern int input_ch;
 
-/* An array of two tap Bessel filters for bandlimiting our followers
-   and performing continuous RMS estimation.  Why Bessel filters?  Two
-   reasons: They exhibit very little ringing in the time domain and
-   about a half-order of magnitude less roundoff noise from gain
-   (compared to other IIR families) */
+/* lookup table this soon */
+static float soft_knee(float x){
+  return atanf(-x*.2)*x/3.14159-x*.5-(5./M_PI);
+}
 
-static float iirg_list[8]={
-  4.875178475e+06,  // 5
-  1.008216556e+06,  // 11
-  2.524889925e+05,  // 22
-  6.3053949794e+04, // 44
-  1.5872282930e+04, // 88
-  4.086422543e+03,  // 175
-  1.049342702e+03,  // 350
-  2.764099277e+02   // 700
-};
+static float hard_knee(float x){
+  return (x>0?-x:0.);
+}
 
-static float iirc_list[8][2]={
-  {1.9984308946, -.9984317150},  // 5
-  {1.9965490514, -.9965530188},  // 11
-  {1.9931020727, -.9931179150},  // 22
-  {1.9861887623, -.98625220002}, // 44
-  {1.9724411246, -.97269313627}, // 88
-  {1.9455669653, -.9465458165},  // 175
-  {1.8921217885, -.8959336985},  // 350
-  {1.7881166933, -0.8025879536}  // 700
-};
+typedef struct {
+  double c0;
+  double c1;
+  double g;
+  float alpha; 
+  //int impulseahead;  //  5764 == 1Hz @ 44.1
+  //int stepahead;     // 14850 == 1Hz @ 44.1
+} iir_filter;
 
-static float iir_corner_list[8]={5,11,22,44,88,175,350,700};
-static float iir_rmsoffset_list[8]={1048,524,262,131,65,32,16,8};
-static float iir_peakoffset_list[8]={5400,2700,1350,675,338,169,84,42};
+static inline long impulse_ahead(float alpha){
+  return rint(.1307f/alpha);
+}
+
+static inline long step_ahead(float alpha){
+  return rint(.3367f/alpha);
+}
+
+static inline float step_freq(long ahead){
+  return input_rate*.3367/ahead;
+}
 
 #if NASTY_IEEE_FLOAT32_HACK_IS_FASTER_THAN_LOG
 
@@ -123,34 +122,38 @@ static float iir_peakoffset_list[8]={5400,2700,1350,675,338,169,84,42};
 #endif
 
 typedef struct {
-  /* RMS follower state */
-  float rms_smooth_y[2];
-  float rms_smooth_x[2];
-
-  float static_c_decay_chase;
-  float static_e_decay_chase;
-  float static_g_decay_chase;
-  float suppress_decay_chase;
-
-  float env1_x[2];
-  float env1_y[2];
-  float env2_x[2];
-  float env2_y[2];
-
-  int dummymarker;
-} envelope_state;
+  double x[2];
+  double y[2];
+  int state;
+} iir_state;
 
 typedef struct {
   subband_state ss;
   subband_window sw[multicomp_banks];
+  
+  iir_filter over_attack[multicomp_banks][multicomp_freqs_max];
+  iir_filter over_decay[multicomp_banks][multicomp_freqs_max];
 
-  int rmschoice[multicomp_banks][multicomp_freqs_max];
-  int attack[multicomp_banks][multicomp_freqs_max];
-  int decay[multicomp_banks][multicomp_freqs_max];
+  iir_filter under_attack[multicomp_banks][multicomp_freqs_max];
+  iir_filter under_decay[multicomp_banks][multicomp_freqs_max];
 
-  envelope_state **e;
+  iir_filter suppress_attack[multicomp_banks][multicomp_freqs_max];
+  iir_filter suppress_decay[multicomp_banks][multicomp_freqs_max];
+  iir_filter suppress_release[multicomp_banks][multicomp_freqs_max];
+
+  iir_state *over_iir[multicomp_freqs_max];
+  iir_state *under_iir[multicomp_freqs_max];
+  iir_state *suppress_iirA[multicomp_freqs_max];
+  iir_state *suppress_iirB[multicomp_freqs_max];
+
   sig_atomic_t pending_bank;
   sig_atomic_t active_bank;
+
+  int previous_over_mode; // RMS or peak?  The iir follower domains
+  // are different, and upon transition, must be converted.
+  int previous_under_mode;    // as above
+  int previous_suppress_mode; // as above
+
 } multicompand_state;
 
 sig_atomic_t compand_visible;
@@ -170,15 +173,14 @@ void multicompand_reset(){
   int h,i,j;
   
   subband_reset(&ms.ss);
-
-  for(i=0;i<input_ch;i++)
-    for(j=0;j<multicomp_freqs_max;j++){
-      memset(&ms.e[j][i],0,sizeof(**ms.e));
-      ms.e[j][i].static_c_decay_chase=0.;
-      ms.e[j][i].static_e_decay_chase=0.;
-      ms.e[j][i].static_g_decay_chase=0.;
+  
+  for(i=0;i<multicomp_freqs_max;i++)
+    for(j=0;j<input_ch;j++){
+      memset(&ms.over_iir[i][j],0,sizeof(iir_state));
+      memset(&ms.under_iir[i][j],0,sizeof(iir_state));
+      memset(&ms.suppress_iirA[i][j],0,sizeof(iir_state));
+      memset(&ms.suppress_iirB[i][j],0,sizeof(iir_state));
     }
-
 }
 
 int multicompand_load(void){
@@ -188,140 +190,182 @@ int multicompand_load(void){
 
   subband_load(&ms.ss,multicomp_freqs_max,qblocksize);
 
-  for(h=0;h<multicomp_banks;h++){
+  for(h=0;h<multicomp_banks;h++)
     subband_load_freqs(&ms.ss,&ms.sw[h],multicomp_freq_list[h],
 		       multicomp_freqs[h]);
     
-    /* select the RMS follower filters to use according to 
-       sample rate and band frequency */
-    for(i=0;i<multicomp_freqs[h];i++){
-      /* select a filter with a corner frequency of about 1/8 the
-	 band center. Don't go lower than 11 or higher than the 44 */
-      /* also... make sure 'workahead' is within input size restrictions */
-      double bf=multicomp_freq_list[h][i];
-      
-      for(j=7;j>=0;j--)
-	if(iir_peakoffset_list[j]<=input_size*2-qblocksize*3){
-	  ms.rmschoice[h][i]=j;
-	  if(iir_corner_list[j]*input_rate/44100 < bf*.25 &&
-	    iir_corner_list[j]*input_rate/44100 < 100)
-	    break;
-	}
-
-      for(j=7;j>=0;j--)
-	if(iir_peakoffset_list[j]<=input_size*2-qblocksize*3){
-	  ms.attack[h][i]=j;
-	  if(iir_corner_list[j]*input_rate/44100 < bf*.5)
-	    break;
-	}
-      ms.decay[h][i]=j;
-      for(j=7;j>=0;j--)
-	if(iir_peakoffset_list[j]<=input_size*2-qblocksize*3){
-	  ms.decay[h][i]=j;
-	  if(iir_corner_list[j]*input_rate/44100 < 30 &&
-	     j<=ms.attack[h][i])
-	    break;
-	}
-    }
-  }
-  
-  ms.e=calloc(multicomp_freqs_max,sizeof(*(ms.e)));
-  
   for(i=0;i<multicomp_freqs_max;i++){
-    ms.e[i]=calloc(input_ch,sizeof(**(ms.e)));
-    
-    for(j=0;j<input_ch;j++){
-      ms.e[i][j].static_c_decay_chase=0.;
-      ms.e[i][j].static_e_decay_chase=0.;
-      ms.e[i][j].static_g_decay_chase=0.;
-    }
+    ms.over_iir[i]=calloc(input_ch,sizeof(iir_state));
+    ms.under_iir[i]=calloc(input_ch,sizeof(iir_state));
+    ms.suppress_iirA[i]=calloc(input_ch,sizeof(iir_state));
+    ms.suppress_iirB[i]=calloc(input_ch,sizeof(iir_state));
   }
-  
+
   ms.active_bank=0;
 
   return 0;
 }
 
-/* The Bessel filter followers are inlined and unrolled here as later
-   to avoid some really shockingly bad code generation by gcc on x86 */
-static void rms_chase(float *rms, int i, int linkp, int filternum,
-		      envelope_state *e, float **xxi){
-  int k,l;
-  float iirc0,iirc1;
-  float iirg,x,y;
-  float iirx0,iirx1;
-  float iiry0,iiry1;
-
-  if(linkp==0 || i==0){
-    float val;
-    int ahead=iir_rmsoffset_list[filternum];
-    iirg=iirg_list[filternum];
-    iirc0=iirc_list[filternum][0];
-    iirc1=iirc_list[filternum][1];
-    if(linkp)memset(rms,0,sizeof(*rms)*input_size);
+int multicompand_filterbank_set(float msec,iir_filter filterbank[multicomp_banks][multicomp_freqs_max]){
+  int i,j;
+  for(j=0;j<multicomp_banks;j++){
+    float *freqs=multicomp_freq_list[j];
+    int bands=multicomp_freqs[j];
+    iir_filter *filters=filterbank[j];
     
-    for(l=i;l<(linkp?input_ch:i+1);l++){
-      float *xx=xxi[l];
-      iirx0=e[l].rms_smooth_x[0];
-      iirx1=e[l].rms_smooth_x[1];
-      iiry0=e[l].rms_smooth_y[0];
-      iiry1=e[l].rms_smooth_y[1];
-      
-      for(k=0;k<input_size;k+=2){
-	y=x=(xx[k+ahead]*xx[k+ahead])/iirg;
-	y+=iirx0;
-	y+=iirx0;
-	y+=iirx1;
-	y+=iiry0*iirc0;
-	y+=iiry1*iirc1;
-	
-	iirx1=x;
-	rms[k]=iiry1=y;
-	
-	y=x=(xx[k+ahead+1]*xx[k+ahead+1])/iirg;
-	y+=iirx1;
-	y+=iirx1;
-	y+=iirx0;
-	y+=iiry1*iirc0;
-	y+=iiry0*iirc1;
-	
-	iirx0=x;
-	rms[k+1]=iiry0=y;
-      }
+    for(i=0;i<bands;i++){
+      float alpha;
+      float corner_freq=500./msec;
 
-      e[l].rms_smooth_x[0]=iirx0;
-      e[l].rms_smooth_x[1]=iirx1;
-      e[l].rms_smooth_y[0]=iiry0;
-      e[l].rms_smooth_y[1]=iiry1;
+      /* limit the filter corner frequency to prevent fast attacks
+         from destroying low frequencies */
+      if(corner_freq>freqs[i]/2)corner_freq=freqs[i]/2;
       
+      /* make sure the chosen frequency doesn't require a lookahead
+         greater than what's available */
+      if(step_freq(input_size*2-ms.ss.qblocksize*3)*.95<freqs[i])
+	corner_freq=step_freq(input_size*2-ms.ss.qblocksize*3);
+		     
+      alpha=corner_freq/input_rate*2.;
+      filters[i].g=mkbessel_2(alpha,&filters[i].c0,&filters[i].c1);
+      filters[i].alpha=alpha;
     }
-    
-    {
-      float scale=(linkp?1./input_ch:1);
-      for(k=0;k<input_size;k++){
-	val=fabs(rms[k]*scale);
-	rms[k]=sqrt(val);
-      }
-    } 
-
-    for(k=0;k<input_size;k++)
-      rms[k]=todB_p(rms+k);
-    
   }
 }
 
-static void peak_chase(float *peak, int i, int linkp, int filternum,
-		       float **xxi){
-  int l;
-  if(linkp==0 || i==0){
-    memset(peak,0,sizeof(*peak)*input_size);
-    for(l=i;l<(linkp?input_ch:i+1);l++){
+
+int multicompand_over_attack_set(float msec){
+  multicompand_filterbank_set(msec,ms.over_attack);
+}
+
+int multicompand_over_decay_set(float msec){
+  multicompand_filterbank_set(msec,ms.over_decay);  
+}
+
+int multicompand_under_attack_set(float msec){
+  multicompand_filterbank_set(msec,ms.under_attack);
+}
+
+int multicompand_under_decay_set(float msec){
+  multicompand_filterbank_set(msec,ms.under_decay);
+}
+
+int multicompand_suppress_attack_set(float msec){
+  multicompand_filterbank_set(msec,ms.suppress_attack);
+}
+
+int multicompand_suppress_decay_set(float msec){
+  multicompand_filterbank_set(msec,ms.suppress_decay);
+}
+
+int multicompand_suppress_release_set(float msec){
+  multicompand_filterbank_set(msec,ms.suppress_release);
+}
+
+/* assymetrical attack/decay filter; the z-space fixup is designed for
+   the case where decay is the same or slower than attack */
+/* The Bessel filter followers are inlined here as later to avoid some
+   really shockingly bad code generation by gcc on x86 */
+static void compute_iir(float *y, float *x, int n,
+			iir_state *is, iir_filter *attack, iir_filter *decay){
+  double a_c0=attack->c0;
+  double d_c0=decay->c0;
+  double a_c1=attack->c1;
+  double d_c1=decay->c1;
+  double a_g=attack->g;
+  double d_g=decay->g;
+  
+  double x0=is->x[0];
+  double x1=is->x[1];
+  double y0=is->y[0];
+  double y1=is->y[1];
+  int state=is->state;
+    
+  int i=0;
+
+  if(x[0]>y0)state=0; 
       
-      float *x=xxi[l];
+  while(i<n){
+    
+    if(state==0){
+      /* attack case */
+      while(i<n){
+	y[i] = (x[i]+x0*2.+x1)/a_g + y0*a_c0+y1*a_c1;
+    
+	if(y[i]<y0){
+	  /* decay fixup; needed because we're in discontinuous time.  In a
+	     physical time-assymmetric Bessel follower, the decay case would
+	     take over at the instant the attack filter peaks.  In z-space,
+	     the attack filter has already begun to decay, and the decay
+	     filter otherwise takes over with an already substantial
+	     negative slope in the filter state, or if it takes over in the
+	     preceeding time quanta, a substantial positive slope.  Fix this
+	     up to take over at zero y slope. */
+	  y1=y0;
+	  state=1; 
+	  break;
+	}
+	x1=x0;x0=x[i];
+	y1=y0;y0=y[i];
+	i++;
+      }
+    }
+
+    if(state==1){
+      /* decay case */
+      while(1){
+	y[i] = (x[i]+x0*2+x1)/d_g + y0*d_c0+y1*d_c1;
+
+	x1=x0;x0=x[i];
+	y1=y0;y0=y[i];
+	i++;
+
+	if(i>=n)break;
+	if(x[i]>y0){
+	  state=0;
+	  break;
+	}
+      }
+    }
+  }
+  
+  is->x[0]=x0;
+  is->x[1]=x1;
+  is->y[0]=y0;
+  is->y[1]=y1;
+  is->state=state;
+  
+}
+
+static void prepare_rms(float *rms, float **xx, int n, int ch,int ahead){
+  if(ch){
+    int i,j;
+
+    memset(rms,0,sizeof(*rms)*n);
+    
+    for(j=0;j<ch;j++){
+      float *x=xx[j]+ahead;
+      for(i=0;i<n;i++)
+	rms[i]+=x[i]*x[i];
+    }
+    if(ch>1)
+      for(i=0;i<n;i++)
+	rms[i]/=ch;
+  }
+}
+
+static void prepare_peak(float *peak, float **xx, int n, int ch,int ahead){
+  if(ch){
+    int j,k,l;
+
+    memset(peak,0,sizeof(*peak)*n);
+
+    for(l=0;l<ch;l++){
+      
+      float *x=xx[l];
       int ii,jj;
       int loc=0;
       float val=fabs(x[0]);
-      int ahead=iir_peakoffset_list[filternum];
       
       /* find highest point in next [ahead] */
       for(ii=1;ii<ahead;ii++)
@@ -331,7 +375,7 @@ static void peak_chase(float *peak, int i, int linkp, int filternum,
 	}
       if(val>peak[0])peak[0]=val;
       
-      for(ii=1;ii<input_size;ii++){
+      for(ii=1;ii<n;ii++){
 	if(fabs(x[ii+ahead])>val){
 	  val=fabs(x[ii+ahead]);
 	  loc=ii+ahead;
@@ -341,118 +385,170 @@ static void peak_chase(float *peak, int i, int linkp, int filternum,
 	  val=0;
 	  for(jj=ii+ahead-1;jj>=ii;jj--){
 	    if(fabs(x[jj])>val)val=fabs(x[jj]);
-	    if(jj<input_size && val>peak[jj])peak[jj]=val;
+	    if(jj<n && val>peak[jj])peak[jj]=val;
 	  }
 	  val=fabs(x[ii+ahead-1]);
 	  loc=ii+ahead;
 	}
 	if(val>peak[ii])peak[ii]=val; 
       }
-      
-      for(ii=0;ii<input_size;ii++)
-	peak[ii]=todB_p(peak+ii);
+    }
+    
+    for(j=0;j<n;j++)
+      peak[j]=todB_p(peak+j);
+  }
+}
+
+static void run_filter_only(float *dB,float *work,float **x,int n,int mode,
+			    iir_state *iir,iir_filter *attack,iir_filter *decay){
+  int i;
+
+  compute_iir(dB, work, n, &iir[i], attack, decay);
+
+  if(mode==0)
+    for(i=0;i<n;i++)
+      dB[i]=todB_p(dB+i)*.5f;
+}
+
+static void run_filter(float *dB,float *work,float **x,int n, int ch, int i,
+		       float lookahead,int link,int mode,
+		       iir_state *iir,iir_filter *attack,iir_filter *decay){
+  if(link){
+    if(i==0){
+      if(mode)
+	prepare_peak(work, x, n, ch, step_ahead(attack->alpha)*lookahead);
+
+      else
+	prepare_rms(work, x, n, ch, impulse_ahead(attack->alpha)*lookahead);
+
+    }
+  }else{
+    if(mode)
+      prepare_peak(work, x+i, n, 1, step_ahead(attack->alpha)*lookahead);
+    else
+      prepare_rms(work, x+i, n, 1, impulse_ahead(attack->alpha)*lookahead);
+  }
+
+  run_filter_only(dB,work,x,n,mode,iir,attack,decay);
+}
+
+static void over_compand(float ***x){
+  int i,j,k;
+  float work[input_size];
+  float dB[input_size];
+  float lookahead=c.over_lookahead/1000.;
+  int link=c.link_mode;
+  int mode=c.over_mode;
+
+  float (*knee)(float)=(c.over_softknee?soft_knee:hard_knee);
+  
+  float corner_multiplier=(1.-1./(c.over_ratio/1000.));
+  float base_multiplier=(1.-1./(c.base_ratio/1000.));
+
+  if(ms.previous_over_mode!=mode){
+    /* the followers for RMS are in linear^2 mode, the followers for
+       peak are dB.  If the mode has changed, we need to convert from
+       one to the other to avoid pops */
+    if(mode==0){
+      /* from dB to linear^2 */
+      for(i=0;i<multicomp_freqs_max;i++){
+	for(j=0;j<input_ch;j++){
+	  ms.over_iir[i][j].x[0]=fromdB(ms.over_iir[i][j].x[0]*2.);
+	  ms.over_iir[i][j].x[1]=fromdB(ms.over_iir[i][j].x[1]*2.);
+	  ms.over_iir[i][j].y[0]=fromdB(ms.over_iir[i][j].y[0]*2.);
+	  ms.over_iir[i][j].y[1]=fromdB(ms.over_iir[i][j].y[1]*2.);
+	}
+      }
+    }else{
+      /* from linear^2 to dB */
+      for(i=0;i<multicomp_freqs_max;i++){
+	for(j=0;j<input_ch;j++){
+	  ms.over_iir[i][j].x[0]=todB(ms.over_iir[i][j].x[0])*.5;
+	  ms.over_iir[i][j].x[1]=todB(ms.over_iir[i][j].x[1])*.5;
+	  ms.over_iir[i][j].y[0]=todB(ms.over_iir[i][j].y[0])*.5;
+	  ms.over_iir[i][j].y[1]=todB(ms.over_iir[i][j].y[1])*.5;
+	}
+      }
+    }
+  }
+
+  ms.previous_over_mode=mode;
+
+  for(i=0;i<multicomp_freqs[ms.active_bank];i++){
+    float zerocorner=bc[ms.active_bank].static_o[i]/10.;
+    float limitcorner=zerocorner + fabs((c.over_limit*10.)/corner_multiplier);
+
+    for(j=0;j<input_ch;j++){
+      float *lx=x[i][j];
+      run_filter(dB,work,x[i],input_size,input_ch,j,lookahead,link,mode,
+		 ms.over_iir[i],&ms.over_attack[ms.active_bank][i],&ms.over_decay[ms.active_bank][i]);
+
+      if(compand_active)
+	for(k=0;k<input_size;k++){
+	  float adj=(knee(dB[i]-zerocorner)-knee(dB[i]-limitcorner))*corner_multiplier;
+	  adj-=  (dB[i]+adj)*base_multiplier;
+	  lx[k]*=fromdB(adj);
+	}
     }
   }
 }
 
-static void static_compand(float *peak, float *rms, float *gain, 
-			   float gate,float expand, float compress,
-			   envelope_state *e){
-  int ii;
-  float current_c=e->static_c_decay_chase;
-  float current_e=e->static_e_decay_chase;
-  float current_g=e->static_g_decay_chase;
+static void under_compand(float ***x){
+  int i,j,k;
+  float work[input_size];
+  float dB[input_size];
+  float lookahead=c.under_lookahead/1000.;
+  int link=c.link_mode;
+  int mode=c.under_mode;
 
-  float decay_c=c.static_c_decay/(float)(1024*1024);
-  float decay_e=c.static_e_decay/(float)(1024*1024);
-  float decay_g=c.static_g_decay/(float)(1024*1024);
-
-  float *envelope=rms;
+  float (*knee)(float)=(c.under_softknee?soft_knee:hard_knee);
   
-  float ratio_c=100./c.static_c_ratio;
-  float ratio_e=c.static_e_ratio/100.;
-  
-  if(c.static_mode)envelope=peak;
-  
-  for(ii=0;ii<input_size;ii++){
-    float adj=0.,local_adj;
-    float current=envelope[ii];
-    
-    /* compressor */
-    local_adj=0.;
-    if(current>compress){
-      float current_over=current-compress;
-      float compress_over=current_over*ratio_c;
-      local_adj=compress_over-current_over;
-    }
-    /* compressor decay is related to how quickly we release
-       attenuation */
-    current_c-=decay_c;
-    if(local_adj<current_c)current_c=local_adj;
-    adj+=current_c;
+  float corner_multiplier=(1.-1./(c.under_ratio/1000.));
 
-    /* expander */
-    local_adj=0.;
-    if(current<expand){
-      float current_under=expand-current;
-      float expand_under=current_under*ratio_e;
-      local_adj= current_under-expand_under;
+  if(ms.previous_under_mode!=mode){
+    /* the followers for RMS are in linear^2 mode, the followers for
+       peak are dB.  If the mode has changed, we need to convert from
+       one to the other to avoid pops */
+    if(mode==0){
+      /* from dB to linear^2 */
+      for(i=0;i<multicomp_freqs_max;i++){
+	for(j=0;j<input_ch;j++){
+	  ms.under_iir[i][j].x[0]=fromdB(ms.under_iir[i][j].x[0]*2.);
+	  ms.under_iir[i][j].x[1]=fromdB(ms.under_iir[i][j].x[1]*2.);
+	  ms.under_iir[i][j].y[0]=fromdB(ms.under_iir[i][j].y[0]*2.);
+	  ms.under_iir[i][j].y[1]=fromdB(ms.under_iir[i][j].y[1]*2.);
+	}
+      }
+    }else{
+      /* from linear^2 to dB */
+      for(i=0;i<multicomp_freqs_max;i++){
+	for(j=0;j<input_ch;j++){
+	  ms.under_iir[i][j].x[0]=todB(ms.under_iir[i][j].x[0])*.5;
+	  ms.under_iir[i][j].x[1]=todB(ms.under_iir[i][j].x[1])*.5;
+	  ms.under_iir[i][j].y[0]=todB(ms.under_iir[i][j].y[0])*.5;
+	  ms.under_iir[i][j].y[1]=todB(ms.under_iir[i][j].y[1])*.5;
+	}
+      }
     }
-    /* expander decay is related to how quickly we engage
-       attenuation */
-    current_e+=decay_e;
-    if(local_adj>current_e)current_e=local_adj;
-    adj+=current_e;
-
-    /* gate */
-    local_adj=0.;
-    if(current<gate){
-      float current_under=gate-current;
-      float gate_under=current_under*10.;
-      local_adj= current_under-gate_under;
-    }
-    /* gate decay is related to how quickly we engage
-       attenuation */
-    current_g+=decay_g;
-    if(local_adj>current_g)current_g=local_adj;
-    adj+=current_g;
-
-    
-    if(adj<-150.)adj=-150;
-    gain[ii]=adj;
   }
-  
-  e->static_c_decay_chase=current_c;
-  e->static_e_decay_chase=current_e;
-  e->static_g_decay_chase=current_g;
-  
-}
 
-static void range_compand(float *peak, float *rms, float *gain){
-  int ii;
-  float *envelope; 
-  float ratio=1.+c.envelope_c/1000.;
-  
-  switch(c.envelope_mode){
-  case 0:
-    envelope=rms;
-    break;
-  default:
-    envelope=peak;
-    break;
-  }
-  
-  for(ii=0;ii<input_size;ii++){
-    float adj=0.;
-    float current=envelope[ii];
-    float target=current*ratio;
-    
-    gain[ii]+=target-current;
+  ms.previous_under_mode=mode;
+
+  for(i=0;i<multicomp_freqs[ms.active_bank];i++){
+    float zerocorner=bc[ms.active_bank].static_o[i]/10.;
+    float limitcorner=zerocorner- fabs((c.under_limit*10.)/corner_multiplier);
+
+    for(j=0;j<input_ch;j++){
+      float *lx=x[i][j];
+      run_filter(dB,work,x[i],input_size,input_ch,j,lookahead,link,mode,
+		 ms.under_iir[i],&ms.under_attack[ms.active_bank][i],&ms.under_decay[ms.active_bank][i]);
+      if(compand_active)
+	for(k=0;k<input_size;k++)
+	  lx[k]*=fromdB((knee(zerocorner-dB[i])-knee(limitcorner-dB[i]))*corner_multiplier);
+    }
   }
 }
 
-static void suppress(float *peak, float *rms, float *gain,
-		     envelope_state *e){
   /* (since this one is kinda unique) The Suppressor....
 
      Reverberation in a measurably live environment displays
@@ -472,231 +568,114 @@ static void suppress(float *peak, float *rms, float *gain,
      Thus, the suppressor can be used to 'dry out' a very 'wet'
      reverberative track. */
 
-  int ii;
-  float *envelope; 
-  float ratio=c.suppress_ratio/100.;
-  float decay=c.suppress_decay/(float)(1024*1024);
-  float depth=-c.suppress_depth/10.;
-  float chase=e->suppress_decay_chase;
-  float undepth=depth/ratio;
+static void suppress(float ***x){
+  int i,j,k;
+  float work[input_size];
+  float dB_fast[input_size];
+  float dB_slow[input_size];
+  int link=c.link_mode;
+  int mode=c.suppress_mode;
 
-  switch(c.suppress_mode){
-  case 0:
-    envelope=rms;
-    break;
-  default:
-    envelope=peak;
-    break;
-  }
+  float multiplier=(1.-1./(c.suppress_ratio/1000.));
 
-  for(ii=0;ii<input_size;ii++){
-    float current=envelope[ii];
-
-    chase+=decay;
-    if(current>chase){
-      chase=current;
+  if(ms.previous_suppress_mode!=mode){
+    /* the followers for RMS are in linear^2 mode, the followers for
+       peak are dB.  If the mode has changed, we need to convert from
+       one to the other to avoid pops */
+    if(mode==0){
+      /* from dB to linear^2 */
+      for(i=0;i<multicomp_freqs_max;i++){
+	for(j=0;j<input_ch;j++){
+	  ms.suppress_iirA[i][j].x[0]=fromdB(ms.suppress_iirA[i][j].x[0]*2.);
+	  ms.suppress_iirA[i][j].x[1]=fromdB(ms.suppress_iirA[i][j].x[1]*2.);
+	  ms.suppress_iirA[i][j].y[0]=fromdB(ms.suppress_iirA[i][j].y[0]*2.);
+	  ms.suppress_iirA[i][j].y[1]=fromdB(ms.suppress_iirA[i][j].y[1]*2.);
+	  ms.suppress_iirB[i][j].x[0]=fromdB(ms.suppress_iirB[i][j].x[0]*2.);
+	  ms.suppress_iirB[i][j].x[1]=fromdB(ms.suppress_iirB[i][j].x[1]*2.);
+	  ms.suppress_iirB[i][j].y[0]=fromdB(ms.suppress_iirB[i][j].y[0]*2.);
+	  ms.suppress_iirB[i][j].y[1]=fromdB(ms.suppress_iirB[i][j].y[1]*2.);
+	}
+      }
     }else{
-      /* yes, need to expand */
-      float difference = chase - current;
-      float expanded = difference * ratio;
-
-      if(expanded>depth){
-	chase=current+undepth;
-	gain[ii]-=depth-undepth;
-      }else{
-	gain[ii]-=expanded-difference;
-
+      /* from linear^2 to dB */
+      for(i=0;i<multicomp_freqs_max;i++){
+	for(j=0;j<input_ch;j++){
+	  ms.suppress_iirA[i][j].x[0]=todB(ms.suppress_iirA[i][j].x[0])*.5;
+	  ms.suppress_iirA[i][j].x[1]=todB(ms.suppress_iirA[i][j].x[1])*.5;
+	  ms.suppress_iirA[i][j].y[0]=todB(ms.suppress_iirA[i][j].y[0])*.5;
+	  ms.suppress_iirA[i][j].y[1]=todB(ms.suppress_iirA[i][j].y[1])*.5;
+	  ms.suppress_iirB[i][j].x[0]=todB(ms.suppress_iirB[i][j].x[0])*.5;
+	  ms.suppress_iirB[i][j].x[1]=todB(ms.suppress_iirB[i][j].x[1])*.5;
+	  ms.suppress_iirB[i][j].y[0]=todB(ms.suppress_iirB[i][j].y[0])*.5;
+	  ms.suppress_iirB[i][j].y[1]=todB(ms.suppress_iirB[i][j].y[1])*.5;
+	}
       }
     }
   }
 
-  e->suppress_decay_chase=chase;
-}
+  ms.previous_suppress_mode=mode;
 
-static void final_followers(float *gain,envelope_state *e,int attack,int decay){
-  float iirx0,iirx1;
-  float iiry0,iiry1;
+  for(i=0;i<multicomp_freqs[ms.active_bank];i++){
+    for(j=0;j<input_ch;j++){
+      float *lx=x[i][j];
 
-  float iirg_a;
-  float iirg_d;
-  float iirc0_a,iirc1_a;
-  float iirc0_d,iirc1_d;
-
-  float x,y;
-  int k;
-
-  iirg_a=iirg_list[attack];
-  iirc0_a=iirc_list[attack][0];
-  iirc1_a=iirc_list[attack][1];
-  iirg_d=iirg_list[decay];
-  iirc0_d=iirc_list[decay][0];
-  iirc1_d=iirc_list[decay][1];
-
-  iirx0=e->env1_x[0];
-  iirx1=e->env1_x[1];
-  iiry0=e->env1_y[0];
-  iiry1=e->env1_y[1];
-
-  /* assymetrical filter; in general, fast attack, slow decay */
-  for(k=0;k<input_size;k+=2){
-    if(iiry0>iiry1){
-      /* decay */
-      y = (gain[k]+iirx0+iirx0+iirx1)/iirg_d + iiry0*iirc0_d+iiry1*iirc1_d;
-      iirx1=gain[k];
-      gain[k]=iiry1=y;
-    }else{
-      /* attack */
-      y = (gain[k]+iirx0+iirx0+iirx1)/iirg_a + iiry0*iirc0_a+iiry1*iirc1_a;
-      iirx1=gain[k];
-      gain[k]=iiry1=y;
-    }
-
-    if(iiry0>iiry1){
-      /* attack */
-      y = (gain[k+1]+iirx1+iirx1+iirx0)/iirg_a + iiry1*iirc0_a+iiry0*iirc1_a;
-      iirx0=gain[k+1];
-      gain[k+1]=iiry0=y;
-    }else{
-      /* decay */
-      y = (gain[k+1]+iirx1+iirx1+iirx0)/iirg_d + iiry1*iirc0_d+iiry0*iirc1_d;
-      iirx0=gain[k+1];
-      gain[k+1]=iiry0=y;
+      run_filter(dB_fast,work,x[i],input_size,input_ch,j,1.,link,mode,
+		 ms.suppress_iirA[i],&ms.suppress_attack[ms.active_bank][i],&ms.suppress_decay[ms.active_bank][i]);
+      run_filter_only(dB_slow,work,x[i],input_size,mode,
+		      ms.suppress_iirB[i],&ms.suppress_attack[ms.active_bank][i],&ms.suppress_release[ms.active_bank][i]);
+      
+      if(compand_active && multiplier!=0.)
+	for(k=0;k<input_size;k++){
+	  float adj=(dB_fast[i]-dB_slow[i])*multiplier;  
+	  lx[k]*=fromdB(adj);
+	}
     }
   }
-  
-  e->env1_x[0]=iirx0;
-  e->env1_x[1]=iirx1;
-  e->env1_y[0]=iiry0;
-  e->env1_y[1]=iiry1;
-
-  iirx0=e->env2_x[0];
-  iirx1=e->env2_x[1];
-  iiry0=e->env2_y[0];
-  iiry1=e->env2_y[1];
-
-  for(k=0;k<input_size;k+=2){
-    if(iiry0>iiry1){
-      /* decay */
-      y = (gain[k]+iirx0+iirx0+iirx1)/iirg_d + iiry0*iirc0_d+iiry1*iirc1_d;
-      iirx1=gain[k];
-      gain[k]=iiry1=y;
-    }else{
-      /* attack */
-      y = (gain[k]+iirx0+iirx0+iirx1)/iirg_a + iiry0*iirc0_a+iiry1*iirc1_a;
-      iirx1=gain[k];
-      gain[k]=iiry1=y;
-    }
-
-    if(iiry0>iiry1){
-      /* attack */
-      y = (gain[k+1]+iirx1+iirx1+iirx0)/iirg_a + iiry1*iirc0_a+iiry0*iirc1_a;
-      iirx0=gain[k+1];
-      gain[k+1]=iiry0=y;
-    }else{
-      /* decay */
-      y = (gain[k+1]+iirx1+iirx1+iirx0)/iirg_d + iiry1*iirc0_d+iiry0*iirc1_d;
-      iirx0=gain[k+1];
-      gain[k+1]=iiry0=y;
-    }
-  }
-  
-  e->env2_x[0]=iirx0;
-  e->env2_x[1]=iirx1;
-  e->env2_y[0]=iiry0;
-  e->env2_y[1]=iiry1;
-
 }
 
 static void multicompand_work(float **peakfeed,float **rmsfeed){
-  int i,j,k,l;
-  int link=c.link_mode;
-  float rms[input_size];
-  float peak[input_size];
-  float gain[input_size];
-  int bands=multicomp_freqs[ms.active_bank];
+  int i,j,k;
 
-  /* we chase both peak and RMS forward at all times. All portions of
-     the compander can use the raw values of one or the other at any
-     time */
+  under_compand(ms.ss.lap);
+  over_compand(ms.ss.lap);
 
-  for(j=0;j<bands;j++){
-    for(i=0;i<input_ch;i++){
-      
-      //_analysis_append("band",j,ms.ss.lap[j][i],input_size,offset);
-
-
-      /* RMS chase */
-      rms_chase(rms,i,link,ms.rmschoice[ms.active_bank][j],
-		ms.e[j],ms.ss.lap[j]);
-
-      /* peak shelving */
-      peak_chase(peak,i,link,ms.attack[ms.active_bank][j],
-		 ms.ss.lap[j]);
-
-      if(compand_active)
-	/* run the static compander */
-	static_compand(peak,rms,gain,
-		       (bc[ms.active_bank].static_g[j]+c.static_g_trim)/10.,
-		       (bc[ms.active_bank].static_e[j]+c.static_e_trim)/10.,
-		       (bc[ms.active_bank].static_c[j]+c.static_c_trim)/10.,
-		       &ms.e[j][i]);
-      else
-	memset(gain,0,sizeof(gain));
-
-      /* feedback displays the results of the static compander */
-      {
-	float *x=ms.ss.lap[j][i];
-	float rmsmax=-150,peakmax=-150;
+  /* feedback displays the results of the static compander */
+  if(c.link_mode==0){
+    for(i=0;i<multicomp_freqs[ms.active_bank];i++){
+      for(j=0;j<input_ch;j++){
+	float *x=ms.ss.lap[i][j];
+	float rms=0,peak=0;
 	
 	for(k=0;k<input_size;k++){
-	  int r=rms[k]+gain[k];
-	  x[k]*=fromdB(gain[k]);
-	  
-	  if(r>rmsmax)rmsmax=r;
-	  if(fabs(x[k])>peakmax)peakmax=fabs(x[k]);
+	  rms+=x[k]*x[k];
+	  if(fabs(x[k])>peak)peak=fabs(x[k]);
 	}	    
 	
-	peakfeed[j][i]=todB(peakmax);
-	rmsfeed[j][i]=rmsmax;
+	peakfeed[i][j]=todB(peak);
+	rmsfeed[i][j]=todB(rms/input_size)*.5;
       }
-
-      if(compand_active){
-	float *x=ms.ss.lap[j][i];
-
-	/* run the range compander */
-	range_compand(peak,rms,gain);
+    }
+  }else{
+    for(i=0;i<multicomp_freqs[ms.active_bank];i++){
+      float rms=0,peak=0;
+      for(j=0;j<input_ch;j++){
+	float *x=ms.ss.lap[i][j];
 	
-	/* run the suppressor */
-	suppress(peak,rms,gain,ms.e[j]);
+	for(k=0;k<input_size;k++){
+	  rms+=x[k]*x[k];
+	  if(fabs(x[k])>peak)peak=fabs(x[k]);
+	}	
+      }    
 	
-	//_analysis_append("peak",j,gain,input_size,offset);
-
-	/* Run the Bessel followers */
-	final_followers(gain,&ms.e[j][i],
-			ms.attack[ms.active_bank][j],
-			ms.decay[ms.active_bank][j]);
-	
-	//_analysis_append("gain",j,gain,input_size,offset);
-	
-
-	/* application to data */
-	for(k=0;k<input_size;k++)
-	  x[k]*=fromdB(gain[k]);
-
-      }else{
-	/* else reset the bessel followers */
-	ms.e[j][i].env1_x[0]=0.;
-	ms.e[j][i].env1_x[1]=0.;
-	ms.e[j][i].env1_y[0]=0.;
-	ms.e[j][i].env1_y[1]=0.;
-	ms.e[j][i].env2_x[0]=0.;
-	ms.e[j][i].env2_x[1]=0.;
-	ms.e[j][i].env2_y[0]=0.;
-	ms.e[j][i].env2_y[1]=0.;
+      for(j=0;j<input_ch;j++){
+	peakfeed[i][j]=todB(peak);
+	rmsfeed[i][j]=todB(rms/input_size/input_ch)*.5;
       }
     }
   }
 
+  suppress(ms.ss.lap);
+  
   offset+=input_size;
 }
 
@@ -712,17 +691,7 @@ time_linkage *multicompand_read(time_linkage *in){
   int bypass=!(compand_visible||compand_active);
   
   if(pending!=ms.active_bank || (bypass && !bypass_state)){
-    /* reset unused envelope followers to a known state for if/when
-       they're brought online */
-    
-    for(j=(bypass?0:multicomp_freqs[pending]);j<multicomp_freqs_max;j++){
-      for(i=0;i<input_ch;i++){
-	memset(&ms.e[j][i],0,sizeof(**ms.e));
-	ms.e[j][i].static_c_decay_chase=0.;
-	ms.e[j][i].static_e_decay_chase=0.;
-	ms.e[j][i].static_g_decay_chase=0.;
-      }
-    }
+
   }
    
   ms.active_bank=ms.pending_bank;

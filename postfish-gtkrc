@@ -20,7 +20,12 @@ style "panel-text" {
 }
 
 style "small-marker" {
-	font_name = "sans 8"
+        fg[NORMAL]="#905050" 
+	font_name = "sans 6"
+}
+
+style "scale-marker" {
+	font_name = "sans 7"
 }
 
 style "frame-label" {
@@ -59,7 +64,7 @@ style "multibar" {
 
         text[NORMAL]="#c0c0d0" 
         text[ACTIVE]="#ffb0b0" 
-        font_name = "sans 6"    
+        font_name = "sans 7"    
 }
 
 style "multislide" {
@@ -138,6 +143,7 @@ style "side" {
 }
 
 widget "*.GtkLabel" style "panel-text"
+widget "*.scalemarker" style "scale-marker"
 widget "*.smallmarker" style "small-marker"
 
 widget "*.color0" style "left"

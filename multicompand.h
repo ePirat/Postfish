@@ -46,31 +46,39 @@ static char *multicomp_freq_labels[multicomp_banks][multicomp_freqs_max]={
 };
 
 typedef struct {
-  sig_atomic_t static_g[multicomp_freqs_max];
-  sig_atomic_t static_e[multicomp_freqs_max];
-  sig_atomic_t static_c[multicomp_freqs_max];
+  sig_atomic_t static_o[multicomp_freqs_max];
+  sig_atomic_t static_u[multicomp_freqs_max];
 } banked_compand_settings;
 
 typedef struct {
-  sig_atomic_t link_mode;
 
-  sig_atomic_t static_mode;
-  sig_atomic_t static_c_trim;
-  sig_atomic_t static_e_trim;
-  sig_atomic_t static_g_trim;
-  sig_atomic_t static_c_decay;
-  sig_atomic_t static_e_decay;
-  sig_atomic_t static_g_decay;
-  sig_atomic_t static_c_ratio;
-  sig_atomic_t static_e_ratio;
+  sig_atomic_t over_mode;
+  sig_atomic_t over_softknee;
+  sig_atomic_t over_ratio;
+  sig_atomic_t over_limit;
+  sig_atomic_t base_ratio;
+  sig_atomic_t over_attack;
+  sig_atomic_t over_decay;
+  sig_atomic_t over_lookahead;
+  sig_atomic_t over_trim;
 
-  sig_atomic_t envelope_mode;
-  sig_atomic_t envelope_c;
+  sig_atomic_t under_mode;
+  sig_atomic_t under_softknee;
+  sig_atomic_t under_ratio;
+  sig_atomic_t under_limit;
+  sig_atomic_t under_attack;
+  sig_atomic_t under_decay;
+  sig_atomic_t under_lookahead;
+  sig_atomic_t under_trim;
 
   sig_atomic_t suppress_mode;
   sig_atomic_t suppress_ratio;
+
+  sig_atomic_t suppress_attack;
   sig_atomic_t suppress_decay;
-  sig_atomic_t suppress_depth;
+  sig_atomic_t suppress_release;
+
+  sig_atomic_t link_mode;
 
 } other_compand_settings;
 
@@ -80,4 +88,10 @@ extern time_linkage *multicompand_read(time_linkage *in);
 extern void multicompand_set_bank(int bank);
 extern int pull_multicompand_feedback(float **peak,float **rms,int *bands);
 
-
+extern int multicompand_over_attack_set(float msec);
+extern int multicompand_over_decay_set(float msec);
+extern int multicompand_under_attack_set(float msec);
+extern int multicompand_under_decay_set(float msec);
+extern int multicompand_suppress_attack_set(float msec);
+extern int multicompand_suppress_decay_set(float msec);
+extern int multicompand_suppress_release_set(float msec);

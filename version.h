@@ -1,2 +1,2 @@
-#define VERSION "$Id: version.h,v 1.42 2004/03/08 11:07:06 xiphmont Exp $ "
-/* DO NOT EDIT: Automated versioning hack [Mon Mar  8 06:01:38 EST 2004] */
+#define VERSION "$Id: version.h,v 1.43 2004/03/17 10:32:04 xiphmont Exp $ "
+/* DO NOT EDIT: Automated versioning hack [Wed Mar 17 05:30:15 EST 2004] */
