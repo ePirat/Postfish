@@ -63,7 +63,7 @@ static void trigger_slider_change(GtkWidget *w,gpointer in){
   sprintf(buffer,"%1.2f",linear);
   readout_set(READOUT(p->readout),buffer);
 
-  sprintf(buffer,"%3.0f dB",todB(linear));
+  sprintf(buffer,"%3.0fdB",todB(linear));
   readout_set(READOUT(p->readoutdB),buffer);
 
   declip_settrigger(linear,p->number);
@@ -75,13 +75,13 @@ static void blocksize_slider_change(GtkWidget *w,gpointer in){
   int choice=rint(gtk_range_get_value(GTK_RANGE(w)));
   int blocksize=64<<choice;
 
-  sprintf(buffer,"%5d   ",blocksize);
+  sprintf(buffer,"%5d  ",blocksize);
   readout_set(READOUT(samplereadout),buffer);
 
-  sprintf(buffer,"%3.1f ms",blocksize*1000./input_rate);
+  sprintf(buffer,"%3.1fms",blocksize*1000./input_rate);
   readout_set(READOUT(msreadout),buffer);
 
-  sprintf(buffer,"%5d Hz",(int)rint(input_rate*2./blocksize));
+  sprintf(buffer,"%5dHz",(int)rint(input_rate*2./blocksize));
   readout_set(READOUT(hzreadout),buffer);
   
   declip_setblock(blocksize);
@@ -150,9 +150,9 @@ void clippanel_create(postfish_mainpanel *mp,
     GtkWidget *samplelabel=gtk_label_new("window sample width");
     GtkWidget *mslabel=gtk_label_new("window time width");
     GtkWidget *hzlabel=gtk_label_new("approximate lowest response");
-    samplereadout=readout_new("00000   ");
-    msreadout=readout_new("00000 ms");
-    hzreadout=readout_new("00000 Hz");
+    samplereadout=readout_new("00000  ");
+    msreadout=readout_new("00000ms");
+    hzreadout=readout_new("00000Hz");
 
     gtk_scale_set_draw_value(GTK_SCALE(slider),FALSE);
     gtk_misc_set_alignment(GTK_MISC(samplelabel),1,.5);
@@ -255,7 +255,7 @@ void clippanel_create(postfish_mainpanel *mp,
     GtkWidget *slider=multibar_new(8,slabels,slevels,1,
 				   HI_DECAY|ZERO_DAMP);
     GtkWidget *readout=readout_new("0.00");
-    GtkWidget *readoutdB=readout_new("-40 dB");
+    GtkWidget *readoutdB=readout_new("-40dB");
     GtkWidget *bar=multibar_new(2,labels,levels,0,
 				HI_DECAY|ZERO_DAMP);
 

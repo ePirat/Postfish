@@ -69,7 +69,7 @@ static void compute(Multibar *m,double *lowvals, double *highvals, int n){
     xpad=2;
   }else{
     if(m->thumbs>1)
-      xpad=height+(height/2-1)/2-1;
+      xpad=height*3/4+6;
     else
       xpad=height/2+1;
   }
@@ -360,7 +360,7 @@ static void draw(GtkWidget *widget,int n){
     int px,py;
     int gc=0;
     
-    if(m->levels[i]>=0)gc=1;
+    if(m->levels[i]>0.)gc=1;
     
     gdk_draw_line (m->backing,
 		   widget->style->text_gc[gc],
@@ -381,8 +381,9 @@ static void draw(GtkWidget *widget,int n){
 
   /* draw frame */
   {
-    int width=widget->allocation.width-xpad;
+    int width=widget->allocation.width;
     int height=widget->allocation.height;
+    int apad=(m->thumbs<2?-height/2+2:3-xpad);
     GdkGC *gc=parent->style->bg_gc[0];
     GdkGC *light_gc=parent->style->light_gc[0];
     GdkGC *dark_gc=parent->style->dark_gc[0];
@@ -390,28 +391,28 @@ static void draw(GtkWidget *widget,int n){
 
     /* blank side padding to bg of parent */
     gdk_draw_rectangle(m->backing,gc,1,0,0,xpad,height);
-    gdk_draw_rectangle(m->backing,gc,1,width+1,0,xpad-1,height);
+    gdk_draw_rectangle(m->backing,gc,1,width-xpad+1,0,xpad-1,height);
 
 
     /* blank sides of trough */
     gdk_draw_rectangle(m->backing,gc,1,
 		       0,height-lpad,
-		       m->thumblo_x+xpad-1,lpad);
+		       m->thumblo_x+xpad+apad-1,lpad);
     gdk_draw_rectangle(m->backing,gc,1,
-		       m->thumbhi_x+xpad,height-lpad,
-		       width-m->thumbhi_x,lpad);
+		       m->thumbhi_x+xpad-apad,height-lpad,
+		       width-xpad+apad-m->thumbhi_x,lpad);
     
     /* frame */
     if(m->readout){
-      gdk_draw_line(m->backing,dark_gc,xpad-1,0,width,0);
+      gdk_draw_line(m->backing,dark_gc,xpad-1,0,width-xpad,0);
       gdk_draw_line(m->backing,dark_gc,xpad-1,0,xpad-1,height-lpad);
-      gdk_draw_line(m->backing,dark_gc,xpad,height-lpad,width,height-lpad);
-      gdk_draw_line(m->backing,dark_gc,width,height-lpad,width,1);
+      gdk_draw_line(m->backing,dark_gc,xpad,height-lpad,width-xpad,height-lpad);
+      gdk_draw_line(m->backing,dark_gc,width-xpad,height-lpad,width-xpad,1);
       
       gdk_draw_line(m->backing,light_gc,xpad-1,height-lpad+1,
-		    width+1,height-lpad+1);
-      gdk_draw_line(m->backing,light_gc,width+1,0,width+1,height-lpad+1);
-      gdk_draw_line(m->backing,light_gc,xpad,1,width-1,1);
+		    width-xpad+1,height-lpad+1);
+      gdk_draw_line(m->backing,light_gc,width-xpad+1,0,width-xpad+1,height-lpad+1);
+      gdk_draw_line(m->backing,light_gc,xpad,1,width-xpad-1,1);
       gdk_draw_line(m->backing,light_gc,xpad,1,xpad,height-lpad-1);
     }
 
@@ -420,29 +421,29 @@ static void draw(GtkWidget *widget,int n){
     if(lpad>2 || m->readout==0){
       if(lpad>2){
 	gdk_draw_rectangle(m->backing,mid_gc,1,
-			   xpad+m->thumblo_x,height-lpad+1,
-			   m->thumbhi_x-m->thumblo_x+1,lpad-1);
+			   xpad+m->thumblo_x+apad,height-lpad+1,
+			   m->thumbhi_x-m->thumblo_x-apad*2+1,lpad-1);
 	
 	gdk_draw_line(m->backing,dark_gc,
-		      m->thumblo_x+xpad-1,height-lpad,
-		      m->thumblo_x+xpad-1,height-1);
+		      m->thumblo_x+xpad+apad-1,height-lpad,
+		      m->thumblo_x+xpad+apad-1,height-1);
 	
       }
 
       gdk_draw_line(m->backing,light_gc,
-		    m->thumblo_x+xpad-1,height-1,
-		    m->thumbhi_x+xpad+1,height-1);
+		    m->thumblo_x+xpad+apad-1,height-1,
+		    m->thumbhi_x+xpad-apad+1,height-1);
 
       dark_gc=widget->style->dark_gc[GTK_STATE_ACTIVE];
 
       gdk_draw_line(m->backing,dark_gc,
-		    m->thumblo_x+xpad-1,height-lpad,
-		    m->thumbhi_x+xpad+1,height-lpad);
+		    m->thumblo_x+xpad+apad-1,height-lpad,
+		    m->thumbhi_x+xpad-apad+1,height-lpad);
       
       if(lpad>2)
 	gdk_draw_line(m->backing,light_gc,
-		      m->thumbhi_x+xpad+1,height-1,
-		      m->thumbhi_x+xpad+1,height-lpad);
+		      m->thumbhi_x+xpad-apad+1,height-1,
+		      m->thumbhi_x+xpad-apad+1,height-lpad);
 
 
     }
@@ -644,6 +645,7 @@ static void size_request (GtkWidget *widget,GtkRequisition *requisition){
 
 }
 
+static int transition_thumbfocus=0;
 static gboolean multibar_focus (GtkWidget         *widget,
 				GtkDirectionType   direction){
   Multibar *m=MULTIBAR(widget);
@@ -652,7 +654,6 @@ static gboolean multibar_focus (GtkWidget         *widget,
   if(m->thumbs==0)return FALSE;
 
   switch(direction){
-  case GTK_DIR_DOWN:
   case GTK_DIR_TAB_FORWARD:
   case GTK_DIR_RIGHT:
     if(m->thumbfocus+1>=m->thumbs){
@@ -662,7 +663,6 @@ static gboolean multibar_focus (GtkWidget         *widget,
       m->thumbfocus++;
     break;
 
-  case GTK_DIR_UP:
   case GTK_DIR_TAB_BACKWARD:
   case GTK_DIR_LEFT:
     if(m->thumbfocus==-1)
@@ -675,6 +675,21 @@ static gboolean multibar_focus (GtkWidget         *widget,
 	m->thumbfocus--;
     }
     break;
+
+  case GTK_DIR_UP:
+  case GTK_DIR_DOWN:
+    if(m->thumbfocus==-1){
+      if(transition_thumbfocus>=0 && transition_thumbfocus<m->thumbs)
+	m->thumbfocus=transition_thumbfocus;
+      else
+	m->thumbfocus=0;
+      ret=TRUE;
+    }else{
+      transition_thumbfocus=m->thumbfocus;
+      ret=FALSE;
+    }
+    break;
+
   default:
     ret=FALSE;
   }
@@ -916,18 +931,15 @@ static gint button_press   (GtkWidget        *widget,
   Multibar *m=MULTIBAR(widget);
   if(m->thumbstate[0]){
     gtk_widget_grab_focus(widget);
-    m->thumbgrab=0;
-    m->thumbfocus=0;
+    transition_thumbfocus=m->thumbgrab=m->thumbfocus=0;
     m->thumbx=m->thumbpixel[0]-event->x;
   }else if(m->thumbstate[1]){
     gtk_widget_grab_focus(widget);
-    m->thumbgrab=1;
-    m->thumbfocus=1;
+    transition_thumbfocus=m->thumbgrab=m->thumbfocus=1;
     m->thumbx=m->thumbpixel[1]-event->x;
   }else if(m->thumbstate[2]){
     gtk_widget_grab_focus(widget);
-    m->thumbgrab=2;
-    m->thumbfocus=2;
+    transition_thumbfocus=m->thumbgrab=m->thumbfocus=2;
     m->thumbx=m->thumbpixel[2]-event->x;
   }
   draw_and_expose(widget);
@@ -951,7 +963,7 @@ static gboolean unfocus(GtkWidget        *widget,
 static gboolean refocus(GtkWidget        *widget,
 			GdkEventFocus       *event){
   Multibar *m=MULTIBAR(widget);
-  m->thumbfocus=m->prev_thumbfocus;
+  transition_thumbfocus=m->thumbfocus=m->prev_thumbfocus;
   m->thumbgrab=-1;
   draw_and_expose(widget);
 }
@@ -1012,9 +1024,6 @@ gboolean key_press(GtkWidget *w,GdkEventKey *event){
       vals_bound(m);
 
     }
-
-
-
 
     if(m->callback)m->callback(GTK_WIDGET(m),m->callbackp);
 

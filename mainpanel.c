@@ -262,7 +262,7 @@ static void masterdB_change(GtkWidget *dummy, gpointer in){
   postfish_mainpanel *p=in;
   char buf[80];
   gdouble val=multibar_get_value(MULTIBAR(p->masterdB_s),0);
-  sprintf(buf,"%.1f dB",val);
+  sprintf(buf,"%.1fdB",val);
   readout_set(READOUT(p->masterdB_r),buf);
 
   if(gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(p->masterdB_a)))
@@ -518,7 +518,7 @@ void mainpanel_create(postfish_mainpanel *panel,char **chlabels){
   }else{
     version="";
   }
-  snprintf(versionmarkup,240,"<span size=\"large\" weight=\"bold\" "
+  snprintf(versionmarkup,240," <span size=\"large\" weight=\"bold\" "
 	   "style=\"italic\" foreground=\"dark blue\">"
 	   "Postfish</span>  <span size=\"small\" foreground=\"#606060\">"
 	   "version %s</span> ",
@@ -662,7 +662,7 @@ void mainpanel_create(postfish_mainpanel *panel,char **chlabels){
 
       GtkWidget *masterlabel=gtk_label_new("master:");
       panel->masterdB_a=gtk_toggle_button_new_with_label("[m] active");
-      panel->masterdB_r=readout_new("  0.0 dB");
+      panel->masterdB_r=readout_new("  0.0dB");
       panel->masterdB_s=multibar_slider_new(10,sliderlabels,sliderlevels,1);
       
       multibar_thumb_set(MULTIBAR(panel->masterdB_s),0.,0);

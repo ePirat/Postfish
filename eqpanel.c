@@ -51,7 +51,7 @@ static void slider_change(GtkWidget *w,gpointer in){
   bar *b=(bar *)in;
   gdouble val=multibar_get_value(MULTIBAR(b->slider),0);
   
-  sprintf(buffer,"%+3.0f dB",val);
+  sprintf(buffer,"%+3.0fdB",val);
   readout_set(READOUT(b->readout),buffer);
   
   eq_set(b->number,val);
@@ -80,7 +80,7 @@ void eqpanel_create(postfish_mainpanel *mp,
     GtkWidget *label=gtk_label_new(labeltext);
     gtk_widget_set_name(label,"smallmarker");
 
-    bars[i].readout=readout_new("+00 dB");
+    bars[i].readout=readout_new("+00dB");
     bars[i].slider=multibar_new(15,labels,levels,1,
 				LO_DECAY|HI_DECAY|LO_ATTACK|HI_ATTACK);
     bars[i].number=i;
