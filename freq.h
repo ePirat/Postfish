@@ -52,7 +52,8 @@ extern int freq_reset(freq_state *f);
 extern const char *freq_frequency_label(int n);
 extern time_linkage *freq_read(time_linkage *in, freq_state *f,
 			       void (*func)(double *data,freq_state *f,
-					    double *peak, double *rms));
+					    double *peak, double *rms),
+			       int bypassp);
 
 extern void freq_metric_work(double *work,freq_state *f,
 			    double *sq_mags,double *peak,double *rms);

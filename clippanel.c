@@ -31,6 +31,7 @@
 #include "declip.h"
 
 extern sig_atomic_t declip_active;
+extern sig_atomic_t declip_visible;
 extern int input_ch;
 extern int input_size;
 extern int input_rate;
@@ -115,7 +116,7 @@ void clippanel_create(postfish_mainpanel *mp,
   int block_choices=0;
 
   subpanel_generic *panel=subpanel_create(mp,windowbutton,activebutton,
-					  &declip_active,
+					  &declip_active,&declip_visible,
 					  "_Declipping filter setup"," [d] ");
   
   GtkWidget *framebox=gtk_hbox_new(1,0);
@@ -317,7 +318,7 @@ void clippanel_create(postfish_mainpanel *mp,
 
 }
 
-void clippanel_feedback(void){
+void clippanel_feedback(int displayit){
   int clip[input_ch],count;
   double peak[input_ch];
   if(pull_declip_feedback(clip,peak,&count)){
@@ -327,10 +328,13 @@ void clippanel_feedback(void){
       val[0]=-1.,zero[0]=-1.;
       val[1]=(count?clip[i]*100./count-.1:-1);
       zero[1]=-1.;
-      multibar_set(MULTIBAR(feedback_bars[i]),zero,val,2);
 
-      val[0]=(count?peak[i]:-1);
-      multibar_set(MULTIBAR(trigger_bars[i]),zero,val,1);
+      if(displayit && declip_visible){
+	multibar_set(MULTIBAR(feedback_bars[i]),zero,val,2);
+	
+	val[0]=(count?peak[i]:-1);
+	multibar_set(MULTIBAR(trigger_bars[i]),zero,val,1);
+      }
 
       if(clip[i]){
 	multibar_setwarn(MULTIBAR(mainpanel_inbar));

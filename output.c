@@ -92,6 +92,9 @@ int pull_output_feedback(double *peak,double *rms){
   return 1;
 }
 
+int output_feedback_deep(void){
+  return feedback_deep(&feedpool);
+}
 
 static void PutNumLE(long num,FILE *f,int bytes){
   int i=0;

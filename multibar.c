@@ -355,7 +355,7 @@ static void draw(GtkWidget *widget,int n){
   }
 
   for(i=0;i<m->labels+1;i++){
-    int x=rint(((double)i)/m->labels*(widget->allocation.width-xpad*2)+xpad);
+    int x=rint(((double)i)/m->labels*(widget->allocation.width-xpad*2))+xpad);
     int y=widget->allocation.height-lpad-upad;
     int px,py;
     int gc=0;

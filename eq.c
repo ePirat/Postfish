@@ -30,6 +30,7 @@
 extern int input_size;
 
 sig_atomic_t eq_active;
+sig_atomic_t eq_visible;
 
 freq_state eq;
 
@@ -85,5 +86,5 @@ static void workfunc(double *data,freq_state *f,
 
 /* called only by playback thread */
 time_linkage *eq_read(time_linkage *in){
-  return freq_read(in,&eq,workfunc);
+  return freq_read(in,&eq,workfunc,!(eq_visible||eq_active));
 }

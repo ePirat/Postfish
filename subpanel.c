@@ -32,9 +32,11 @@ static int clippanel_hide(GtkWidget *widget,
 			  GdkEvent *event,
 			  gpointer in){
   subpanel_generic *p=in;
+  if(p->mappedvar)*p->mappedvar=0;
   gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->subpanel_windowbutton),0);
   return TRUE;
 }
+
 static int windowbutton_action(GtkWidget *widget,
 			gpointer in){
   int active;
@@ -47,10 +49,13 @@ static int windowbutton_action(GtkWidget *widget,
     gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->subpanel_windowbutton),active);
   }
   
-  if(active)
+  if(active){
+    if(p->mappedvar)*p->mappedvar=1;
     gtk_widget_show_all(p->subpanel_toplevel);
-  else
+  }else{
+    if(p->mappedvar)*p->mappedvar=0;
     gtk_widget_hide_all(p->subpanel_toplevel);
+  }
 
   return FALSE;
 }
@@ -103,6 +108,7 @@ subpanel_generic *subpanel_create(postfish_mainpanel *mp,
 				  GtkWidget *windowbutton,
 				  GtkWidget *activebutton,
 				  sig_atomic_t *activevar,
+				  sig_atomic_t *mappedvar,
 				  char *prompt,char *shortcut){
 
   subpanel_generic *panel=calloc(1,sizeof(*panel));
@@ -124,6 +130,7 @@ subpanel_generic *subpanel_create(postfish_mainpanel *mp,
   panel->mainpanel_windowbutton=windowbutton;
   panel->mainpanel_activebutton=activebutton;
   panel->activevar=activevar;
+  panel->mappedvar=mappedvar;
   
   gtk_box_pack_start(GTK_BOX(toplabel),toplabelwb,0,0,5);
   gtk_box_pack_end(GTK_BOX(toplabel),toplabelab,0,0,5);

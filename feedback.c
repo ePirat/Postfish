@@ -83,3 +83,17 @@ void feedback_old(feedback_generic_pool *pool,
   pthread_mutex_unlock(&master_mutex);
 }
 
+/* are there multiple feedback outputs waiting or just one (a metric
+   of 'are we behind?') */
+int feedback_deep(feedback_generic_pool *pool){
+  if(pool){
+    pthread_mutex_lock(&master_mutex);
+    if(pool->feedback_list_tail)
+      if(pool->feedback_list_tail->next){
+	pthread_mutex_unlock(&master_mutex);
+	return 1;
+      }
+    pthread_mutex_unlock(&master_mutex);
+  }
+  return 0;
+}

@@ -50,6 +50,7 @@ static time_linkage out;
 
 /* accessed across threads */
 sig_atomic_t declip_active=0;
+sig_atomic_t declip_visible=0;
 sig_atomic_t declip_converge=2; /* 0=over, 1=full, 2=half, 3=partial, 4=approx */
 
 static double *chtrigger=0;

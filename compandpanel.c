@@ -30,49 +30,60 @@
 #include "subpanel.h"
 #include "feedback.h"
 #include "freq.h"
-#include "eq.h"
+#include "compand.h"
 
-extern sig_atomic_t eq_active;
-extern sig_atomic_t eq_visible;
+extern sig_atomic_t compand_active;
+extern sig_atomic_t compand_visible;
 extern int input_ch;
 extern int input_size;
 extern int input_rate;
 
 typedef struct {
   GtkWidget *slider;
-  GtkWidget *readout;
+  GtkWidget *readoutg;
+  GtkWidget *readoute;
+  GtkWidget *readoutc;
   int number;
-} bar;
+} cbar;
 
-static bar bars[freqs];
+static cbar bars[freqs];
 
 static void slider_change(GtkWidget *w,gpointer in){
   char buffer[80];
-  bar *b=(bar *)in;
+  cbar *b=(cbar *)in;
+
   gdouble val=multibar_get_value(MULTIBAR(b->slider),0);
-  
   sprintf(buffer,"%+5.1f dB",val);
-  readout_set(READOUT(b->readout),buffer);
+  readout_set(READOUT(b->readoutg),buffer);
+  compand_g_set(b->number,val);
   
-  eq_set(b->number,val);
+  val=multibar_get_value(MULTIBAR(b->slider),1);
+  sprintf(buffer,"%+5.1f dB",val);
+  readout_set(READOUT(b->readoute),buffer);
+  compand_e_set(b->number,val);
+
+  val=multibar_get_value(MULTIBAR(b->slider),2);
+  sprintf(buffer,"%+5.1f dB",val);
+  readout_set(READOUT(b->readoute),buffer);
+  compand_c_set(b->number,val);
 
 }
 
-void eqpanel_create(postfish_mainpanel *mp,
-		    GtkWidget *windowbutton,
-		    GtkWidget *activebutton){
+void compandpanel_create(postfish_mainpanel *mp,
+			 GtkWidget *windowbutton,
+			 GtkWidget *activebutton){
   int i;
-  char *labels[15]={"-110","-100","-90","-80","-70","-60","-50","-40",
-		    "-30","-20","-10","0","+10","+20","+30"};
-  double levels[16]={-120,-110,-100,-90,-80,-70,-60,-50,-40,
-		     -30,-20,-10,0,10,20,30};
+  char *labels[14]={"-130","-120","-110","-100","-90","-80","-70",
+		    "-60","-50","-40","-30","-20","-10","0"};
+  double levels[15]={-140,-130,-120,-110,-100,-90,-80,-70,-60,-50,-40,
+		     -30,-20,-10,0};
 
   subpanel_generic *panel=subpanel_create(mp,windowbutton,activebutton,
-					  &eq_active,
-					  &eq_visible,
-					  "_Equalization filter"," [e] ");
+					  &compand_active,
+					  &compand_visible,
+					  "_Compander and Noise Gate"," [c] ");
   
-  GtkWidget *slidertable=gtk_table_new(freqs,3,0);
+  GtkWidget *slidertable=gtk_table_new(freqs,5,0);
 
   for(i=0;i<freqs;i++){
     const char *labeltext=freq_frequency_label(i);
@@ -80,20 +91,28 @@ void eqpanel_create(postfish_mainpanel *mp,
     GtkWidget *label=gtk_label_new(labeltext);
     gtk_widget_set_name(label,"smallmarker");
 
-    bars[i].readout=readout_new("+00.0 dB");
-    bars[i].slider=multibar_new(15,labels,levels,1,
+    bars[i].readoutg=readout_new("+000 dB");
+    bars[i].readoute=readout_new("+000 dB");
+    bars[i].readoutc=readout_new("+000 dB");
+    bars[i].slider=multibar_new(14,labels,levels,3,
 				LO_DECAY|HI_DECAY|LO_ATTACK|HI_ATTACK);
     bars[i].number=i;
 
     multibar_callback(MULTIBAR(bars[i].slider),slider_change,bars+i);
-    multibar_thumb_set(MULTIBAR(bars[i].slider),0.,0);
-    multibar_thumb_bounds(MULTIBAR(bars[i].slider),-40,30);
+    multibar_thumb_set(MULTIBAR(bars[i].slider),-140.,0);
+    multibar_thumb_set(MULTIBAR(bars[i].slider),-140.,1);
+    multibar_thumb_set(MULTIBAR(bars[i].slider),0.,2);
+    multibar_thumb_bounds(MULTIBAR(bars[i].slider),-140,0);
 
     gtk_misc_set_alignment(GTK_MISC(label),1,.5);
 
     gtk_table_attach(GTK_TABLE(slidertable),label,0,1,i,i+1,
 		     GTK_FILL,0,10,0);
     gtk_table_attach(GTK_TABLE(slidertable),bars[i].readout,2,3,i,i+1,
+		     GTK_FILL,0,0,0);
+    gtk_table_attach(GTK_TABLE(slidertable),bars[i].readout,3,4,i,i+1,
+		     GTK_FILL,0,0,0);
+    gtk_table_attach(GTK_TABLE(slidertable),bars[i].readout,4,5,i,i+1,
 		     GTK_FILL,0,0,0);
     gtk_table_attach(GTK_TABLE(slidertable),bars[i].slider,1,2,i,i+1,
 		     GTK_FILL|GTK_EXPAND,GTK_FILL|GTK_EXPAND,0,0);
@@ -106,7 +125,7 @@ void eqpanel_create(postfish_mainpanel *mp,
 static double **peakfeed=0;
 static double **rmsfeed=0;
 
-void eqpanel_feedback(int displayit){
+void compandpanel_feedback(int displayit){
   int i;
   if(!peakfeed){
     peakfeed=malloc(sizeof(*peakfeed)*freqs);
@@ -118,13 +137,13 @@ void eqpanel_feedback(int displayit){
     }
   }
   
-  if(pull_eq_feedback(peakfeed,rmsfeed)==1)
-    if(displayit && eq_visible)
+  if(pull_compand_feedback(peakfeed,rmsfeed)==1)
+    if(displayit && compand_visible)
       for(i=0;i<freqs;i++)
 	multibar_set(MULTIBAR(bars[i].slider),rmsfeed[i],peakfeed[i],input_ch);
 }
 
-void eqpanel_reset(void){
+void compandpanel_reset(void){
   int i;
   for(i=0;i<freqs;i++)
     multibar_reset(MULTIBAR(bars[i].slider));

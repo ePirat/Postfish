@@ -27,38 +27,6 @@
 #include "feedback.h"
 #include "freq.h"
 
-#include <stdio.h>
-void _analysis(char *base,int i,double *v,int n,int bark,int dB){
-  int j;
-  FILE *of;
-  char buffer[80];
-
-  sprintf(buffer,"%s_%d.m",base,i);
-  of=fopen(buffer,"w");
-  
-  if(!of)perror("failed to open data dump file");
-  
-  for(j=0;j<n;j++){
-    if(bark){
-      float b=toBark((4000.f*j/n)+.25);
-      fprintf(of,"%f ",b);
-    }else
-      fprintf(of,"%f ",(double)j);
-    
-    if(dB){
-      if(j==0||j==n-1)
-        fprintf(of,"%f\n",todB(v[j]));
-      else{
-        fprintf(of,"%f\n",todB(hypot(v[j],v[j+1])));
-        j++;
-      }
-    }else{
-      fprintf(of,"%f\n",v[j]);
-    }
-  }
-  fclose(of);
-}
-
 extern int input_rate;
 extern int input_ch;
 extern int input_size;
@@ -68,6 +36,7 @@ typedef struct freq_feedback{
   feedback_generic parent_class;
   double **peak;
   double **rms;
+  int bypass;
 } freq_feedback;
 
 /* accessed only in playback thread/setup */
@@ -108,18 +77,22 @@ int pull_freq_feedback(freq_state *ff,double **peak,double **rms){
   
   if(!f)return 0;
   
-  if(peak)
-    for(i=0;i<freqs;i++)
-      for(j=0;j<input_ch;j++)
-	peak[i][j]=f->peak[j][i];
-
-  if(rms)
-    for(i=0;i<freqs;i++)
-      for(j=0;j<input_ch;j++)
-	rms[i][j]=f->rms[j][i];
-  
-  feedback_old(&ff->feedpool,(feedback_generic *)f);
-  return 1;
+  if(f->bypass){
+    feedback_old(&ff->feedpool,(feedback_generic *)f);
+    return 2;
+  }else{
+    if(peak)
+      for(i=0;i<freqs;i++)
+	for(j=0;j<input_ch;j++)
+	  peak[i][j]=f->peak[j][i];
+    
+    if(rms)
+      for(i=0;i<freqs;i++)
+	for(j=0;j<input_ch;j++)
+	  rms[i][j]=f->rms[j][i];
+    feedback_old(&ff->feedpool,(feedback_generic *)f);
+    return 1;
+  }
 }
 
 /* called only by initial setup */
@@ -285,9 +258,6 @@ static void feedback_work(double *peak,double *rms,
 static void lap_work(double *work,double *lap,double *out,freq_state *f){
   double *workoff=work+f->blocksize/2;
   int i,j;
-
-  /* back to time we go */
-  drft_backward(&f->fft,work);
   
   /* lap and out */
   if(out)
@@ -303,7 +273,8 @@ static void lap_work(double *work,double *lap,double *out,freq_state *f){
 /* called only by playback thread */
 time_linkage *freq_read(time_linkage *in, freq_state *f,
 			void (*func)(double *data,freq_state *f,
-				     double *peak, double *rms)){
+				     double *peak, double *rms),
+			int bypass){
   int i;
 
   double feedback_peak[input_ch][freqs];
@@ -314,9 +285,10 @@ time_linkage *freq_read(time_linkage *in, freq_state *f,
 
   int blocks=0;
 
-  memset(feedback_peak,0,sizeof(feedback_peak));
-  memset(feedback_rms,0,sizeof(feedback_rms));
-
+  if(!bypass){
+    memset(feedback_peak,0,sizeof(feedback_peak));
+    memset(feedback_rms,0,sizeof(feedback_rms));
+  }
   {
     double work[f->blocksize*2];
     
@@ -333,9 +305,12 @@ time_linkage *freq_read(time_linkage *in, freq_state *f,
 	memset(work+f->blocksize/2,0,sizeof(*work)*f->blocksize/2);
 	memcpy(work+f->blocksize,temp,sizeof(*work)*f->blocksize/2);
 
-	transform_work(work,f);
-	func(work,f,peak,rms);
-	feedback_work(peak,rms,feedback_peak[i],feedback_rms[i]);
+	if(!bypass){
+	  transform_work(work,f);
+	  func(work,f,peak,rms);
+	  feedback_work(peak,rms,feedback_peak[i],feedback_rms[i]);
+	  drft_backward(&f->fft,work);
+	}
 	lap_work(work,f->lap[i],0,f);
 	blocks++;	
 
@@ -362,9 +337,12 @@ time_linkage *freq_read(time_linkage *in, freq_state *f,
 	  memcpy(work+f->blocksize/2,temp+j,sizeof(*work)*f->blocksize);
 	  memset(work+f->blocksize*3/2,0,sizeof(*work)*f->blocksize/2);
 
-	  transform_work(work,f);
-	  func(work,f,peak,rms);
-	  feedback_work(peak,rms,feedback_peak[i],feedback_rms[i]);
+	  if(!bypass){
+	    transform_work(work,f);
+	    func(work,f,peak,rms);
+	    feedback_work(peak,rms,feedback_peak[i],feedback_rms[i]);
+	    drft_backward(&f->fft,work);
+	  }
 	  lap_work(work,f->lap[i],f->out.data[i]+j,f);
 	  blocks++;	
 	}
@@ -374,9 +352,12 @@ time_linkage *freq_read(time_linkage *in, freq_state *f,
 	memcpy(work+f->blocksize,in->data[i],sizeof(*work)*f->blocksize/2);
 	memset(work+f->blocksize*3/2,0,sizeof(*work)*f->blocksize/2);
 	
-	transform_work(work,f);
-	func(work,f,peak,rms);
-	feedback_work(peak,rms,feedback_peak[i],feedback_rms[i]);
+	if(!bypass){
+	  transform_work(work,f);
+	  func(work,f,peak,rms);
+	  feedback_work(peak,rms,feedback_peak[i],feedback_rms[i]);
+	  drft_backward(&f->fft,work);
+	}
 	lap_work(work,f->lap[i],f->out.data[i]+j,f);
 	blocks++;	
 	
@@ -394,7 +375,7 @@ time_linkage *freq_read(time_linkage *in, freq_state *f,
 
   /* finish up the state feedabck */
   blocks/=input_ch;
-  {
+  if(!bypass){
     int j;
     double scale=1./blocks;
     freq_feedback *ff=
@@ -410,6 +391,12 @@ time_linkage *freq_read(time_linkage *in, freq_state *f,
       memcpy(ff->peak[i],feedback_peak[i],freqs*sizeof(**feedback_peak));
       memcpy(ff->rms[i],feedback_rms[i],freqs*sizeof(**feedback_rms));
     } 
+    ff->bypass=0;
+    feedback_push(&f->feedpool,(feedback_generic *)ff);
+  }else{
+    freq_feedback *ff=
+      (freq_feedback *)feedback_new(&f->feedpool,new_freq_feedback);
+    ff->bypass=1;
     feedback_push(&f->feedpool,(feedback_generic *)ff);
   }
 

@@ -38,4 +38,5 @@ extern void feedback_push(feedback_generic_pool *pool,
 extern feedback_generic *feedback_pull(feedback_generic_pool *pool);
 extern void feedback_old(feedback_generic_pool *pool,
 			 feedback_generic *f);
+extern int feedback_deep(feedback_generic_pool *pool);
 

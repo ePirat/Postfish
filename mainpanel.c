@@ -587,7 +587,7 @@ void mainpanel_create(postfish_mainpanel *panel,char **chlabels){
   panel->leftframe=gtk_frame_new(NULL);
   panel->box2=gtk_vbox_new(0,0);
   panel->box1=gtk_vbox_new(0,6);
-  panel->wintable=gtk_table_new(7,3,0);
+  panel->wintable=gtk_table_new(6,3,0);
   panel->twirlimage=gtk_image_new_from_pixmap(panel->ff[0],panel->fb[0]);
 
   gtk_container_set_border_width (GTK_CONTAINER (panel->topframe), 3);
@@ -854,11 +854,10 @@ void mainpanel_create(postfish_mainpanel *panel,char **chlabels){
 
   mainpanel_panelentry(panel,"_Declip ","[d]",0,clippanel_create);
   mainpanel_panelentry(panel,"Cross_Talk ","[t]",1,0);
-  mainpanel_panelentry(panel,"_Noise Filter ","[n]",2,0);
+  mainpanel_panelentry(panel,"_Compand/Gate ","[c]",2,0);
   mainpanel_panelentry(panel,"_Equalizer ","[e]",3,eqpanel_create);
-  mainpanel_panelentry(panel,"_Compander ","[c]",4,0);
-  mainpanel_panelentry(panel,"_Limiter ","[l]",5,0);
-  mainpanel_panelentry(panel,"_Output Cal. ","[o]",6,0);
+  mainpanel_panelentry(panel,"_Limiter ","[l]",4,0);
+  mainpanel_panelentry(panel,"_Output Cal. ","[o]",5,0);
 
 
   g_signal_connect (G_OBJECT (panel->toplevel), "delete_event",
@@ -885,30 +884,24 @@ static gboolean feedback_process(postfish_mainpanel *panel){
   /* second order of business; update the input meter if data is
      available and not dirtied by a seek */
   if(!playback_seeking){
-    off_t   time_cursor;
-    int     n=(input_ch>1?input_ch+2:input_ch);
-    double *rms=alloca(sizeof(*rms)*(input_ch+2));
-    double *peak=alloca(sizeof(*peak)*(input_ch+2));
+    if(output_feedback_deep()){
 
-    if(pull_output_feedback(peak,rms)){
-      char buffer[14];
-      int i;
-	
-      for(i=0;i<n;i++){
-	if(gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(panel->channelshow[i]))){
-	  peak[i]=todB(peak[i]);
-	  rms[i]=todB(rms[i]);
-	}else{
-	  peak[i]=-400;
-	  rms[i]=-400;
-	}
+      pull_input_feedback(NULL,NULL,NULL);
+      clippanel_feedback(0);
+      eqpanel_feedback(0);
+      pull_output_feedback(NULL,NULL);
 
-	if(i<input_ch && peak[i]>=0.)multibar_setwarn(MULTIBAR(panel->outbar));
-      }
+
+    }else{
+      off_t   time_cursor;
+      int     n=(input_ch>1?input_ch+2:input_ch);
+      double *rms=alloca(sizeof(*rms)*(input_ch+2));
+      double *peak=alloca(sizeof(*peak)*(input_ch+2));
       
-      multibar_set(MULTIBAR(panel->outbar),rms,peak,n);
-
-      if(pull_input_feedback(peak,rms,&time_cursor)){
+      if(pull_output_feedback(peak,rms)){
+	char buffer[14];
+	int i;
+	
 	for(i=0;i<n;i++){
 	  if(gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(panel->channelshow[i]))){
 	    peak[i]=todB(peak[i]);
@@ -917,16 +910,32 @@ static gboolean feedback_process(postfish_mainpanel *panel){
 	    peak[i]=-400;
 	    rms[i]=-400;
 	  }
+
+	  if(i<input_ch && peak[i]>=0.)multibar_setwarn(MULTIBAR(panel->outbar));
+	}
+      
+	multibar_set(MULTIBAR(panel->outbar),rms,peak,n);
+	
+	if(pull_input_feedback(peak,rms,&time_cursor)){
+	  for(i=0;i<n;i++){
+	    if(gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(panel->channelshow[i]))){
+	      peak[i]=todB(peak[i]);
+	      rms[i]=todB(rms[i]);
+	    }else{
+	      peak[i]=-400;
+	      rms[i]=-400;
+	    }
+	  }
+	  
+	  multibar_set(MULTIBAR(panel->inbar),rms,peak,n);
+	  input_cursor_to_time(time_cursor,buffer);
+	  readout_set(READOUT(panel->cue),buffer);
 	}
 	
-	multibar_set(MULTIBAR(panel->inbar),rms,peak,n);
-	input_cursor_to_time(time_cursor,buffer);
-	readout_set(READOUT(panel->cue),buffer);
+	clippanel_feedback(1);
+	eqpanel_feedback(1);
+	
       }
-
-      clippanel_feedback();
-      eqpanel_feedback();
-      
     }
   }
   
