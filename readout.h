@@ -39,6 +39,7 @@ struct _ReadoutClass{
 GType          readout_get_type        (void);
 GtkWidget*     readout_new             (char *markup);
 void	       readout_set             (Readout *m,char *markup);
+const gchar*   readout_get             (Readout  *r);
 
 G_END_DECLS
 

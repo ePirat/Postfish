@@ -125,15 +125,60 @@ static void action_play(GtkWidget *widget,postfish_mainpanel *p){
   }
 }
 
-static void action_entryb(GtkWidget *widget,postfish_mainpanel *p){
-  if(gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(widget)))
-    loop_active=1;
-  else
-    loop_active=0;
+static void action_entrya(GtkWidget *widget,postfish_mainpanel *p){
+  const char *time=gtk_entry_get_text(GTK_ENTRY(p->entry_a));
+  off_t cursor=input_time_to_cursor(time);
+  
+  if(cursor==0){
+    time=readout_get(READOUT(p->cue));
+    gtk_entry_set_text(GTK_ENTRY(p->entry_a),time);
+  }else{
+    input_seek(cursor);
+    readout_set(READOUT(p->cue),(char *)time);
+  }
+}
 
+static void action_entryb(GtkWidget *widget,postfish_mainpanel *p){
+  if(gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(widget))){
+
+    const char *time=gtk_entry_get_text(GTK_ENTRY(p->entry_b));
+    off_t cursora,cursorb=input_time_to_cursor(time);
+    time=gtk_entry_get_text(GTK_ENTRY(p->entry_a));
+    cursora=input_time_to_cursor(time);
+  
+    if(cursorb==0){
+      time=readout_get(READOUT(p->cue));
+      cursorb=input_time_to_cursor(time);
+      gtk_entry_set_text(GTK_ENTRY(p->entry_b),time);
+    }
+    
+    if(cursora<cursorb){
+      input_Acursor_set(cursora);
+      input_Bcursor_set(cursorb);
+      loop_active=1;
+    }else{
+      gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(widget),0);
+    }
+  }else
+    loop_active=0;
+  
   gtk_image_set_from_pixmap(GTK_IMAGE(p->playimage),
 			    p->pf[loop_active],
 			    p->pb[loop_active]);
+    
+}
+
+static void action_reseta(GtkWidget *widget,postfish_mainpanel *p){
+  char time[14];
+  input_cursor_to_time(0,time);
+  gtk_entry_set_text(GTK_ENTRY(p->entry_a),time);
+}
+
+static void action_resetb(GtkWidget *widget,postfish_mainpanel *p){
+  char time[14];
+  input_cursor_to_time(0,time);
+  gtk_entry_set_text(GTK_ENTRY(p->entry_b),time);
+  gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->cue_set[1]),0);
 }
 
 /* gotta have the Fucking Fish */
@@ -441,7 +486,7 @@ void mainpanel_create(postfish_mainpanel *panel,char **chlabels){
   char versiondate[20];
   char versiontime[20];
   char versionmarkup[240];
-  sscanf(VERSION,"$Id: mainpanel.c,v 1.19 2003/10/18 07:29:47 xiphmont Exp $",
+  sscanf(VERSION,"$Id: mainpanel.c,v 1.20 2003/10/18 08:10:49 xiphmont Exp $",
 	 versionnum,versiondate,versiontime);
   snprintf(versionmarkup,240,"<span size=\"large\" weight=\"bold\" "
 	   "style=\"italic\" foreground=\"dark blue\">"
@@ -735,8 +780,14 @@ void mainpanel_create(postfish_mainpanel *panel,char **chlabels){
       g_signal_connect_after(G_OBJECT (panel->entry_b), "grab_focus",
 			G_CALLBACK (timeevent_unselect), NULL);
 
+      g_signal_connect (G_OBJECT (panel->cue_set[0]), "clicked",
+			G_CALLBACK (action_entrya), panel);
       g_signal_connect (G_OBJECT (panel->cue_set[1]), "clicked",
 			G_CALLBACK (action_entryb), panel);
+      g_signal_connect (G_OBJECT (panel->cue_reset[0]), "clicked",
+			G_CALLBACK (action_reseta), panel);
+      g_signal_connect (G_OBJECT (panel->cue_reset[1]), "clicked",
+			G_CALLBACK (action_resetb), panel);
 
 
       gtk_widget_set_name(panel->cue_reset[0],"reseta");

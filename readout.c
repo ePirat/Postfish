@@ -74,4 +74,8 @@ void readout_set(Readout  *r,char *label){
   gtk_label_set_markup(GTK_LABEL(r->label),label);
 }
 
+const gchar *readout_get(Readout  *r){
+  gtk_label_get_label(GTK_LABEL(r->label));
+}
+
 
