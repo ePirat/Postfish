@@ -1,0 +1,21 @@
+#!/usr/bin/perl
+
+if(open F,"version.h"){
+	$line=<F>;
+	close F;
+
+	if(open F,">version.h"){
+	
+	    print F "$line";
+	    chomp($line=`date`);
+	    print F "/* DO NOT EDIT: Automated versioning hack [$line] */\n";
+	    close F;
+	    0;
+	}else{
+	    print "touch-version: Failed to write new version.h\n";
+	    1;
+	}
+}else{
+	print "touch-version: Failed to open version.h\n";
+	1;
+}

@@ -68,7 +68,7 @@ static int signp=0;
 
 /* working space */
 
-static long block=8192;
+static long block=1024;
 
 static off_t Acursor=0;
 static off_t Bcursor=-1;
@@ -81,6 +81,7 @@ pthread_mutex_t master_mutex=PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
 sig_atomic_t primed=0;
 sig_atomic_t playback_active=0;
 sig_atomic_t playback_exit=0;
+sig_atomic_t loop_active;
 
 int eventpipe[2];
 
@@ -306,7 +307,7 @@ void *playback_thread(void *dummy){
 
   /* is this file a block device? */
   if(isachr(playback_fd)){
-    int fragment=0x7fff000d;
+    int fragment=0x7fff0008;
 
     fd=fileno(playback_fd);
 
@@ -403,7 +404,12 @@ void *playback_thread(void *dummy){
 
   }
 
-  if(!isachr(playback_fd))WriteWav(playback_fd,ch,rate,outbytes*8,count);
+  if(isachr(playback_fd)){
+    fd=fileno(playback_fd);
+    ret=ioctl(fd,SNDCTL_DSP_RESET);
+  }else{
+    WriteWav(playback_fd,ch,rate,outbytes*8,count);
+  }
 
   fclose(playback_fd);
   playback_active=0;
@@ -415,7 +421,7 @@ void *playback_thread(void *dummy){
 int main(int argc, char **argv){
   off_t total=0;
   int i,j;
-  int configfd;
+  int configfd=-1;
   int stdinp=0;
   char *fname="stdin";
 

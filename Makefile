@@ -11,6 +11,7 @@ GCF = `pkg-config --cflags gtk+-2.0`
 
 all:	
 	$(MAKE) target CFLAGS="-W -O2 $(GCF)"
+	./touch-version
 
 debug:
 	$(MAKE) target CFLAGS="-g -W -D__NO_MATH_INLINES $(GCF)"
