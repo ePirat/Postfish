@@ -66,6 +66,18 @@ static void draw_triangle (GtkStyle      *style,
 
 }
 
+static void windowbutton_get_props (GtkCheckButton *check_button,
+				    gint           *indicator_size,
+				    gint           *indicator_spacing){
+  GtkWidget *widget =  GTK_WIDGET (check_button);
+  
+  if (indicator_size)
+    gtk_widget_style_get (widget, "indicator_size", indicator_size, NULL);
+  
+  if (indicator_spacing)
+    gtk_widget_style_get (widget, "indicator_spacing", indicator_spacing, NULL);
+}
+
 static void windowbutton_draw_indicator (GtkCheckButton *check_button,
 					 GdkRectangle   *area){
   GtkWidget *widget;
@@ -91,7 +103,7 @@ static void windowbutton_draw_indicator (GtkCheckButton *check_button,
 			  "focus-line-width", &focus_width, 
 			  "focus-padding", &focus_pad, NULL);
     
-    _gtk_check_button_get_props (check_button, &indicator_size, 
+    windowbutton_get_props (check_button, &indicator_size, 
 				 &indicator_spacing);
     
     x = widget->allocation.x + 
