@@ -37,6 +37,7 @@ extern int input_rate;
 extern sig_atomic_t declip_converge;
 
 GtkWidget **feedback_bars;
+GtkWidget **trigger_bars;
 
 GtkWidget *samplereadout;
 GtkWidget *msreadout;
@@ -135,6 +136,7 @@ void clippanel_create(postfish_mainpanel *mp,
   gtk_container_set_border_width(GTK_CONTAINER(limit_box),2);
 
   feedback_bars=calloc(input_ch,sizeof(*feedback_bars));
+  trigger_bars=calloc(input_ch,sizeof(*trigger_bars));
 
   /* set up blocksize config */
   for(i=64;i<=input_size*2;i*=2)block_choices++;
@@ -249,16 +251,19 @@ void clippanel_create(postfish_mainpanel *mp,
     char buffer[80];
     clipslider *cs=calloc(1,sizeof(*cs));
     GtkWidget *label;
-    GtkWidget *slider=multibar_new(8,slabels,slevels,HI_DECAY|ZERO_DAMP|PEAK_FOLLOW);
+    GtkWidget *slider=multibar_new(8,slabels,slevels,1,
+				   HI_DECAY|ZERO_DAMP);
     GtkWidget *readout=readout_new("0.00");
     GtkWidget *readoutdB=readout_new("-40 dB");
-    GtkWidget *bar=multibar_new(2,labels,levels,HI_DECAY|ZERO_DAMP|PEAK_FOLLOW);
+    GtkWidget *bar=multibar_new(2,labels,levels,0,
+				HI_DECAY|ZERO_DAMP);
 
     cs->slider=slider;
     cs->readout=readout;
     cs->readoutdB=readoutdB;
     cs->number=i;
     feedback_bars[i]=bar;
+    trigger_bars[i]=slider;
 
     gtk_widget_set_name(bar,"clipbar");
     multibar_thumb_set(MULTIBAR(slider),1.,0);
@@ -314,7 +319,8 @@ void clippanel_create(postfish_mainpanel *mp,
 
 void clippanel_feedback(void){
   int clip[input_ch],count;
-  if(pull_declip_feedback(clip,&count)){
+  double peak[input_ch];
+  if(pull_declip_feedback(clip,peak,&count)){
     int i;
     for(i=0;i<input_ch;i++){
       double val[2],zero[2];
@@ -322,9 +328,12 @@ void clippanel_feedback(void){
       val[1]=(count?clip[i]*100./count-.1:-1);
       zero[1]=-1.;
       multibar_set(MULTIBAR(feedback_bars[i]),zero,val,2);
+      val[1]=(count?peak[i]:-1);
+      multibar_set(MULTIBAR(trigger_bars[i]),zero,val,2);
       if(clip[i]){
 	multibar_setwarn(MULTIBAR(mainpanel_inbar));
 	multibar_setwarn(MULTIBAR(feedback_bars[i]));
+	multibar_setwarn(MULTIBAR(trigger_bars[i]));
       }
     }
   }
@@ -332,6 +341,8 @@ void clippanel_feedback(void){
 
 void clippanel_reset(void){
   int i;
-  for(i=0;i<input_ch;i++)
+  for(i=0;i<input_ch;i++){
     multibar_reset(MULTIBAR(feedback_bars[i]));
+    multibar_reset(MULTIBAR(trigger_bars[i]));
+  }
 }

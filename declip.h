@@ -28,3 +28,4 @@ extern int declip_setiterations(double x);
 extern int declip_setconvergence(double x);
 extern int declip_reset(void);
 extern time_linkage *declip_read(time_linkage *in);
+extern int pull_declip_feedback(int *clip,double *peak,int *total);

@@ -41,7 +41,7 @@ style "slider" {
 
 style "multibar" {
         bg[NORMAL]="#80a0ff" 
-        bg[ACTIVE]="#c0f0ff" 
+        bg[ACTIVE]="#b0b0b0" 
         bg[PRELIGHT]="#c0f0ff" 
 
         fg[NORMAL]="#000000" 

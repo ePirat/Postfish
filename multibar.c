@@ -347,7 +347,7 @@ static void draw(GtkWidget *widget,int n){
     GdkGC *gc=parent->style->bg_gc[0];
     GdkGC *light_gc=parent->style->light_gc[0];
     GdkGC *dark_gc=parent->style->dark_gc[0];
-    GdkGC *mid_gc=parent->style->mid_gc[0];
+    GdkGC *mid_gc=widget->style->bg_gc[GTK_STATE_ACTIVE];
 
     /* blank side padding to bg of parent */
     gdk_draw_rectangle(m->backing,gc,1,0,0,xpad,height);
@@ -547,6 +547,7 @@ static gboolean expose( GtkWidget *widget, GdkEventExpose *event ){
 static void size_request (GtkWidget *widget,GtkRequisition *requisition){
   int i,maxx=0,maxy=0,x,y,xpad;
   Multibar *m=MULTIBAR(widget);
+
   for(i=0;i<m->labels;i++){
     pango_layout_get_pixel_size(m->layout[i],&x,&y);
 
@@ -556,10 +557,18 @@ static void size_request (GtkWidget *widget,GtkRequisition *requisition){
 
   maxy+=4;
 
-  requisition->width = (maxx*1.5+2)*m->labels;
+  if(m->thumbs==0){
+    xpad=2;
+  }else{
+    if(m->thumbs>1)
+      xpad=maxy+(maxy/2-1)/2-1+2;
+    else
+      xpad=maxy/2+1+2;
+  }
+
+  requisition->width = (maxx*1.5+2)*m->labels+xpad*2;
   requisition->height = maxy;
 
-  fprintf(stderr,"reqwidth=%d, maxx=%d, maxy=%d labels=%d\n",requisition->width,maxx,maxy,m->labels);
 }
 
 static gboolean multibar_focus (GtkWidget         *widget,
@@ -568,8 +577,6 @@ static gboolean multibar_focus (GtkWidget         *widget,
   int ret=TRUE;
 
   if(m->thumbs==0)return FALSE;
-
-  fprintf(stderr,"thumbfocus=%d thumbs=%d ",m->thumbfocus,m->thumbs);
 
   switch(direction){
   case GTK_DIR_DOWN:
@@ -598,12 +605,11 @@ static gboolean multibar_focus (GtkWidget         *widget,
   default:
     ret=FALSE;
   }
-  fprintf(stderr,"thumbfocus=%d thumbs=%d ",m->thumbfocus,m->thumbs);
 
   m->prev_thumbfocus=m->thumbfocus;
   if(ret==TRUE) gtk_widget_grab_focus(widget);
   draw_and_expose(widget);
-  fprintf(stderr,"thumbfocus=%d \n",m->thumbfocus);
+
   return ret;
 }
 
@@ -713,7 +719,7 @@ static gboolean configure(GtkWidget *widget, GdkEventConfigure *event){
   for(i=0;i<m->thumbs;i++)
     m->thumbpixel[i]=val_to_pixel(widget,m->thumbval[i]);
   draw_and_expose(widget);
-  fprintf(stderr,"acwidth=%d\n",widget->allocation.width);
+
   return TRUE;
 }
 
@@ -959,7 +965,8 @@ GType multibar_get_type (void){
   return m_type;
 }
 
-GtkWidget* multibar_new (int n, char **labels, double *levels, int flags){
+GtkWidget* multibar_new (int n, char **labels, double *levels, int thumbs,
+			 int flags){
   int i;
   GtkWidget *ret= GTK_WIDGET (g_object_new (multibar_get_type (), NULL));
   Multibar *m=MULTIBAR(ret);
@@ -978,6 +985,11 @@ GtkWidget* multibar_new (int n, char **labels, double *levels, int flags){
   m->thumbgrab=-1;
   m->thumblo=levels[0];
   m->thumbhi=levels[n];
+
+  if(thumbs<0)thumbs=0;
+  if(thumbs>3)thumbs=3;
+  m->thumbs=thumbs;
+  if(m->thumbs!=0)  GTK_WIDGET_SET_FLAGS (m, GTK_CAN_FOCUS);
 
   {
     int events=gtk_widget_get_events(ret);
@@ -1005,11 +1017,8 @@ void multibar_thumb_set(Multibar *m,double v, int n){
   GtkWidget *w=GTK_WIDGET(m);
 
   if(n<0)return;
-  if(n>2)return;
+  if(n>=m->thumbs)return;
 
-  if(m->thumbs==0)  GTK_WIDGET_SET_FLAGS (m, GTK_CAN_FOCUS);
-  
-  if(n+1>m->thumbs)m->thumbs=n+1;
   {
     int x=m->thumbpixel[n]=val_to_pixel(w,v);
     m->thumbval[n]=v;
