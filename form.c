@@ -28,6 +28,7 @@
 
 #include <stdlib.h>
 #include <ncurses.h>
+#include <string.h>
 #include <pthread.h>
 #include <math.h>
 #include <form.h>

@@ -9,7 +9,7 @@ LDADD = -lm -lpthread -lncurses
 bin_PROGRAMS = postfish
 man_MANS = postfish.1
 
-postfish_SOURCES = postfish.c smallft.c form.c smallft.h form.h
+postfish_SOURCES = postfish.c smallft.c form.c envelope.c envelope.h smallft.h form.h
 postfish_LDADD = $(LDADD)
 
 debug:

@@ -57,6 +57,8 @@
 #include <smallft.h>
 #include <form.h>
 
+#include "envelope.h"
+
 #define todB(x)   ((x)==0?-400.f:log((x)*(x))*4.34294480f)
 #define fromdB(x) (exp((x)*.11512925f))  
 #define toOC(n)     (log(n)*1.442695f-5.965784f)
@@ -65,6 +67,7 @@
 #define BANDS 35
 
 static int outfileno=-1;
+static int loop_flag=1;
 static int inbytes=0;
 static int outbytes=2;
 static int rate=0;
@@ -188,6 +191,7 @@ pthread_mutex_t master_mutex=PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
 int playback_active=0;
 int playback_exit=0;
 drft_lookup fft;
+env_lookup envpre,envpost;
 pthread_t playback_thread_id;
 
 
@@ -450,7 +454,7 @@ off_t time_to_cursor(long t){
     off_t c=t%10000;
     
     c+=t/10000%100*6000;
-    c+=t/1000000*600000;
+    c+=t/1000000*6000*60;
     
     return((off_t)rint(c*.01*rate)*ch*inbytes);
   }
@@ -468,8 +472,10 @@ long cursor_to_time(off_t c){
   if(c<0)return(-1);
   c=c*100./rate/ch/inbytes;
   T =c/(100*60*60)*1000000;
-  T+=c/(100*60)%60*10000;
-  T+=c/(100)%60*100;
+  c%=(100*60*60);
+  T+=c/(100*60)*10000;
+  c%= (100*60);
+  T+=c/(100)*100;
   T+=c%100;
   return(T);
 }
@@ -993,6 +999,57 @@ void dynamic_att(double *b){
     pthread_mutex_unlock(&master_mutex);
 }  
 
+void dynamic_sq(double *b){
+  int i;
+  pthread_mutex_lock(&master_mutex);
+  if(wc.dynamicatt_p && wc.dynamicatt!=0.){
+    double diff=fromdB(wc.dynamicatt/10.);
+    pthread_mutex_unlock(&master_mutex);
+    
+    env_compute(&envpre,b);
+    
+    /* zero */
+    {
+      double val=diff*envpre.envelope[0];
+      double M=b[0];
+      if(M-val>0){	
+	double div=(M-val)/M;
+	b[0]*=div;
+      }else{
+	b[0]=0;
+      }
+    }
+      
+    /* 1 ... n-1 */
+    for(i=1;i+1<block-1;i+=2){
+      double val=diff*envpre.envelope[(i>>1)+1];
+      double M=hypot(b[i],b[i+1]);
+      if(M-val>0){	
+	double div=(M-val)/M;
+	b[i]*=div;
+	b[i+1]*=div;
+      }else{
+	b[i]=0;
+	b[i+1]=0;
+      }
+    }
+
+    /* n */
+    {
+      double val=diff*envpre.envelope[block/2-1];
+      double M=b[block/2-1];
+      if(M-val>0){	
+	double div=(M-val)/M;
+	b[block/2-1]*=div;
+      }else{
+	b[block/2-1]=0;
+      }
+    }
+
+  }else
+    pthread_mutex_unlock(&master_mutex);
+}  
+
 void refresh_thresh_array(double *t,long *set){
   int i;
   for(i=0;i<=block/2;i++){
@@ -1228,7 +1285,12 @@ int aread(double **buf){
     }
 
     if(Bcursor!=-1 && cursor>=Bcursor){
-      aseek(Acursor);
+      if(loop_flag)
+	aseek(Acursor);
+      else{
+	pthread_mutex_unlock(&master_mutex);
+	return(-1);
+      }
     }else if(cursor>=current_file_entry->end){
       if(current_file_entry_number+1<file_entries){
 	current_file_entry_number++;
@@ -1308,6 +1370,40 @@ int isachr(FILE *f){
     if(S_ISCHR(s.st_mode)) return 1;
   return 0;
 }
+
+#define toBark(n) \
+  (13.1f*atan(.00074f*(n))+2.24f*atan((n)*(n)*1.85e-8f)+1e-4f*(n))
+#define todB(x)   ((x)==0?-400.f:log((x)*(x))*4.34294480f)
+#define fromdB(x) (exp((x)*.11512925f))  
+
+
+void _analysis(char *base,int i,double *v,int n,int bark,int dB){
+  int j;
+  FILE *of;
+  char buffer[80];
+
+  sprintf(buffer,"%s_%d.m",base,i);
+  of=fopen(buffer,"w");
+  
+  if(!of)perror("failed to open data dump file");
+  
+  for(j=0;j<n;j++){
+    if(!dB || v[j]!=0){
+      if(bark)
+	fprintf(of,"%f ",toBark(22050.f*j/n));
+      else
+	fprintf(of,"%f ",(double)j);
+      
+      if(dB){
+	fprintf(of,"%.12f\n",todB(v[j]));
+      }else{
+	fprintf(of,"%.12f\n",v[j]);
+      }
+    }
+  }
+  fclose(of);
+}
+static int seq;
 
 /* playback must be halted to change blocksize. */
 void *playback_thread(void *dummy){
@@ -1405,6 +1501,10 @@ void *playback_thread(void *dummy){
   window=alloca(block*sizeof(*window));
 
   drft_init(&fft,block);
+
+  env_init(&envpre,rate/2,block/2,.5);
+  env_init(&envpost,rate/2,block/2,.5);
+
   for(i=0;i<block;i++)
     window[i]=sin((i+.5)/block*M_PI);
 
@@ -1434,15 +1534,19 @@ void *playback_thread(void *dummy){
 
       /* forward FFT */
       drft_forward(&fft,w);
-
+      
       /* noise thresh */
       noise_filter(w);
-
+      
       /* EQ */
       eq_filter(w);
-
+      
       /* dynamic range att */
-      dynamic_att(w);
+      if(wc.dynamicatt_p){
+	dynamic_sq(w);
+      }
+	
+      /**************************/
       
       /* inverse FFT */
       drft_backward(&fft,w);
@@ -1518,37 +1622,11 @@ void *playback_thread(void *dummy){
   playback_active=0;
   playback_exit=0;
   drft_clear(&fft);
+  env_clear(&envpre);
+  env_clear(&envpost);
   pthread_mutex_unlock(&master_mutex);
   write(ttypipe[1],"",1);
   return(NULL);
-}
-
-void _analysis(char *base,int i,double *v,int n,int dB){
-  int j;
-  FILE *of;
-  char buffer[80];
-
-  sprintf(buffer,"%s_%d.m",base,i);
-  of=fopen(buffer,"w");
-  
-  if(!of)perror("failed to open data dump file");
-  
-  for(j=0;j<n;j++){
-    //fprintf(of,"%f ",(double)toOC((j+1)*22050./n)*2);
-    fprintf(of,"%d ",j);
-    
-    if(dB){
-      float val;
-      if(v[j]==0.)
-	val=-140.;
-      else
-	val=todB(v[j]);
-      fprintf(of,"%f\n",val);
-    }else{
-      fprintf(of,"%f\n",v[j]);
-    }
-  }
-  fclose(of);
 }
 
 void save_settings(int fd){
@@ -1868,6 +1946,7 @@ int main(int argc, char **argv){
   /* look at stdout... do we have a file or device? */
   if(!isatty(STDOUT_FILENO)){
     /* apparently; assume this is the file/device for output */
+    loop_flag=0;
     outfileno=dup(STDOUT_FILENO);
     dup2(STDERR_FILENO,STDOUT_FILENO);
   }
@@ -1925,7 +2004,7 @@ int main(int argc, char **argv){
     form_init(&editf,120,1);
     form_init(&noneditf,50,0);
     box(stdscr,0,0);
-    mvaddstr(0, 2, " Postfish Filter $Id: postfish.c,v 1.5 2002/12/02 02:17:27 xiphmont Exp $ ");
+    mvaddstr(0, 2, " Postfish Filter $Id: postfish.c,v 1.6 2003/09/16 08:55:12 xiphmont Exp $ ");
     mvaddstr(LINES-1, 2, 
 	     "  [<]<<   [,]<   [Spc] Play/Pause   [Bksp] Stop/Cue   [.]>   [>]>>  ");
 
@@ -2066,6 +2145,7 @@ int main(int argc, char **argv){
 	    B=-1;
 	    Bcursor=-1;
 	    pthread_mutex_unlock(&master_mutex);
+	    update_b();
 	  }
 	  update_a();
 	}else{
