@@ -315,7 +315,7 @@ time_linkage *mix_read(time_linkage *in,
       acc=0.;
       if(inA && !mute_channel_muted(inA->active,i)){
 	memset(mix,0,sizeof(mix));
-	mixwork(inA->data[i],ms.cacheP[i],ms.cachePP[i],
+	mixwork(inA->data[i],ms.cachePA[i],ms.cachePPA[i],
 		mix,att,del,0,att,del,0);
 	
 	bypass=0;
@@ -331,7 +331,7 @@ time_linkage *mix_read(time_linkage *in,
       acc=0.;
       if(inB && !mute_channel_muted(inB->active,i)){
 	memset(mix,0,sizeof(mix));
-	mixwork(inB->data[i],ms.cacheP[i],ms.cachePP[i],
+	mixwork(inB->data[i],ms.cachePB[i],ms.cachePPB[i],
 		mix,att,del,0,att,del,0);
 	
 	bypass=0;
