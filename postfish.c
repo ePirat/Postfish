@@ -130,6 +130,11 @@ static configprofile wc;
 
 static long block=8192;
 
+static int feedback_n_displayed=0;
+static int feedback_e_displayed=0;
+static int feedback_a_displayed=0;
+static int feedback_l_displayed=0;
+
 static double eqt_feedbackmax[BANDS]={
   0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
   0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
@@ -529,7 +534,7 @@ void update_static_D(){
   mvaddstr(D_Y+6,D_X+18," +30");
 
   mvaddstr(D_Y+8,D_X,"[l] Limiter                  dB");
-  mvaddstr(D_Y+9,D_X,"    Block period             ms");
+  mvaddstr(D_Y+9,D_X,"    Block Period             ms");
   mvaddstr(D_Y+11,D_X,"                             dB");
 
   mvvline(D_Y+11,D_X,0,1);
@@ -568,8 +573,8 @@ void update_static_D(){
 
   T_field=field_add(&noneditf,FORM_TIME,D_X+4,D_Y+16,11,&T,NULL,0,0,99999999);
 
-  pre_field=field_add(&noneditf,FORM_DB,D_X+23,D_Y+5,5,&pre_var,NULL,0,-30,30);
-  post_field=field_add(&noneditf,FORM_DB,D_X+23,D_Y+11,5,&post_var,NULL,0,-30,0);
+  pre_field=field_add(&noneditf,FORM_DB,D_X+23,D_Y+5,5,&pre_var,NULL,0,-300,300);
+  post_field=field_add(&noneditf,FORM_DB,D_X+23,D_Y+11,5,&post_var,NULL,0,-300,00);
 
 }
 
@@ -659,31 +664,35 @@ void update_b(){
   draw_field(B_field);
 }
 
-void update_ui(){
+void update_ui(int up){
   int i,j;
-
+  int valM[BANDS],valA[BANDS];
+  
   pthread_mutex_lock(&master_mutex); 
   T=cursor_to_time(cursor);
   pthread_mutex_unlock(&master_mutex); 
   draw_field(T_field);
+  
+  pthread_mutex_lock(&master_mutex);
+  for(i=0;i<BANDS;i++){
+    valM[i]=rint(todB(eqt_feedbackmax[i])/5.7142857+21);
+    valA[i]=rint(todB(eqt_feedbackav[i]/eqt_feedbackcount[i])/5.7142857+21);
+  }
+  if(up)feedback_e_displayed=1;
+  pthread_mutex_unlock(&master_mutex);
 
   for(i=0;i<BANDS;i++){
-    int valM,valA,valT;
-    valT=rint(wc.eqt[i]/30.+10);
-    pthread_mutex_lock(&master_mutex);
-    valM=rint(todB(eqt_feedbackmax[i])/5.7142857+21);
-    valA=rint(todB(eqt_feedbackav[i]/eqt_feedbackcount[i])/5.7142857+21);
-    pthread_mutex_unlock(&master_mutex);
-
+    int valT=rint(wc.eqt[i]/30.+10);
+    
     move(E_Y+3+i,E_X+9);
-    for(j=0;j<valA && j<21;j++){
+    for(j=0;j<valA[i] && j<21;j++){
       if(j==valT)
 	addch(ACS_VLINE);
       else
 	addch(' ');
     }
 
-    for(;j<=valM && j<21;j++){
+    for(;j<=valM[i] && j<21;j++){
       if(j==valT)
 	addch(ACS_PLUS);
       else
@@ -699,10 +708,12 @@ void update_ui(){
   }
 }
 
-void update_play(){
+void update_play(int up){
   int i,j;
+  int valM[BANDS],valA[BANDS];
+
   pthread_mutex_lock(&master_mutex); 
-  update_ui();
+  update_ui(up);
   if(playback_active){
     if(B!=-1){
       pthread_mutex_unlock(&master_mutex);
@@ -722,21 +733,22 @@ void update_play(){
 	mvaddstr(D_Y+16,D_X,"|||");
   }
   
+  pthread_mutex_lock(&master_mutex);
   for(i=0;i<BANDS;i++){
-    int valM,valA;
-    pthread_mutex_lock(&master_mutex);
-
     if(noiset_feedbackcount[i]){
-      valM=rint(todB(noiset_feedbackmax[i])/3.+10);
-      valA=rint(todB(noiset_feedbackav[i]/noiset_feedbackcount[i])/3.+10);
+      valM[i]=rint(todB(noiset_feedbackmax[i])/3.+10);
+      valA[i]=rint(todB(noiset_feedbackav[i]/noiset_feedbackcount[i])/3.+10);
     }else{
-      valM=-1;
-      valA=-1;
+      valM[i]=-1;
+      valA[i]=-1;
     }
-    pthread_mutex_unlock(&master_mutex);
+  }
+  if(up)feedback_n_displayed=1;
+  pthread_mutex_unlock(&master_mutex);
 
+  for(i=0;i<BANDS;i++){
     move(N_Y+3+i,N_X+10);
-    for(j=0;j<valA && j<=21;j++){
+    for(j=0;j<valA[i] && j<=21;j++){
       if(j==21)
 	addch('+');
       else
@@ -746,7 +758,7 @@ void update_play(){
 	  addch(' ');
     }
 
-    for(;j<=valM && j<=21;j++){
+    for(;j<=valM[i] && j<=21;j++){
       if(j==21)
 	addch('+');
       else
@@ -764,16 +776,6 @@ void update_play(){
 	addch(' ');
     }
 
-
-    noiset_feedbackav[i]/=2;
-    noiset_feedbackmax[i]/=2;
-    noiset_feedbackcount[i]/=2;
-  }
-
-  for(i=0;i<BANDS;i++){
-    eqt_feedbackav[i]/=2;
-    eqt_feedbackmax[i]/=2;
-    eqt_feedbackcount[i]/=2;
   }
 
   /* pre-limit bargraph */
@@ -784,7 +786,8 @@ void update_play(){
     pthread_mutex_lock(&master_mutex);
     if(maxtimeprehold){
       val=maxtimepre;
-      pre_var=rint(todB(maxtimeprehold));
+      pre_var=rint(todB(maxtimeprehold)*10.);
+      if(up)feedback_a_displayed=1;
       pthread_mutex_unlock(&master_mutex);
       
       ival=(todB(val)+30.)/3.;
@@ -808,7 +811,6 @@ void update_play(){
 	  addch(' ');
       }
       
-      maxtimepre/=2;
       draw_field(pre_field);
     }else{
       pthread_mutex_unlock(&master_mutex);
@@ -829,7 +831,8 @@ void update_play(){
     pthread_mutex_lock(&master_mutex);
     if(&wc.dyn_p && maxtimeposthold){
       val=maxtimepost;
-      post_var=rint(todB(maxtimeposthold));
+      post_var=rint(todB(maxtimeposthold)*10.);
+      if(up)feedback_l_displayed=1;
       pthread_mutex_unlock(&master_mutex);
       
       if(todB(val)<wc.dynt*.1){
@@ -861,7 +864,6 @@ void update_play(){
 	  addch(' ');
       }
       
-      maxtimepost/=2;
       draw_field(post_field);
     }else{
       pthread_mutex_unlock(&master_mutex);
@@ -917,6 +919,14 @@ void dynamic_limit(double **b){
     double y=0;
     double d=0;
     long ms=wc.dynms/10;
+
+    if(feedback_a_displayed)
+      maxtimepre/=2;
+    if(feedback_l_displayed)
+      maxtimepost/=2;
+    feedback_a_displayed=0;
+    feedback_l_displayed=0;
+
     pthread_mutex_unlock(&master_mutex);
     
     for(j=0;j<ch;j++)
@@ -1016,19 +1026,29 @@ void noise_filter(double *b){
   int i;
   double dv;
   pthread_mutex_lock(&master_mutex);
-  if(wc.noise_p){
-    if(noise_dirty){
-      refresh_thresh_array(noise_tfull,wc.noiset);
-      noise_dirty=0;
-    }
-      
-    pthread_mutex_unlock(&master_mutex);
-    
-    dv=fabs(b[0])/noise_tfull[0];
-    if(noiset_feedbackmax[oc[0]]<dv)noiset_feedbackmax[oc[0]]=dv;
-    noiset_feedbackav[oc[0]]+=dv;
-    noiset_feedbackcount[oc[0]]++;
 
+  if(noise_dirty){
+    refresh_thresh_array(noise_tfull,wc.noiset);
+    noise_dirty=0;
+  }
+  
+  if(feedback_n_displayed)
+    for(i=0;i<BANDS;i++){
+      noiset_feedbackav[i]/=2;
+      noiset_feedbackmax[i]/=2;
+      noiset_feedbackcount[i]/=2;
+    }
+  feedback_n_displayed=0;
+
+  pthread_mutex_unlock(&master_mutex);
+  
+  dv=fabs(b[0])/noise_tfull[0];
+  if(noiset_feedbackmax[oc[0]]<dv)noiset_feedbackmax[oc[0]]=dv;
+  noiset_feedbackav[oc[0]]+=dv;
+  noiset_feedbackcount[oc[0]]++;
+  
+
+  if(wc.noise_p){
     if(b[0]<0){
       b[0]+=noise_tfull[0];
       if(b[0]>0)b[0]=0;
@@ -1036,15 +1056,17 @@ void noise_filter(double *b){
       b[0]-=noise_tfull[0];
       if(b[0]<0)b[0]=0;
     }
+  }
 
-    for(i=1;i<block/2;i++){
-      double M=sqrt(b[i*2]*b[i*2]+b[i*2-1]*b[i*2-1]);
-      
-      dv=M/noise_tfull[i];
-      if(noiset_feedbackmax[oc[i]]<dv)noiset_feedbackmax[oc[i]]=dv;
-      noiset_feedbackav[oc[i]]+=dv;
-      noiset_feedbackcount[oc[i]]++;
-
+  for(i=1;i<block/2;i++){
+    double M=sqrt(b[i*2]*b[i*2]+b[i*2-1]*b[i*2-1]);
+    
+    dv=M/noise_tfull[i];
+    if(noiset_feedbackmax[oc[i]]<dv)noiset_feedbackmax[oc[i]]=dv;
+    noiset_feedbackav[oc[i]]+=dv;
+    noiset_feedbackcount[oc[i]]++;
+    
+    if(wc.noise_p){
       if(M-noise_tfull[i]>0){
 	double div=(M-noise_tfull[i])/M;
 	b[i*2]*=div;
@@ -1054,12 +1076,14 @@ void noise_filter(double *b){
 	b[i*2-1]=0;
       }
     }
-
-    dv=fabs(b[block-1])/noise_tfull[block/2];
-    if(noiset_feedbackmax[oc[block/2]]<dv)noiset_feedbackmax[oc[block/2]]=dv;
-    noiset_feedbackav[oc[block/2]]+=dv;
-    noiset_feedbackcount[oc[block/2]]++;
-
+  }
+  
+  dv=fabs(b[block-1])/noise_tfull[block/2];
+  if(noiset_feedbackmax[oc[block/2]]<dv)noiset_feedbackmax[oc[block/2]]=dv;
+  noiset_feedbackav[oc[block/2]]+=dv;
+  noiset_feedbackcount[oc[block/2]]++;
+  
+  if(wc.noise_p){
     if(b[i*2-1]<0){
       b[i*2-1]+=noise_tfull[block/2];
       if(b[i*2-1]>0)b[i*2-1]=0;
@@ -1067,9 +1091,6 @@ void noise_filter(double *b){
       b[i*2-1]-=noise_tfull[block/2];
       if(b[i*2-1]<0)b[i*2-1]=0;
     }
-
-  }else{
-    pthread_mutex_unlock(&master_mutex);
   }
 }
 
@@ -1077,41 +1098,48 @@ void eq_filter(double *b){
   int i;
   double dv;
   pthread_mutex_lock(&master_mutex);
-  if(wc.eq_p){
 
-    if(eq_dirty){
-      refresh_thresh_array(eq_tfull,wc.eqt);
-      eq_dirty=0;
-    }
+  if(eq_dirty){
+    refresh_thresh_array(eq_tfull,wc.eqt);
+    eq_dirty=0;
+  }
       
-    pthread_mutex_unlock(&master_mutex);
-    
+  if(feedback_e_displayed)
+    for(i=0;i<BANDS;i++){
+      eqt_feedbackav[i]/=2;
+      eqt_feedbackmax[i]/=2;
+      eqt_feedbackcount[i]/=2;
+    }
+  feedback_e_displayed=0;
+  pthread_mutex_unlock(&master_mutex);
+  
+  if(wc.eq_p)
     b[0]*=eq_tfull[0];
-    dv=fabs(b[0]);
-    if(eqt_feedbackmax[oc[0]]<dv)eqt_feedbackmax[oc[0]]=dv;
-    eqt_feedbackav[oc[0]]+=dv;
-    eqt_feedbackcount[oc[0]]++;
-    
-    for(i=1;i<block/2;i++){
+  dv=fabs(b[0]);
+  if(eqt_feedbackmax[oc[0]]<dv)eqt_feedbackmax[oc[0]]=dv;
+  eqt_feedbackav[oc[0]]+=dv;
+  eqt_feedbackcount[oc[0]]++;
+  
+  for(i=1;i<block/2;i++){
+    if(wc.eq_p){
       b[i*2]*=eq_tfull[i];
       b[i*2-1]*=eq_tfull[i];
-      
-      dv=sqrt(b[i*2]*b[i*2]+b[i*2-1]*b[i*2-1]);
-      if(eqt_feedbackmax[oc[i]]<dv)eqt_feedbackmax[oc[i]]=dv;
-      eqt_feedbackav[oc[i]]+=dv;
-      eqt_feedbackcount[oc[i]]++;
-
     }
-
-    b[block-1]*=eq_tfull[block/2-1];
-    dv=fabs(b[block-1]);
+    
+    dv=sqrt(b[i*2]*b[i*2]+b[i*2-1]*b[i*2-1]);
     if(eqt_feedbackmax[oc[i]]<dv)eqt_feedbackmax[oc[i]]=dv;
     eqt_feedbackav[oc[i]]+=dv;
     eqt_feedbackcount[oc[i]]++;
-
-  }else{
-    pthread_mutex_unlock(&master_mutex);
+    
   }
+  
+  if(wc.eq_p)
+    b[block-1]*=eq_tfull[block/2-1];
+  dv=fabs(b[block-1]);
+  if(eqt_feedbackmax[oc[i]]<dv)eqt_feedbackmax[oc[i]]=dv;
+  eqt_feedbackav[oc[i]]+=dv;
+  eqt_feedbackcount[oc[i]]++;
+ 
 }
 
 int aseek(off_t pos){
@@ -1897,7 +1925,7 @@ int main(int argc, char **argv){
     form_init(&editf,120,1);
     form_init(&noneditf,50,0);
     box(stdscr,0,0);
-    mvaddstr(0, 2, " Postfish Filter $Id: postfish.c,v 1.4 2002/12/01 08:34:40 xiphmont Exp $ ");
+    mvaddstr(0, 2, " Postfish Filter $Id: postfish.c,v 1.5 2002/12/02 02:17:27 xiphmont Exp $ ");
     mvaddstr(LINES-1, 2, 
 	     "  [<]<<   [,]<   [Spc] Play/Pause   [Bksp] Stop/Cue   [.]>   [>]>>  ");
 
@@ -1915,7 +1943,7 @@ int main(int argc, char **argv){
     update_a();
     update_b();
     update_C();
-    update_play();
+    update_play(0);
     update_static_0();
 
     refresh();
@@ -1938,25 +1966,25 @@ int main(int argc, char **argv){
 	pthread_mutex_lock(&master_mutex);
 	aseek(cursor-rate*ch*inbytes*60);
 	pthread_mutex_unlock(&master_mutex);
-	update_ui();
+	update_ui(0);
 	break;
       case ',':
 	pthread_mutex_lock(&master_mutex);
 	aseek(cursor-rate*ch*inbytes*5);
 	pthread_mutex_unlock(&master_mutex);
-	update_ui();
+	update_ui(0);
 	break;
       case '>':
 	pthread_mutex_lock(&master_mutex);
 	aseek(cursor+rate*ch*inbytes*60);
 	pthread_mutex_unlock(&master_mutex);
-	update_ui();
+	update_ui(0);
 	break;
       case '.':
 	pthread_mutex_lock(&master_mutex);
 	aseek(cursor+rate*ch*inbytes*5);
 	pthread_mutex_unlock(&master_mutex);
-	update_ui();
+	update_ui(0);
 	break;
       case 'n':
 	pthread_mutex_lock(&master_mutex);
@@ -1997,7 +2025,7 @@ int main(int argc, char **argv){
 	    pthread_mutex_lock(&master_mutex);
 	    aseek(time_to_cursor(TX[num]));
 	    pthread_mutex_unlock(&master_mutex);
-	    update_play();
+	    update_play(0);
 	  }else{
 	    pthread_mutex_lock(&master_mutex);
 	    TX[num]=cursor_to_time(cursor);
@@ -2005,7 +2033,7 @@ int main(int argc, char **argv){
 	    update_0();
 	  }
 	}
-	update_ui();
+	update_ui(0);
 	break;
       case ')':
 	TX[0]=-1;update_0();break;
@@ -2043,7 +2071,7 @@ int main(int argc, char **argv){
 	}else{
 	  aseek(Acursor);
 	  pthread_mutex_unlock(&master_mutex);
-	  update_play();
+	  update_play(0);
 	}
 	break;	    
       case 'b':
@@ -2061,7 +2089,7 @@ int main(int argc, char **argv){
 	  update_b();
 	}else
 	  pthread_mutex_unlock(&master_mutex);
-	  update_play();
+	  update_play(0);
 	break;
       case 'A':
 	pthread_mutex_lock(&master_mutex);
@@ -2094,14 +2122,14 @@ int main(int argc, char **argv){
 	}
 	aseek(Acursor);
 	pthread_mutex_unlock(&master_mutex);
-	update_play();
+	update_play(0);
 	break;
       case ' ':
 	pthread_mutex_lock(&master_mutex);
 	if(!playback_active){
 	  playback_active=1;
 	  pthread_mutex_unlock(&master_mutex);
-	  update_play();
+	  update_play(0);
 	  pthread_create(&playback_thread_id,NULL,&playback_thread,NULL);
 	}else{
 	  playback_exit=1;
@@ -2116,7 +2144,7 @@ int main(int argc, char **argv){
 	      break;
 	  }
 	  pthread_mutex_unlock(&master_mutex);
-	  update_play();
+	  update_play(0);
 	}
 	break;
       case 'v':case 'w':case 'x':case 'y':case 'z':
@@ -2136,7 +2164,7 @@ int main(int argc, char **argv){
 	  update_C();
 	  update_N();
 	  update_E();
-	  update_ui();
+	  update_ui(0);
 	  form_redraw(&editf);
 	  form_redraw(&noneditf);
 	  update_D();
@@ -2158,18 +2186,17 @@ int main(int argc, char **argv){
 	  update_C();
 	  update_N();
 	  update_E();
-	  update_ui();
+	  update_ui(0);
 	  form_redraw(&editf);
 	  form_redraw(&noneditf);
 	  update_D();
 	}
 	break;
       case 0:
-	update_play();
-	update_ui();
+	update_play(1);
 	break;
       default:
-	update_ui();
+	update_ui(0);
 	break;
       }
     }

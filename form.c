@@ -277,9 +277,9 @@ formfield *field_add(form *f,enum field_type type,int x,int y,int width,
 
 void form_next_field(form *f){
   int v=f->cursor;
-  int t=(v+1>=f->count?v+1:0);
+  int t=(v+1>=f->count?0:v+1);
   while(t!=v && !f->fields[t].active)
-    t=(t+1>=f->count?t+1:0);
+    t=(t+1>=f->count?0:t+1);
   
   f->cursor=t;
   draw_field(f->fields+v);
