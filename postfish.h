@@ -30,8 +30,7 @@
 #define _POSTFISH_H_
 
 #define _GNU_SOURCE
-#define _LARGEFILE_SOURCE 
-#define _LARGEFILE64_SOURCE
+#define _ISOC99_SOURCE
 #define _FILE_OFFSET_BITS 64
 #define _REENTRANT 1
 #include <stdlib.h>
@@ -54,6 +53,8 @@
 #define todB(x)   ((x)==0?-400.f:log((x)*(x))*4.34294480f)
 #define fromdB(x) (exp((x)*.11512925f))  
 #define toOC(n)     (log(n)*1.442695f-5.965784f)
+#define toBark(n)   (13.1f*atan(.00074f*(n))+2.24f*atan((n)*(n)*1.85e-8f)+1e-4f*(n))
+#define fromBark(z) (102.f*(z)-2.f*pow(z,2.f)+.4f*pow(z,3.f)+pow(1.46f,z)-1.f)
 
 typedef struct time_linkage {
   int size;

@@ -5,8 +5,10 @@
 CC=gcc
 LD=gcc
 
-SRC = main.c mainpanel.c multibar.c readout.c input.c output.c clippanel.c
-OBJ = main.o mainpanel.o multibar.o readout.o input.o output.o clippanel.o
+SRC = main.c mainpanel.c multibar.c readout.c input.c output.c clippanel.c declip.c \
+	reconstruct.c smallft.c
+OBJ = main.o mainpanel.o multibar.o readout.o input.o output.o clippanel.o declip.o \
+	reconstruct.o smallft.o
 GCF = `pkg-config --cflags gtk+-2.0` -DG_DISABLE_DEPRECATED -DGDK_DISABLE_DEPRECATED -DGTK_DISABLE_DEPRECATED -DGDK_PIXBUF_DISABLE_DEPRECATED
 
 all:	

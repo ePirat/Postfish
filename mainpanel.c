@@ -900,9 +900,9 @@ void mainpanel_go(int argc,char *argv[], int ch){
   int i;
 
   memset(&p,0,sizeof(p));
-  gtk_rc_add_default_file("/etc/postfish/postfishrc");
+  gtk_rc_add_default_file("/etc/postfish/postfish-gtkrc");
   if(homedir){
-    char *rcfile="/.postfishrc";
+    char *rcfile="/.postfish-gtkrc";
     char *homerc=calloc(1,strlen(homedir)+strlen(rcfile)+1);
     strcat(homerc,homedir);
     strcat(homerc,rcfile);

@@ -272,8 +272,8 @@ static void draw(GtkWidget *widget,double *lowvals, double *highvals, int n){
 	gdk_draw_line(m->backing,widget->style->fg_gc[0],
 		      x-1,y-3,x+1,y-3);
       
-	gdk_draw_line(m->backing,widget->style->fg_gc[0],
-		      x,0,x,y-1);
+	gdk_draw_line(m->backing,widget->style->fg_gc[1],
+		      x,1,x,y-2);
       }
     }
   }

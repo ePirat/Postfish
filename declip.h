@@ -21,5 +21,9 @@
  * 
  */
 
-extern void reconstruct(drft_lookup *fft,double *x, double *w, int *flag, 
-			double e,int max,int n);
+extern int declip_load(void);
+extern int declip_setblock(int n);
+extern int declip_setactive(int activep,int ch);
+extern int declip_settrigger(double trigger,int ch);
+extern int declip_reset(void);
+extern time_linkage *declip_read(time_linkage *in);

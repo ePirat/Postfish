@@ -31,10 +31,11 @@ static off_t        cursor=0;
 sig_atomic_t loop_active;
 int seekable;
 
-static int input_rate;
+int input_rate;
 int input_ch;
 static int inbytes;
 static int signp;
+int input_size;
 
 typedef struct {
   FILE *f;
@@ -308,7 +309,7 @@ int input_load(int n,char *list[]){
     }
   }
 
-  out.size=2048;
+  input_size=out.size=2048;
   input_ch=out.channels=ch;
   input_rate=out.rate=rate;
   out.data=malloc(sizeof(*out.data)*ch);

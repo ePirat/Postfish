@@ -31,28 +31,16 @@
 #include "smallft.h"
 #include "reconstruct.h"
 
-/* this setup isn't thread safe, but it's fine for postfish which will
-   only access it from a single thread */
-
-drft_lookup fft;
-void set_up_filter(int n){
-  static int cached_n=0;
-  if(n!=cached_n){
-    if(n)drft_clear(&fft);
-    drft_init(&fft,n);
-    cached_n=n;
-  }
-}
-
-double inner_product(double *a, double *b, int n){
+static double inner_product(double *a, double *b, int n){
   int i;
   double acc=0.;
   for(i=0;i<n;i++)acc+=a[i]*b[i];
   return acc;
 }
 
-void compute_AtAx(double *x,double *w,int *flag,int mask,int n,
-		    double *out){
+static void compute_AtAx(drft_lookup *fft,
+			 double *x,double *w,int *flag,int mask,int n,
+			 double *out){
   int i;
 
   if(mask){
@@ -68,24 +56,25 @@ void compute_AtAx(double *x,double *w,int *flag,int mask,int n,
       else
 	out[i]=x[i];
   
-  drft_forward(&fft,out);
+  drft_forward(fft,out);
   for(i=0;i<n;i++)out[i]*=w[i];
-  drft_backward(&fft,out);
+  drft_backward(fft,out);
 
   for(i=0;i<n;i++)
     if(!flag[i])out[i]=0;
   
 }
 
-void compute_Atb_minus_AtAx(double *x,double *w,double *Atb,int *flag,int n,
-			    double *out){
+static void compute_Atb_minus_AtAx(drft_lookup *fft,
+				   double *x,double *w,double *Atb,int *flag,
+				   int n,double *out){
   int i;
-  compute_AtAx(x,w,flag,1,n,out);
+  compute_AtAx(fft,x,w,flag,1,n,out);
   for(i=0;i<n;i++)out[i]=Atb[i]-out[i];
 }
 
-
-void reconstruct(double *x, double *w, int *flag, double e,int max,int n){
+void reconstruct(drft_lookup *fft,
+		 double *x, double *w, int *flag, double e,int max,int n){
   int i,j;
   double Atb[n];
   double r[n];
@@ -94,23 +83,21 @@ void reconstruct(double *x, double *w, int *flag, double e,int max,int n){
   double phi_new,phi_old,phi_0;
   double alpha,beta;
 
-  set_up_filter(n);
-
   /* compute initial Atb */
-  compute_AtAx(x,w,flag,0,n,Atb);
+  compute_AtAx(fft,x,w,flag,0,n,Atb);
   for(j=0;j<n;j++)Atb[j]= -Atb[j];
 
-  compute_Atb_minus_AtAx(x,w,Atb,flag,n,r);
+  compute_Atb_minus_AtAx(fft,x,w,Atb,flag,n,r);
   memcpy(d,r,sizeof(d));
   phi_0=phi_new=inner_product(r,r,n);
 
   for(i=0;i<max && phi_new>e*e*phi_0;i++){
-    compute_AtAx(d,w,flag,1,n,q);
+    compute_AtAx(fft,d,w,flag,1,n,q);
     alpha=phi_new/inner_product(d,q,n);
     for(j=0;j<n;j++)x[j]+=alpha*d[j];
 
     if((i & 0x3f)==0x3f)
-      compute_Atb_minus_AtAx(x,w,Atb,flag,n,r);
+      compute_Atb_minus_AtAx(fft,x,w,Atb,flag,n,r);
     else
       for(j=0;j<n;j++)r[j]-=alpha*q[j];
     
