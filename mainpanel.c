@@ -3,14 +3,14 @@
 #include <gdk/gdkkeysyms.h>
 #include <signal.h>
 #include <stdio.h>
+#include <pthread.h>
 #include "fisharray.h"
 #include "buttonicons.h"
 #include "multibar.h"
 #include "readout.h"
-#define VERSION "$Id: mainpanel.c,v 1.4 2003/10/10 05:42:41 xiphmont Exp $ "
+#define VERSION "$Id: mainpanel.c,v 1.5 2003/10/10 08:02:12 xiphmont Exp $ "
 
 typedef struct {
-  GtkWidget *toplevel;
   GtkWidget *topframe;
   GtkWidget *toplabel;
 
@@ -22,28 +22,112 @@ typedef struct {
 
   GtkWidget *wintable;
   GtkWidget *twirlimage;
-  GdkPixmap *ff[16];
-  GdkBitmap *fb[16];
+  GdkPixmap *ff[19];
+  GdkBitmap *fb[19];
 
   GtkWidget *buttonpanel[7];
-  GtkWidget *buttonactive[7];
-
-
   GtkWidget *quitbutton;
   
   /* we need these widgets */
+  GtkWidget *toplevel;
+
   GtkWidget *masterdB_r;
   GtkWidget *masterdB_s;
   GtkWidget *masterdB_a;
-  
+
+  GtkWidget *buttonactive[7];
+  GtkWidget *cue_set[2];
+  GtkWidget *cue_reset[2];
+
+  GtkWidget *deckactive[7];
+
+  /* ui state */
+  int fishframe;
+  int fishframe_init;
+  guint fishframe_timer;
+ 
 } postfish_mainpanel;
 
+extern sig_atomic_t playback_active;
+extern sig_atomic_t playback_exit;
+extern void *playback_thread(void *dummy);
 
+static void action_play(GtkWidget *dummy,postfish_mainpanel *p){
+  if(!playback_active){
+    pthread_t playback_thread_id;
+    playback_active=1;
+    animate_fish(p);
+    pthread_create(&playback_thread_id,NULL,&playback_thread,NULL);
+  }else{
+    playback_exit=1;
+    sched_yield();
+    while(1){
+      if(playback_active){
+	sched_yield();
+      }else
+	break;
+    }
+  }
+}
+
+/* gotta have the Fucking Fish */
+int reanimate_fish(postfish_mainpanel *p){
+  if(playback_active || (p->fishframe>0 && p->fishframe<12)){
+    /* continue spinning */
+    p->fishframe++;
+    if(p->fishframe==12)p->fishframe=0;
+
+    gtk_image_set_from_pixmap(GTK_IMAGE(p->twirlimage),
+			      p->ff[p->fishframe],
+			      p->fb[p->fishframe]);
+
+    if(p->fishframe==0 && !playback_active){
+      /* reschedule to blink */
+      p->fishframe_timer=
+	gtk_timeout_add(rand()%1000*30,(GtkFunction)reanimate_fish,p);
+      return FALSE;
+    }
+  }else{
+    p->fishframe++;
+    if(p->fishframe==1)p->fishframe=12;
+    if(p->fishframe==19)p->fishframe=0;
+
+    gtk_image_set_from_pixmap(GTK_IMAGE(p->twirlimage),
+			      p->ff[p->fishframe],
+			      p->fb[p->fishframe]);
+
+
+    if(p->fishframe==12){
+      /* reschedule to animate */
+      p->fishframe_timer=
+	gtk_timeout_add(10,(GtkFunction)reanimate_fish,p);
+      return FALSE;
+    }
+    if(p->fishframe==0){
+      /* reschedule to blink */
+      p->fishframe_timer=
+	gtk_timeout_add(rand()%1000*30,(GtkFunction)reanimate_fish,p);
+      return FALSE;
+    }
+    return TRUE;
+  }
+}
+
+int animate_fish(postfish_mainpanel *p){
+  if(p->fishframe_init){
+    gtk_timeout_remove(p->fishframe_timer);
+    p->fishframe_timer=
+      gtk_timeout_add(80,(GtkFunction)reanimate_fish,p);
+  }else{
+    p->fishframe_init=1;
+    p->fishframe_timer=
+      gtk_timeout_add(rand()%1000*30,(GtkFunction)reanimate_fish,p);
+  }
+}
 
 static void shutdown(void){
   gtk_main_quit ();
 }
-
 
 sig_atomic_t master_att;
 static void masterdB_change(GtkRange *r, gpointer in){
@@ -155,85 +239,95 @@ static gboolean timeevent_keybinding(GtkWidget *widget,
 static gboolean keybinding(GtkWidget *widget,
 			   GdkEventKey *event,
 			   gpointer in){
+  postfish_mainpanel *p=in;
+
+#if 0
   fprintf(stderr,"keypress: M%d C%d S%d L%d '%x'\n",
 	  event->state&GDK_MOD1_MASK,
 	  event->state&GDK_CONTROL_MASK,
 	  event->state&GDK_SHIFT_MASK,
 	  event->state&GDK_LOCK_MASK,
 	  event->keyval);
+#endif
 
   /* do not capture Alt accellerators */
   if(event->state&GDK_MOD1_MASK) return FALSE;
+  if(event->state&GDK_CONTROL_MASK) return FALSE;
 
   switch(event->keyval){
   case GDK_m:
     /* trigger master dB */
+    gtk_widget_activate(p->masterdB_a);
     break;
   case GDK_minus:
-
+    gtk_range_set_value(GTK_RANGE(p->masterdB_s),
+			gtk_range_get_value(GTK_RANGE(p->masterdB_s))-.1);
     break;
   case GDK_underscore:
-
+    gtk_range_set_value(GTK_RANGE(p->masterdB_s),
+			gtk_range_get_value(GTK_RANGE(p->masterdB_s))-1.);
     break;
   case GDK_equal:
-
+    gtk_range_set_value(GTK_RANGE(p->masterdB_s),
+			gtk_range_get_value(GTK_RANGE(p->masterdB_s))+.1);
     break;
   case GDK_plus:
-
+    gtk_range_set_value(GTK_RANGE(p->masterdB_s),
+			gtk_range_get_value(GTK_RANGE(p->masterdB_s))+1.);
     break;
   case GDK_d:
-
+    gtk_widget_activate(p->buttonactive[0]);
     break;
   case GDK_t:
-
+    gtk_widget_activate(p->buttonactive[1]);
     break;
   case GDK_n:
-
+    gtk_widget_activate(p->buttonactive[2]);
     break;
   case GDK_e:
-
+    gtk_widget_activate(p->buttonactive[3]);
     break;
   case GDK_c:
-
+    gtk_widget_activate(p->buttonactive[4]);
     break;
   case GDK_l:
-
+    gtk_widget_activate(p->buttonactive[5]);
     break;
   case GDK_o:
-
+    gtk_widget_activate(p->buttonactive[6]);
     break;
   case GDK_a:
-
+    gtk_widget_activate(p->cue_set[0]);
     break;
   case GDK_A:
-
+    gtk_widget_activate(p->cue_reset[0]);
     break;
   case GDK_b:
-
+    gtk_widget_activate(p->cue_set[1]);
     break;
   case GDK_B:
-
+    gtk_widget_activate(p->cue_reset[1]);
     break;
-    //  case GDK_BackSpace:
-
+  case GDK_BackSpace:
+    gtk_widget_activate(p->deckactive[0]);
     break;
   case GDK_less:
-
+    gtk_widget_activate(p->deckactive[1]);
     break;
   case GDK_comma:
-
+    gtk_widget_activate(p->deckactive[2]);
     break;
   case GDK_space:
-
+    gtk_widget_activate(p->deckactive[3]);
     break;
   case GDK_period:
-
+    gtk_widget_activate(p->deckactive[4]);
     break;
   case GDK_greater:
-
+    gtk_widget_activate(p->deckactive[5]);
     break;
   case GDK_End:
-
+    gtk_widget_activate(p->deckactive[6]);
     break;
   default:
     return FALSE;
@@ -293,7 +387,7 @@ void mainpanel_create(postfish_mainpanel *panel,char **chlabels){
 		    G_CALLBACK (keybinding), panel);
   
 
-  for(i=0;i<16;i++)
+  for(i=0;i<19;i++)
     panel->ff[i]=gdk_pixmap_create_from_xpm_d(root,
 					      panel->fb+i,NULL,ff_xpm[i]);
   xpm_bar[0]=gdk_pixmap_create_from_xpm_d(root,
@@ -457,29 +551,28 @@ void mainpanel_create(postfish_mainpanel *panel,char **chlabels){
     /* master action bar */
     {
       GtkWidget *bar_table=gtk_table_new(1,8,1);
-      GtkWidget *buttons[7];
       char buffer[20];
       for(i=0;i<7;i++){
 	GtkWidget *box=gtk_vbox_new(0,3);
 	GtkWidget *label=gtk_label_new(text_bar[i]);
 
 	if(i==3)
-	  buttons[i]=gtk_toggle_button_new();
+	  panel->deckactive[i]=gtk_toggle_button_new();
 	else
-	  buttons[i]=gtk_button_new();
+	  panel->deckactive[i]=gtk_button_new();
 
 	gtk_box_pack_start(GTK_BOX(box),gim_bar[i],0,0,0);
 	gtk_box_pack_start(GTK_BOX(box),label,0,0,0);
-	gtk_container_add (GTK_CONTAINER(buttons[i]), box);
+	gtk_container_add (GTK_CONTAINER(panel->deckactive[i]), box);
       }
 
-      gtk_table_attach_defaults(GTK_TABLE(bar_table),buttons[0],0,1,0,1);
-      gtk_table_attach_defaults(GTK_TABLE(bar_table),buttons[1],1,2,0,1);
-      gtk_table_attach_defaults(GTK_TABLE(bar_table),buttons[2],2,3,0,1);
-      gtk_table_attach_defaults(GTK_TABLE(bar_table),buttons[3],3,5,0,1);
-      gtk_table_attach_defaults(GTK_TABLE(bar_table),buttons[4],5,6,0,1);
-      gtk_table_attach_defaults(GTK_TABLE(bar_table),buttons[5],6,7,0,1);
-      gtk_table_attach_defaults(GTK_TABLE(bar_table),buttons[6],7,8,0,1);
+      gtk_table_attach_defaults(GTK_TABLE(bar_table),panel->deckactive[0],0,1,0,1);
+      gtk_table_attach_defaults(GTK_TABLE(bar_table),panel->deckactive[1],1,2,0,1);
+      gtk_table_attach_defaults(GTK_TABLE(bar_table),panel->deckactive[2],2,3,0,1);
+      gtk_table_attach_defaults(GTK_TABLE(bar_table),panel->deckactive[3],3,5,0,1);
+      gtk_table_attach_defaults(GTK_TABLE(bar_table),panel->deckactive[4],5,6,0,1);
+      gtk_table_attach_defaults(GTK_TABLE(bar_table),panel->deckactive[5],6,7,0,1);
+      gtk_table_attach_defaults(GTK_TABLE(bar_table),panel->deckactive[6],7,8,0,1);
 
       gtk_table_attach(GTK_TABLE(ttable),bar_table,1,3,4,5,
 		       GTK_EXPAND|GTK_FILL,GTK_EXPAND|GTK_FILL,
@@ -488,6 +581,11 @@ void mainpanel_create(postfish_mainpanel *panel,char **chlabels){
       gtk_table_attach(GTK_TABLE(ttable),panel->twirlimage,0,1,4,5,
       		       0,0,
 		       0,0);
+
+
+      g_signal_connect (G_OBJECT (panel->deckactive[3]), "clicked",
+			G_CALLBACK (action_play), panel);
+
 
     }
 
@@ -502,12 +600,13 @@ void mainpanel_create(postfish_mainpanel *panel,char **chlabels){
       GtkWidget *framea=gtk_vseparator_new();
       GtkWidget *frameb=gtk_vseparator_new();
 
-      GtkWidget *set_a=gtk_button_new_with_label("[a]");
-      GtkWidget *set_b=gtk_button_new_with_label("[b]");
-      GtkWidget *reset_a=gtk_button_new_with_label("[A]");
-      GtkWidget *reset_b=gtk_button_new_with_label("[B]");
-
       GtkWidget *panelb=gtk_check_button_new_with_mnemonic("c_ue list");
+
+      panel->cue_set[0]=gtk_button_new_with_label("[a]");
+      panel->cue_set[1]=gtk_button_new_with_label("[b]");
+      panel->cue_reset[0]=gtk_button_new_with_label("[A]");
+      panel->cue_reset[1]=gtk_button_new_with_label("[B]");
+
 
       gtk_entry_set_width_chars(GTK_ENTRY(entry_a),13);
       gtk_entry_set_width_chars(GTK_ENTRY(entry_b),13);
@@ -525,11 +624,10 @@ void mainpanel_create(postfish_mainpanel *panel,char **chlabels){
 			G_CALLBACK (timeevent_unselect), NULL);
 
 
-      gtk_widget_set_name(reset_a,"reseta");
-      gtk_widget_set_name(reset_b,"resetb");
+      gtk_widget_set_name(panel->cue_reset[0],"reseta");
+      gtk_widget_set_name(panel->cue_reset[1],"resetb");
 
       gtk_misc_set_alignment(GTK_MISC(cuelabel),1,.5);
-
 
       gtk_table_attach_defaults(GTK_TABLE(ttable),cuelabel,0,1,5,6);
       gtk_table_attach_defaults(GTK_TABLE(ttable),cuebox,1,2,5,6);
@@ -539,15 +637,15 @@ void mainpanel_create(postfish_mainpanel *panel,char **chlabels){
 
       gtk_box_pack_start(GTK_BOX(cuebox),framea,1,1,3);
 
-      gtk_box_pack_start(GTK_BOX(cuebox),set_a,0,0,0);
+      gtk_box_pack_start(GTK_BOX(cuebox),panel->cue_set[0],0,0,0);
       gtk_box_pack_start(GTK_BOX(cuebox),entry_a,0,0,0);
-      gtk_box_pack_start(GTK_BOX(cuebox),reset_a,0,0,0);
+      gtk_box_pack_start(GTK_BOX(cuebox),panel->cue_reset[0],0,0,0);
 
       gtk_box_pack_start(GTK_BOX(cuebox),frameb,1,1,3);
 
-      gtk_box_pack_start(GTK_BOX(cuebox),set_b,0,0,0);
+      gtk_box_pack_start(GTK_BOX(cuebox),panel->cue_set[1],0,0,0);
       gtk_box_pack_start(GTK_BOX(cuebox),entry_b,0,0,0);
-      gtk_box_pack_start(GTK_BOX(cuebox),reset_b,0,0,0);
+      gtk_box_pack_start(GTK_BOX(cuebox),panel->cue_reset[1],0,0,0);
 
     }
 
@@ -578,11 +676,10 @@ void mainpanel_create(postfish_mainpanel *panel,char **chlabels){
 }
 
 #include <stdlib.h>
-int main(int argc, char *argv[]){
-  postfish_mainpanel mainpanel;
-
+void mainpanel_go(int argc,char *argv[]){
+  postfish_mainpanel p;
   char *homedir=getenv("HOME");
-
+  memset(&p,0,sizeof(p));
   gtk_rc_add_default_file("/etc/postfish/postfishrc");
   if(homedir){
     char *rcfile="/.postfishrc";
@@ -592,12 +689,13 @@ int main(int argc, char *argv[]){
     gtk_rc_add_default_file(homerc);
   }
   gtk_init (&argc, &argv);
-
+  
   {
     char *labels[]={"_0 left","_1 right","_2 mid","_3 side",0};
-    mainpanel_create(&mainpanel,labels);
+    mainpanel_create(&p,labels);
   }
-
+  
+  animate_fish(&p);
   gtk_main ();
-}
 
+}

@@ -5,8 +5,8 @@
 CC=gcc
 LD=gcc
 
-SRC = mainpanel.c multibar.c readout.c
-OBJ = mainpanel.o multibar.o readout.o
+SRC = main.c mainpanel.c multibar.c readout.c
+OBJ = main.o mainpanel.o multibar.o readout.o
 GCF = `pkg-config --cflags gtk+-2.0`
 
 all:	

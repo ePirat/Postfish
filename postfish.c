@@ -2,7 +2,7 @@
  *
  *  postfish.c
  *    
- *      Copyright (C) 2002 Monty
+ *      Copyright (C) 2002-2003 Monty
  *
  *  Postfish is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -2004,7 +2004,7 @@ int main(int argc, char **argv){
     form_init(&editf,120,1);
     form_init(&noneditf,50,0);
     box(stdscr,0,0);
-    mvaddstr(0, 2, " Postfish Filter $Id: postfish.c,v 1.6 2003/09/16 08:55:12 xiphmont Exp $ ");
+    mvaddstr(0, 2, " Postfish Filter $Id: postfish.c,v 1.7 2003/10/10 08:02:12 xiphmont Exp $ ");
     mvaddstr(LINES-1, 2, 
 	     "  [<]<<   [,]<   [Spc] Play/Pause   [Bksp] Stop/Cue   [.]>   [>]>>  ");
 
