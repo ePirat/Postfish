@@ -312,7 +312,7 @@ int input_load(void){
 
       /* Crappy! Use a lib to do this for pete's sake! */
       if(f){
-	unsigned char headerid[12];
+	char headerid[12];
 	off_t filelength;
 	fe->f=f;
 	

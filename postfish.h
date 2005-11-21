@@ -85,22 +85,43 @@ static inline int zerome(double x){
 
 #ifdef UGLY_IEEE754_FLOAT32_HACK
 
-static inline float todB_a(float x){
-  return (float)((*((int32_t *)&x))&0x7fffffff) * 7.17711438e-7f -764.6161886f;
+static inline float todB_a(const float x){
+  union {
+    u_int32_t i;
+    float f;
+  } ix;
+  ix.f = x;
+  ix.i = ix.i&0x7fffffff;
+  return (float)(ix.i * 7.17711438e-7f -764.6161886f);
 }
 
 // eliminate a *.5 in ops on sq magnitudes
-static inline float todB_a2(float x){
-  return (float)((*((int32_t *)&x))&0x7fffffff) * 3.58855719e-7f -382.3080943f;
+static inline float todB_a2(const float x){
+  union {
+    u_int32_t i;
+    float f;
+  } ix;
+  ix.f = x;
+  ix.i = ix.i&0x7fffffff;
+  return (float)(ix.i * 3.58855719e-7f -382.3080943f);
 }
 
-static inline float fromdB_a(float x){
-  int y=(x < -300.f ? 0 : 1.39331762961e+06f*(x+764.6161886f));
-  return *(float *)&y;
+static inline float fromdB_a(const float x){
+  union {
+    u_int32_t i;
+    float f;
+  } ix;
+  ix.i = (x < -300.f ? 0 : 1.39331762961e+06f*(x+764.6161886f));
+  return ix.f;
 }
 
 static inline void underguard(float *x){
-  if(((*(int32_t *) &x) & 0x7f800000)==0) *x=0.0f;
+  union {
+    u_int32_t i;
+    float f;
+  } ix;
+  ix.f = *x;
+  if((ix.i & 0x7f800000)==0) *x=0.0f;
 }
 
 #else
