@@ -852,7 +852,7 @@ time_linkage *input_read(void){
 
 	/* perform read/conversion of this file entry */
 	{
-	  off_t read_this_loop=fe->end-cursor-fileread_s;
+	  off_t read_this_loop=(fe->end<0?input_size:fe->end-cursor-fileread_s);
 	  unsigned char readbuf[input_size*(g->ch*fe->bytes)];
 	  if(read_this_loop>toread_s)read_this_loop=toread_s;
 	  
