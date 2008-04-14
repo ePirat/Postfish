@@ -328,7 +328,7 @@ int output_probe_stdout(int outfileno){
     output_stdout_available=1;
     output_stdout_device=0;
 
-  }else if((ret==isaudio(outfileno))){
+  }else if((ret=isaudio(outfileno))){
     /* stdout is an audio device */
 
     output_stdout_available=1;
