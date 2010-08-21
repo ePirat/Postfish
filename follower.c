@@ -91,9 +91,9 @@ static void prepare_peak(float *peak, float *x, int n, int ahead,
   ps->val=val;
 }
 
-static void fill_work(float *A, float *B, float *work,
+static void fill_work(float **A, float **B, int ch, float *work,
 		      int ahead, int hold, int mode, peak_state *ps){
-  int k;
+  int i,j,k;
 
   if(mode){
     /* peak mode */
@@ -102,36 +102,85 @@ static void fill_work(float *A, float *B, float *work,
     
     if(B){
       float bigcache[input_size*2];
-      memcpy(bigcache,A,sizeof(*work)*input_size);
-      memcpy(bigcache+input_size,B,sizeof(*work)*input_size);
-      
+      memcpy(bigcache,A[0],sizeof(*bigcache)*input_size);
+      memcpy(bigcache+input_size,B[0],sizeof(*bigcache)*input_size);
+      for(j=1;j<ch;j++){
+        float *AA = A[j];
+        float *BB = B[j];
+        float *bb = bigcache+input_size;
+        for(i=0;i<input_size;i++)
+          if(bigcache[i]*bigcache[i]<AA[i]*AA[i])
+            bigcache[i]=AA[i];
+        for(i=0;i<input_size;i++)
+          if(bb[i]*bb[i]<BB[i]*BB[i])
+            bb[i]=BB[i];
+      }
       prepare_peak(work, bigcache, input_size, ahead, hold, ps);
     }else{
-      prepare_peak(work, A, input_size, ahead, hold, ps);
+      if(ch>1){
+        float bigcache[input_size];
+        memcpy(bigcache,A[0],sizeof(*bigcache)*input_size);
+        for(j=1;j<ch;j++){
+          float *AA = A[j];
+          for(i=0;i<input_size;i++)
+            if(bigcache[i]*bigcache[i]<AA[i]*AA[i])
+              bigcache[i]=AA[i];
+        }
+        prepare_peak(work, bigcache, input_size, ahead, hold, ps);
+      }else{
+        prepare_peak(work, A[0], input_size, ahead, hold, ps);
+      }
     }
   }else{
     /* rms mode */
-    float *cachea=A+ahead;
+    float *cachea=A[0]+ahead;
     
     if(B){
+      float *cacheb=B[0];
       float *worka=work+input_size-ahead;
       
       for(k=0;k<input_size-ahead;k++)
 	work[k]=cachea[k]*cachea[k];
-      
       for(k=0;k<ahead;k++)
-	worka[k]=B[k]*B[k];    
+	worka[k]=cacheb[k]*cacheb[k];
+
+      for(j=1;j<ch;j++){
+        cachea = A[j]+ahead;
+        cacheb = B[j];
+        for(k=0;k<input_size-ahead;k++)
+          work[k]+=cachea[k]*cachea[k];
+        for(k=0;k<ahead;k++)
+          worka[k]+=cacheb[k]*cacheb[k];
+      }
+      if(ch>0){
+        float inv = 1./ch;
+        for(k=0;k<input_size;k++)
+          work[k]*=inv;
+      }
+
     }else{
 
       for(k=0;k<input_size;k++)
 	work[k]=cachea[k]*cachea[k];
+      for(j=1;j<ch;j++){
+        cachea = A[j];
+        for(k=0;k<input_size;k++)
+          work[k]+=cachea[k]*cachea[k];
+      }
+      if(ch>0){
+        float inv = 1./ch;
+        for(k=0;k<input_size;k++)
+          work[k]*=inv;
+      }
       
     }
   }
 
 }
 
-void bi_compand(float *A,float *B,float *adj,
+void bi_compand(float **A,float **B,
+                int ch,
+                float *adj,
 		float corner,
 		float multiplier,
 		float currmultiplier,
@@ -150,7 +199,7 @@ void bi_compand(float *A,float *B,float *adj,
   hold=ahead*(1.-lookahead);
   ahead*=lookahead;
   
-  fill_work(A,B,work,ahead,hold,mode,ps);
+  fill_work(A,B,ch,work,ahead,hold,mode,ps);
   
   multiplier*=.5;
   currmultiplier*=.5;
@@ -197,7 +246,7 @@ void bi_compand(float *A,float *B,float *adj,
 
 }
 
-void full_compand(float *A,float *B,float *adj,
+void full_compand(float **A,float **B,int ch,float *adj,
 		  float multiplier,float currmultiplier,
 		  int mode,
 		  iir_filter *attack, iir_filter *decay,
@@ -208,7 +257,7 @@ void full_compand(float *A,float *B,float *adj,
   float work[input_size];
   int ahead=(mode?step_ahead(attack->alpha):impulse_ahead2(attack->alpha));
   
-  fill_work(A,B,work,ahead,0,mode,ps);
+  fill_work(A,B,ch,work,ahead,0,mode,ps);
   
   multiplier*=.5;
   currmultiplier*=.5;

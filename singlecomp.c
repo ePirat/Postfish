@@ -224,19 +224,22 @@ static void work_and_lapping(singlecomp_state *scs,
 			     singlecomp_settings **scset,
 			     time_linkage *in,
 			     time_linkage *out,
-			     int *active){
-  int i;
+			     int *active,
+                             int link){
+  int i,j;
   int have_feedback=0;
   u_int32_t mutemaskC=in->active;
   u_int32_t mutemask0=scs->mutemask0;
   u_int32_t mutemaskP=scs->mutemaskP;
+  int iterations = (link?1:scs->ch);
+  int chper = (link?scs->ch:1);
 
   float peakfeed[scs->ch];
   float rmsfeed[scs->ch];
   memset(peakfeed,0,sizeof(peakfeed));
   memset(rmsfeed,0,sizeof(rmsfeed));
   
-  for(i=0;i<scs->ch;i++){
+  for(i=0;i<iterations;i++){
 
     int o_active=0,u_active=0,b_active=0;
 
@@ -267,34 +270,36 @@ static void work_and_lapping(singlecomp_state *scs,
       if(activeP) reset_onech_filter(scs,i); /* just became inactive;
                                                 reset all filters for
                                                 this channel */
-      
       /* feedback */
       if(scset[i]->panel_visible){
-	int k;
-	float rms=0.;
-	float peak=0.;
-        float *x=scs->cache[i];
-	have_feedback=1;
+        for(j=i;j<i+chper;j++){
+          int k;
+          float rms=0.;
+          float peak=0.;
+          float *x=scs->cache[j];
+          have_feedback=1;
 
-	if(!muted0){
-	  for(k=0;k<input_size;k++){
-	    float val=x[k]*x[k];
-	    rms+= val;
-	    if(peak<val)peak=val;
-	  }
-	}
-	peakfeed[i]=todB_a(peak)*.5;
-	rms/=input_size;
-	rmsfeed[i]=todB_a(rms)*.5;
+          if(!muted0){
+            for(k=0;k<input_size;k++){
+              float val=x[k]*x[k];
+              rms+= val;
+              if(peak<val)peak=val;
+            }
+          }
+          peakfeed[j]=todB_a(peak)*.5;
+          rms/=input_size;
+          rmsfeed[j]=todB_a(rms)*.5;
+        }
       }
 
       /* rotate data vectors */
       if(out){
-	float *temp=out->data[i];
-	out->data[i]=scs->cache[i];
-	scs->cache[i]=temp;
-      }
-	
+        for(j=i;j<i+chper;j++){
+          float *temp=out->data[j];
+          out->data[j]=scs->cache[j];
+          scs->cache[j]=temp;
+        }
+      }	
 
     }else if(active0 || activeC){
       float adj[input_size]; // under will set it
@@ -346,7 +351,7 @@ static void work_and_lapping(singlecomp_state *scs,
       memset(adj,0,sizeof(*adj)*input_size);
 
       if(u_active)
-	bi_compand(scs->cache[i],in->data[i],adj,
+	bi_compand(scs->cache+i,in->data+i,chper,adj,
 		   //scs->prevset[i].u_thresh,
 		   scs->currset[i].u_thresh,
 		   1.f-1000./scs->prevset[i].u_ratio,
@@ -359,7 +364,7 @@ static void work_and_lapping(singlecomp_state *scs,
 		   active0,0);
       
       if(o_active)
-	bi_compand(scs->cache[i],in->data[i],adj,
+	bi_compand(scs->cache+i,in->data+i,chper,adj,
 		   //scs->prevset[i].o_thresh,
 		   scs->currset[i].o_thresh,
 		   1.f-1000.f/scs->prevset[i].o_ratio,
@@ -374,30 +379,32 @@ static void work_and_lapping(singlecomp_state *scs,
 
       /* feedback before base */
       if(scset[i]->panel_visible){
-	int k;
-	float rms=0.;
-	float peak=0.;
-        float *x=scs->cache[i];
-	have_feedback=1;
+        for(j=i;j<i+chper;j++){
+          int k;
+          float rms=0.;
+          float peak=0.;
+          float *x=scs->cache[j];
+          have_feedback=1;
 
-	if(!muted0){
-	  for(k=0;k<input_size;k++){
-	    float mul=fromdB_a(adj[k]);
-	    float val=x[k]*mul;
+          if(!muted0){
+            for(k=0;k<input_size;k++){
+              float mul=fromdB_a(adj[k]);
+              float val=x[k]*mul;
 	  
-	    val*=val;
-	    rms+= val;
-	    if(peak<val)peak=val;
-	    
-	  }
-	}
-	peakfeed[i]=todB_a(peak)*.5;
-	rms/=input_size;
-	rmsfeed[i]=todB_a(rms)*.5;
+              val*=val;
+              rms+= val;
+              if(peak<val)peak=val;
+              
+            }
+          }
+          peakfeed[j]=todB_a(peak)*.5;
+          rms/=input_size;
+          rmsfeed[j]=todB_a(rms)*.5;
+        }
       }
-
+       
       if(b_active)
-	full_compand(scs->cache[i],in->data[i],adj,
+	full_compand(scs->cache+i,in->data+i,chper,adj,
 		     1.-1000./scs->prevset[i].b_ratio,
 		     1.-1000./scs->currset[i].b_ratio,
 		     scset[i]->b_mode,
@@ -406,49 +413,53 @@ static void work_and_lapping(singlecomp_state *scs,
 		     active0);
 
       if(active0 && out){
-	/* current frame should be manipulated; render into out,
-	   handle transitioning after */
-	int k;
-        float *ix=scs->cache[i];
-        float *ox=out->data[i];
+        for(j=i;j<i+chper;j++){
+          /* current frame should be manipulated; render into out,
+             handle transitioning after */
+          int k;
+          float *ix=scs->cache[j];
+          float *ox=out->data[j];
 
-        for(k=0;k<input_size;k++)
-          ox[k]=ix[k]*fromdB_a(adj[k]);
+          for(k=0;k<input_size;k++)
+            ox[k]=ix[k]*fromdB_a(adj[k]);
 
-	/* is this frame preceeded/followed by an 'inactive' frame?
-	   If so, smooth the transition */
-	if(!activeP){
-	  if(!mutedP){
-	    for(k=0;k<input_size/2;k++){
-	      float w=window[k];
-	      ox[k]= ox[k]*w + ix[k]*(1.-w);
-	    }
-	  }
-	}
-	if(!activeC){
-	  if(!mutedC){
-	    float *cox=ox+input_size/2;
-	    float *cix=ix+input_size/2;
-	    for(k=0;k<input_size/2;k++){
-	      float w=window[k];
-	      cox[k]= cox[k]*(1.-w) + cix[k]*w;
-	    }
-	  }
-	}
+          /* is this frame preceeded/followed by an 'inactive' frame?
+             If so, smooth the transition */
+          if(!activeP){
+            if(!mutedP){
+              for(k=0;k<input_size/2;k++){
+                float w=window[k];
+                ox[k]= ox[k]*w + ix[k]*(1.-w);
+              }
+            }
+          }
+          if(!activeC){
+            if(!mutedC){
+              float *cox=ox+input_size/2;
+              float *cix=ix+input_size/2;
+              for(k=0;k<input_size/2;k++){
+                float w=window[k];
+                cox[k]= cox[k]*(1.-w) + cix[k]*w;
+              }
+            }
+          }
+        }
       }else if(out){
-	float *temp=out->data[i];
-	out->data[i]=scs->cache[i];
-	scs->cache[i]=temp;
+        for(j=i;j<i+chper;j++){
+          float *temp=out->data[j];
+          out->data[j]=scs->cache[j];
+          scs->cache[j]=temp;
+        }
       }
     }
-    {
-      float *temp=scs->cache[i];
-      scs->cache[i]=in->data[i];
-      in->data[i]=temp;
-    }
-    scs->activeP[i]=active0;
-    scs->active0[i]=activeC;
 
+    for(j=i;j<i+chper;j++){
+      float *temp=scs->cache[j];
+      scs->cache[j]=in->data[j];
+      in->data[j]=temp;
+      scs->activeP[j]=active0;
+      scs->active0[j]=activeC;
+    }
   }
 
   if(out){
@@ -485,7 +496,8 @@ static void work_and_lapping(singlecomp_state *scs,
 time_linkage *singlecomp_read_helper(time_linkage *in,
 				     singlecomp_state *scs, 
 				     singlecomp_settings **scset,
-				     int *active){
+				     int *active,
+                                     int link){
   int i;
 
   switch(scs->fillstate){
@@ -507,7 +519,7 @@ time_linkage *singlecomp_read_helper(time_linkage *in,
     }
     scs->mutemaskP=scs->mutemask0=in->active;
     
-    work_and_lapping(scs,scset,in,0,active);
+    work_and_lapping(scs,scset,in,0,active,link);
 
     scs->fillstate=1;
     scs->out.samples=0;
@@ -519,7 +531,7 @@ time_linkage *singlecomp_read_helper(time_linkage *in,
     /* fall through */
   case 1: /* nominal processing */
 
-    work_and_lapping(scs,scset,in,&scs->out,active);
+    work_and_lapping(scs,scset,in,&scs->out,active,link);
 
     if(scs->out.samples<input_size)scs->fillstate=2;
     break;
@@ -545,7 +557,7 @@ time_linkage *singlecomp_read_master(time_linkage *in){
   for(i=0;i<master_state.ch;i++)
     active[i]=singlecomp_master_set.panel_active;
 
-  return singlecomp_read_helper(in, &master_state, master_set_bundle,active);
+  return singlecomp_read_helper(in, &master_state, master_set_bundle,active,1);
 }
 
 time_linkage *singlecomp_read_channel(time_linkage *in){
@@ -555,5 +567,5 @@ time_linkage *singlecomp_read_channel(time_linkage *in){
   for(i=0;i<channel_state.ch;i++)
     active[i]=singlecomp_channel_set[i].panel_active;
 
-  return singlecomp_read_helper(in, &channel_state, channel_set_bundle,active);
+  return singlecomp_read_helper(in, &channel_state, channel_set_bundle,active,0);
 }

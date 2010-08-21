@@ -28,7 +28,7 @@ typedef struct {
   float val;
 } peak_state;
 
-extern void bi_compand(float *A,float *B,float *adj,
+extern void bi_compand(float **A,float **B,int ch,float *adj,
 		       float corner,
 		       float multiplier,
 		       float currmultiplier,
@@ -39,7 +39,7 @@ extern void bi_compand(float *A,float *B,float *adj,
 		       int active,
 		       int over);
 
-extern void full_compand(float *A,float *B,float *adj,
+extern void full_compand(float **A,float **B,int ch,float *adj,
 			 float multiplier,float currmultiplier,
 			 int mode,
 			 iir_filter *attack, iir_filter *decay,

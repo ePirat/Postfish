@@ -37,7 +37,7 @@ OBJ = main.o mainpanel.o multibar.o readout.o input.o output.o clippanel.o \
 	limit.o limitpanel.o mute.o mixpanel.o mix.o freeverb.o reverbpanel.o \
 	outpanel.o config.o window.o follower.o linkage.o
 
-GCF = -DETCDIR=\\\"$(ETCDIR)\\\" `pkg-config --cflags gtk+-2.0` -DG_DISABLE_DEPRECATED -DGDK_DISABLE_DEPRECATED -DGTK_DISABLE_DEPRECATED -DGDK_PIXBUF_DISABLE_DEPRECATED
+GCF = -DETCDIR=\\\"$(ETCDIR)\\\" `pkg-config --cflags gtk+-2.0`
 
 all:	
 	$(MAKE) target CFLAGS="-O2 -ffast-math -fomit-frame-pointer $(GCF) $(ADD_DEF)"
@@ -76,7 +76,7 @@ endif
 
 target:  $(OBJ) postfish-wisdomrc
 	./touch-version
-	$(LD) $(OBJ) $(CFLAGS) -o postfish $(LIBS) `pkg-config --libs gtk+-2.0` -lpthread -lfftw3f -lm #/home/xiphmont/electric-fence-2.1.4/libefence.a 
+	$(LD) $(OBJ) $(CFLAGS) -o postfish $(LIBS) `pkg-config --libs gtk+-2.0` -lpthread -lfftw3f -lm
 
 install: target
 	$(INSTALL) -d -m 0755 $(BINDIR)

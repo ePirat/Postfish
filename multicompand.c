@@ -356,7 +356,7 @@ static int multicompand_work_perchannel(multicompand_state *ms,
       memset(adj,0,sizeof(*adj)*input_size);
       
     if(u_active)
-      bi_compand(x,0,(i>=w->freq_bands?0:adj),
+      bi_compand(&x,0,1,(i>=w->freq_bands?0:adj),
 		 //prevset->static_u[i],
 		 currset->static_u[i],
 		 1.f-1000.f/prevset->under_ratio,
@@ -373,7 +373,7 @@ static int multicompand_work_perchannel(multicompand_state *ms,
 		 0);
 
     if(o_active)
-      bi_compand(x,0,(i>=w->freq_bands?0:adj),
+      bi_compand(&x,0,1,(i>=w->freq_bands?0:adj),
 		 //prevset->static_o[i],
 		 currset->static_o[i],
 		 1.f-1000.f/prevset->over_ratio,
@@ -417,7 +417,7 @@ static int multicompand_work_perchannel(multicompand_state *ms,
     }
     
     if(b_active)
-      full_compand(x,0,(i>=w->freq_bands?0:adj),
+      full_compand(&x,0,1,(i>=w->freq_bands?0:adj),
 		   1.f-1000.f/prevset->base_ratio,
 		   1.f-1000.f/currset->base_ratio,
 		   c->base_mode,
@@ -443,6 +443,199 @@ static int multicompand_work_perchannel(multicompand_state *ms,
     memset(&ms->over_iir[i][channel],0,sizeof(iir_state));
     memset(&ms->under_iir[i][channel],0,sizeof(iir_state));
     memset(&ms->base_iir[i][channel],0,sizeof(iir_state));
+  }
+  return(feedback_p);
+}
+
+static int multicompand_work_allchannels(multicompand_state *ms, 
+                                         float **peakfeed,
+                                         float **rmsfeed,
+                                         int maxbands,
+                                         atten_cache *prevset,
+                                         atten_cache *currset,
+                                         multicompand_settings *c){
+  subband_state *ss=&ms->ss;
+  int active=(ss->effect_active1[0] || 
+	      ss->effect_active0[0] || 
+	      ss->effect_activeC[0]);
+    
+  int feedback_p=0;
+  int i,k,ch,bank;
+  subband_window *w=ss->w1[0];
+  subband_window *wP=ss->wP[0];
+  float adj[input_size];
+
+  int o_active=0,u_active=0,b_active=0;
+
+  if(w==&sw[0]){
+    bank=0;
+  }else if(w==&sw[1]){
+    bank=1;
+  }else bank=2;
+
+  if(active){
+    for(i=0;i<multicomp_freqs_max;i++){
+      currset->static_u[i]=c->bc[bank].static_u[i];
+      currset->static_o[i]=c->bc[bank].static_o[i];
+    }
+    
+    currset->under_ratio=c->under_ratio;
+    currset->over_ratio=c->over_ratio;
+    currset->base_ratio=c->base_ratio;
+    
+    /* don't slew from an unknown value */
+    if(!ss->effect_activeP[0] || !ms->initstate) 
+      memcpy(prevset,currset,sizeof(*currset));
+
+    /* don't run filters that will be applied at unity */
+    if(prevset->under_ratio==1000 && currset->under_ratio==1000){
+      ms->under_delay[0]=2;
+      for(i=0;i<multicomp_freqs_max;i++){
+	memset(&ms->under_peak[i][0],0,sizeof(peak_state));
+	memset(&ms->under_iir[i][0],0,sizeof(iir_state));
+      }
+    }else{
+      if(ms->under_delay[0]-->0)currset->under_ratio=1000;
+      if(ms->under_delay[0]<0)ms->under_delay[0]=0;
+      u_active=1;
+    }
+
+    if(prevset->over_ratio==1000 && currset->over_ratio==1000){
+      ms->over_delay[0]=2;
+      for(i=0;i<multicomp_freqs_max;i++){
+	memset(&ms->over_peak[i][0],0,sizeof(peak_state));
+	memset(&ms->over_iir[i][0],0,sizeof(iir_state));
+      }
+    }else{
+      if(ms->over_delay[0]-->0)currset->over_ratio=1000;
+      if(ms->over_delay[0]<0)ms->over_delay[0]=0;
+      o_active=1;
+    }
+
+    if(prevset->base_ratio==1000 && currset->base_ratio==1000){
+      ms->base_delay[0]=2;
+      for(i=0;i<multicomp_freqs_max;i++){
+	memset(&ms->base_peak[i][0],0,sizeof(peak_state));
+	memset(&ms->base_iir[i][0],0,sizeof(iir_state));
+      }
+    }else{
+      if(ms->base_delay[0]-->0)currset->base_ratio=1000;
+      if(ms->base_delay[0]<0)ms->base_delay[0]=0;
+      b_active=1;
+    }
+
+  } else if (ss->effect_activeP[0]){ 
+    /* this lapping channel just became inactive */
+    reset_filters_onech(ms,0);
+  }   
+  
+  /* one thing is worth a note here; 'maxbands' can be
+     'overrange' for the current bank.  This is intentional; we
+     may need to run the additional (allocated and valid)
+     filters before or after their bands are active.  The only
+     garbage data here is the xxxx_u, xxxx_o and xxxx_b
+     settings.  There are allocated, but unset; if overrange,
+     they're ignored in the compand worker */
+
+  for(i=0;i<maxbands;i++){  
+    float **x=ss->lap[i];
+      
+    if(u_active || o_active || b_active)
+      memset(adj,0,sizeof(*adj)*input_size);
+      
+    if(u_active)
+      bi_compand(x,0,ms->ch,(i>=w->freq_bands?0:adj),
+		 //prevset->static_u[i],
+		 currset->static_u[i],
+		 1.f-1000.f/prevset->under_ratio,
+		 1.f-1000.f/currset->under_ratio,
+		 c->under_lookahead/1000.f,
+		 c->under_mode,
+		 c->under_softknee,
+		 &ms->under_attack[0],
+		 &ms->under_decay[0],
+		 &ms->under_iir[i][0],
+		 &ms->under_peak[i][0],
+		 ss->effect_active1[0] && 
+		 (i<w->freq_bands),
+		 0);
+
+    if(o_active)
+      bi_compand(x,0,ms->ch,(i>=w->freq_bands?0:adj),
+		 //prevset->static_o[i],
+		 currset->static_o[i],
+		 1.f-1000.f/prevset->over_ratio,
+		 1.f-1000.f/currset->over_ratio,
+		 c->over_lookahead/1000.f,
+		 c->over_mode,
+		 c->over_softknee,
+		 &ms->over_attack[0],
+		 &ms->over_decay[0],
+		 &ms->over_iir[i][0],
+		 &ms->over_peak[i][0],
+		 ss->effect_active1[0] && 
+		 (i<w->freq_bands),
+		 1);
+
+    for(ch=0;ch<ms->ch;ch++){
+      if(ss->visible1[ch]){
+        feedback_p=1;
+      
+        if(!mute_channel_muted(ss->mutemask1,ch)){
+          /* determine rms and peak for feedback */
+          float max=-1.;
+          int maxpos=-1;
+          float rms=0.;
+          
+          for(k=0;k<input_size;k++){
+            float val=x[ch][k]*x[ch][k];
+            if(val>max){
+              max=val;
+              maxpos=k;
+            }
+            rms+=val;
+          }
+          if(u_active || o_active || b_active){
+            peakfeed[i][ch]=todB(max)*.5+adj[maxpos];
+            rmsfeed[i][ch]=todB(rms/input_size)*.5+adj[maxpos];
+          }else{
+            peakfeed[i][ch]=todB(max)*.5;
+            rmsfeed[i][ch]=todB(rms/input_size)*.5;
+          }
+        }
+      }
+    }
+    
+    if(b_active)
+      full_compand(x,0,ms->ch,(i>=w->freq_bands?0:adj),
+		   1.f-1000.f/prevset->base_ratio,
+		   1.f-1000.f/currset->base_ratio,
+		   c->base_mode,
+		   &ms->base_attack[0],
+		   &ms->base_decay[0],
+		   &ms->base_iir[i][0],
+		   &ms->base_peak[i][0],
+		   ss->effect_active1[0] &&
+		   i<w->freq_bands);
+
+    if(u_active || o_active || b_active){
+      if(ss->effect_active1[0]){
+        for(k=0;k<input_size;k++){
+          float a = fromdB_a(adj[k]);
+          for(ch=0;ch<ms->ch;ch++)
+            x[ch][k]*=a;
+        }
+      }
+    }
+  }
+  
+  for(;i<wP->freq_bands;i++){
+    memset(&ms->over_peak[i][0],0,sizeof(peak_state));
+    memset(&ms->under_peak[i][0],0,sizeof(peak_state));
+    memset(&ms->base_peak[i][0],0,sizeof(peak_state));
+    memset(&ms->over_iir[i][0],0,sizeof(iir_state));
+    memset(&ms->under_iir[i][0],0,sizeof(iir_state));
+    memset(&ms->base_iir[i][0],0,sizeof(iir_state));
   }
   return(feedback_p);
 }
