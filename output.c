@@ -610,9 +610,20 @@ static int outpack(time_linkage *link,unsigned char *audiobuf,
   int bytes=(bits+7)>>3;
   int32_t signxor=(signp?0:0x800000L);
   int bytestep=bytes*(ch-1);
+  int round=0;
 
   int endbytecase=endian*3+(bytes-1);
   int j,i;
+
+  switch(endbytecase){
+  case 1:case 4:
+    round=128;
+    break;
+  case 0:case 3:
+    round=32768;
+    break;
+  }
+
   for(j=0;j<ch;j++){
     unsigned char *o=audiobuf+bytes*j;
     if(!mute_channel_muted(link->active,j) && source[j]){
@@ -621,7 +632,7 @@ static int outpack(time_linkage *link,unsigned char *audiobuf,
 
       for(i=0;i<link->samples;i++){
 	float dval=d[i];
-	int32_t val=rint(dval*8388608.);
+	int32_t val=rint(dval*8388608.)+round;
 	if(val>8388607)val=8388607;
 	if(val<-8388608)val=-8388608;
 	val ^= signxor;
