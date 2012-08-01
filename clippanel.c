@@ -46,7 +46,7 @@ static GtkWidget *limit_readout;
 
 static GtkWidget *mainpanel_inbar;
 
-static subpanel_generic *panel;
+static subpanel_generic *panel=NULL;
 
 typedef struct {
   GtkWidget *slider;
@@ -71,18 +71,19 @@ void clippanel_state_from_config(int bank){
   config_get_sigat("clippanel_throttle",bank,0,0,0,0,&declip_iterations);
   config_get_vector("clippanel_trigger",bank,0,0,0,input_ch,declip_chtrigger);
 
-  {
+  if(panel){
     int i=0,j=declip_pending_blocksize;
     while(j>64){j>>=1;i++;}
     multibar_thumb_set(MULTIBAR(width_bar),i,0);
-  }
-  multibar_thumb_set(MULTIBAR(depth_bar),declip_convergence*-.1,0);
-  multibar_thumb_set(MULTIBAR(limit_bar),declip_iterations*.1,0);
 
-  for(i=0;i<input_ch;i++){
-    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(panel->subpanel_activebutton[i]),
-				 declip_active[i]);
-    multibar_thumb_set(MULTIBAR(trigger_bars[i]),declip_chtrigger[i]*.0001,0);
+    multibar_thumb_set(MULTIBAR(depth_bar),declip_convergence*-.1,0);
+    multibar_thumb_set(MULTIBAR(limit_bar),declip_iterations*.1,0);
+
+    for(i=0;i<input_ch;i++){
+      gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(panel->subpanel_activebutton[i]),
+                                   declip_active[i]);
+      multibar_thumb_set(MULTIBAR(trigger_bars[i]),declip_chtrigger[i]*.0001,0);
+    }
   }
 }
 

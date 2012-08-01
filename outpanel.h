@@ -27,3 +27,4 @@ extern void outpanel_create(postfish_mainpanel *mp,
 
 extern void outpanel_state_to_config(int bank);
 extern void outpanel_state_from_config(int bank);
+extern void output_load(int bank);

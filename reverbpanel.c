@@ -51,7 +51,7 @@ typedef struct{
 } reverb_panel_state;
 
 reverb_panel_state *master_panel;
-reverb_panel_state **channel_panel;
+reverb_panel_state *channel_panel[MAX_INPUT_CHANNELS];
 
 static void reverbpanel_state_to_config_helper(int bank,reverb_settings *s,int A){
   config_set_integer("reverb_active",bank,A,0,0,0,s->active);
@@ -75,26 +75,25 @@ static void reverbpanel_state_from_config_helper(int bank,reverb_settings *s,
 						 reverb_panel_state *p,int A){
 
   config_get_sigat("reverb_active",bank,A,0,0,0,&s->active);
-  gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->panel->subpanel_activebutton[0]),s->active);
-
+  if(p)gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->panel->subpanel_activebutton[0]),s->active);
 
   config_get_sigat("reverb_set",bank,A,0,0,3,&s->roomsize);
-    multibar_thumb_set(MULTIBAR(p->roomsize->s),s->roomsize,0);
+  if(p)multibar_thumb_set(MULTIBAR(p->roomsize->s),s->roomsize,0);
 
   config_get_sigat("reverb_set",bank,A,0,0,4,&s->liveness);
-    multibar_thumb_set(MULTIBAR(p->liveness->s),s->liveness,0);
+  if(p)multibar_thumb_set(MULTIBAR(p->liveness->s),s->liveness,0);
 
   config_get_sigat("reverb_set",bank,A,0,0,5,&s->wet);
-    multibar_thumb_set(MULTIBAR(p->wet->s),s->wet,0);
+  if(p)multibar_thumb_set(MULTIBAR(p->wet->s),s->wet,0);
 
   config_get_sigat("reverb_set",bank,A,0,0,6,&s->width);
-    multibar_thumb_set(MULTIBAR(p->width->s),s->width,0);
+  if(p)multibar_thumb_set(MULTIBAR(p->width->s),s->width,0);
 
   config_get_sigat("reverb_set",bank,A,0,0,7,&s->delay);
-    multibar_thumb_set(MULTIBAR(p->delay->s),s->delay,0);
+  if(p)multibar_thumb_set(MULTIBAR(p->delay->s),s->delay,0);
 
   config_get_sigat("reverb_set",bank,A,0,0,8,&s->hfdamp);
-    multibar_thumb_set(MULTIBAR(p->hfdamp->s),s->hfdamp,0);
+  if(p)multibar_thumb_set(MULTIBAR(p->hfdamp->s),s->hfdamp,0);
 
 }
 
@@ -282,8 +281,6 @@ void reverbpanel_create_channel(postfish_mainpanel *mp,
                                 GtkWidget **activebutton){
   int i;
   /* a panel for each channel */
-  channel_panel=calloc(input_ch,sizeof(*channel_panel));
-
   for(i=0;i<input_ch;i++){
     subpanel_generic *panel;
     char buffer[80];

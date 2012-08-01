@@ -34,7 +34,7 @@
 #include "windowbutton.h"
 #include "config.h"
 
-static postfish_mainpanel p;
+static postfish_mainpanel *p=NULL;
 extern char *configfile;
 extern sig_atomic_t main_looping;
 
@@ -46,20 +46,20 @@ static void mainpanel_state_to_config(int bank){
   int i;
   float f;
 
-  f=multibar_get_value(MULTIBAR(p.masterdB_s),0);
-  i=gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(p.masterdB_a));
+  f=multibar_get_value(MULTIBAR(p->masterdB_s),0);
+  i=gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(p->masterdB_a));
 
   config_set_integer("mainpanel_master_att",bank,0,0,0,0,rint(f*10));
   config_set_integer("mainpanel_master_att_active",bank,0,0,0,0,i);
 
-  config_set_string("mainpanel_cue_A",0,0,0,0,gtk_entry_get_text(GTK_ENTRY(p.entry_a)));
-  config_set_string("mainpanel_cue_B",0,0,0,0,gtk_entry_get_text(GTK_ENTRY(p.entry_b)));
+  config_set_string("mainpanel_cue_A",0,0,0,0,gtk_entry_get_text(GTK_ENTRY(p->entry_a)));
+  config_set_string("mainpanel_cue_B",0,0,0,0,gtk_entry_get_text(GTK_ENTRY(p->entry_b)));
   config_set_integer("mainpanel_loop",0,0,0,0,0,
-		     gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(p.cue_b)));
+		     gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(p->cue_b)));
 
   for(i=0;i<input_ch || i<OUTPUT_CHANNELS;i++)
     config_set_integer("mainpanel_VU_show",0,0,0,0,i,
-		       gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(p.channelshow[i])));
+		       gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(p->channelshow[i])));
 
   clippanel_state_to_config(bank);
   compandpanel_state_to_config(bank);
@@ -73,28 +73,36 @@ static void mainpanel_state_to_config(int bank){
 
 }
 
-static void mainpanel_state_from_config(int bank){
+void mainpanel_state_from_config(int bank){
 
   int val,i;
   const char *string;
 
-  if(!config_get_integer("mainpanel_master_att",bank,0,0,0,0,&val))
-    multibar_thumb_set(MULTIBAR(p.masterdB_s),val*.1,0);
+  if(!config_get_integer("mainpanel_master_att",bank,0,0,0,0,&val)){
+    master_att = val;
+    if(p)
+      multibar_thumb_set(MULTIBAR(p->masterdB_s),val*.1,0);
+  }
 
-  if(!config_get_integer("mainpanel_master_att_active",bank,0,0,0,0,&val))
-    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p.masterdB_a),val);
+  if(!config_get_integer("mainpanel_master_att_active",bank,0,0,0,0,&val)){
+    if(!val)master_att=0;
+    if(p)
+      gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->masterdB_a),val);
+  }
 
   /* A/B state are saved but *not* banked */
   if((string=config_get_string("mainpanel_cue_A",0,0,0,0)))
-    action_seta_to(&p,string);
+    action_seta_to(p,string);
   if((string=config_get_string("mainpanel_cue_B",0,0,0,0)))
-    action_setb_to(&p,string);
-  if(!config_get_integer("mainpanel_loop",0,0,0,0,0,&val))
-    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p.cue_b),val);
+    action_setb_to(p,string);
+  if(p)
+    if(!config_get_integer("mainpanel_loop",0,0,0,0,0,&val))
+      gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->cue_b),val);
 
-  for(i=0;i<input_ch || i<OUTPUT_CHANNELS;i++)
-    if(!config_get_integer("mainpanel_VU_show",0,0,0,0,i,&val))
-      gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p.channelshow[i]),val);
+  if(p)
+    for(i=0;i<input_ch || i<OUTPUT_CHANNELS;i++)
+      if(!config_get_integer("mainpanel_VU_show",0,0,0,0,i,&val))
+        gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->channelshow[i]),val);
 
   clippanel_state_from_config(bank);
   compandpanel_state_from_config(bank);
@@ -294,20 +302,19 @@ static void action_entryb(GtkWidget *widget,postfish_mainpanel *p){
 }
 
 static void action_seta_to(postfish_mainpanel *p,const char *time){
-  gtk_entry_set_text(GTK_ENTRY(p->entry_a),time);
+  off_t cursora=input_time_to_cursor(time),cursorb;
 
-  {
-    const char *time=gtk_entry_get_text(GTK_ENTRY(p->entry_a));
-    off_t cursora=input_time_to_cursor(time),cursorb;
+  if(p){
+    gtk_entry_set_text(GTK_ENTRY(p->entry_a),time);
     time=gtk_entry_get_text(GTK_ENTRY(p->entry_b));
     cursorb=input_time_to_cursor(time);
-    
     if(cursora>=cursorb && loop_active){
       loop_active=0;
       gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->cue_b),0);
     }
-    input_Acursor_set(cursora);
   }
+
+  input_Acursor_set(cursora);
 
 }
 
@@ -317,20 +324,20 @@ static void action_seta(GtkWidget *widget,postfish_mainpanel *p){
 }
 
 static void action_setb_to(postfish_mainpanel *p,const char *time){
-  off_t cursora,cursorb;
-  
-  cursorb=input_time_to_cursor(time);
-  gtk_entry_set_text(GTK_ENTRY(p->entry_b),time);
-    
-  time=gtk_entry_get_text(GTK_ENTRY(p->entry_a));
-  cursora=input_time_to_cursor(time);
+  off_t cursora,cursorb=input_time_to_cursor(time);
 
-  if(cursora>=cursorb && loop_active){
-    loop_active=0;
-    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->cue_b),0);
+  if(p){
+    gtk_entry_set_text(GTK_ENTRY(p->entry_b),time);
+    time=gtk_entry_get_text(GTK_ENTRY(p->entry_a));
+    cursora=input_time_to_cursor(time);
+
+    if(cursora>=cursorb && loop_active){
+      loop_active=0;
+      gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->cue_b),0);
+    }
   }
+
   input_Bcursor_set(cursorb);
- 
 }
 
 static void action_setb(GtkWidget *widget,postfish_mainpanel *p){
@@ -1252,7 +1259,8 @@ void mainpanel_go(int argc,char *argv[], int ch){
   char  buffer[20];
   int i;
   int found=0;
-  memset(&p,0,sizeof(p));
+
+  p=calloc(1,sizeof(*p));
 
   found|=look_for_gtkrc(ETCDIR"/postfish-gtkrc");
   {
@@ -1339,9 +1347,9 @@ void mainpanel_go(int argc,char *argv[], int ch){
     exit(1);
   }
   
-  mainpanel_create(&p,labels);
+  mainpanel_create(p,labels);
   mainpanel_state_from_config(0);
-  animate_fish(&p);
+  animate_fish(p);
 
   /* set up watching the event pipe */
   {
@@ -1352,7 +1360,7 @@ void mainpanel_go(int argc,char *argv[], int ch){
     g_io_channel_set_buffered (channel, FALSE);
     g_io_channel_set_close_on_unref (channel, TRUE);
 
-    id = g_io_add_watch (channel, G_IO_IN, async_event_handle, &p);
+    id = g_io_add_watch (channel, G_IO_IN, async_event_handle, p);
 
     g_io_channel_unref (channel);
 

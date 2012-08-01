@@ -70,13 +70,14 @@ void outpanel_state_from_config(int bank){
   int i;
 
   config_get_vector("output_active",bank,0,0,0,2,outset.panel_active);
-  gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(state.monitor_active),outset.panel_active[0]);
-  gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(state.stdout_active),outset.panel_active[1]);
+  if(state.monitor_active)gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(state.monitor_active),outset.panel_active[0]);
+  if(state.stdout_active)gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(state.stdout_active),outset.panel_active[1]);
 
   config_get_vector("output_monitor_source",bank,0,0,0,OUTPUT_CHANNELS,outset.monitor.source);
   for(i=0;i<OUTPUT_CHANNELS;i++)
-    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(state.monitor.source[i]),
-				 outset.monitor.source[i]);
+    if(state.monitor.source[i])
+      gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(state.monitor.source[i]),
+                                   outset.monitor.source[i]);
 
   config_get_sigat("output_monitor_set",bank,0,0,0,0,&outset.monitor.device);
 
@@ -98,8 +99,9 @@ void outpanel_state_from_config(int bank){
 
   config_get_vector("output_stdout_source",bank,0,0,0,OUTPUT_CHANNELS,outset.stdout.source);
   for(i=0;i<OUTPUT_CHANNELS;i++)
-    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(state.stdout.source[i]),
-				 outset.stdout.source[i]);
+    if(state.stdout.source[i])
+      gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(state.stdout.source[i]),
+                                   outset.stdout.source[i]);
 
   config_get_sigat("output_stdout_set",bank,0,0,0,0,&outset.stdout.device);
   if(state.stdout.device)
@@ -113,7 +115,6 @@ void outpanel_state_from_config(int bank){
   config_get_sigat("output_stdout_set",bank,0,0,0,3,&outset.stdout.format);
   if(state.stdout.format)
     gtk_combo_box_set_active(GTK_COMBO_BOX(state.stdout.format),outset.stdout.format);
-
 
 }
 

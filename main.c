@@ -52,6 +52,7 @@ int eventpipe[2];
 sig_atomic_t main_looping;
 char *configfile="postfish-staterc";
 char *version;
+int batch = 0;
 
 void clean_exit(int sig){
   signal(sig,SIG_IGN);
@@ -84,9 +85,10 @@ void clean_exit(int sig){
 
 }
 
-const char *optstring = "-c:gh";
+const char *optstring = "-c:ghB";
 
 struct option options [] = {
+        {"batch-mode",no_argument,NULL,'B'},
         {"configuration-file",required_argument,NULL,'c'},
         {"group",no_argument,NULL,'g'},
         {"help",no_argument,NULL,'h'},
@@ -102,6 +104,8 @@ static void usage(FILE *f){
 "  postfish [options] infile [infile]+ [-g infile [infile]+]+ > output\n\n"
 
 "OPTIONS:\n"
+"  -B --batch-mode            : process the input in batch mode without\n"
+"                               UI or monitor output\n"
 "  -c --configuration-file    : load state from alternate configuration file\n"
 "  -g --group                 : place following input files in a new channel\n"
 "                               grouping\n"
@@ -178,6 +182,9 @@ void parse_command_line(int argc, char **argv){
       /* file name that belongs to current group */
       input_parse(optarg,newgroup);      
       newgroup=0;
+      break;
+    case 'B':
+      batch=1;
       break;
     case 'c':
       /* alternate configuration file */
@@ -328,7 +335,7 @@ int main(int argc, char **argv){
     fprintf(stderr,"Unable to remove block buffering on stdout; continuing\n");
   
   output_probe_stdout(STDOUT_FILENO);
-  output_probe_monitor();
+  if(!batch) output_probe_monitor();
 
   /* open all the input files */
   if(input_load())exit(1);
@@ -363,7 +370,13 @@ int main(int argc, char **argv){
   signal(SIGINT,clean_exit);
   signal(SIGSEGV,clean_exit);
 
-  mainpanel_go(argc,argv,input_ch);
+  if(batch){
+    mainpanel_state_from_config(0);
+    playback_active=1;
+    outset.panel_active[1]=1;
+    playback_thread(NULL);
+  }else
+    mainpanel_go(argc,argv,input_ch);
 
   return(0);
 }

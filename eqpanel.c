@@ -48,7 +48,7 @@ typedef struct eps {
 } eq_panel_state;
 
 static eq_panel_state *master_panel;
-static eq_panel_state **channel_panel;
+static eq_panel_state *channel_panel[MAX_INPUT_CHANNELS];
 
 static void eqpanel_state_to_config_helper(int bank,eq_settings *s,int A){
   config_set_integer("eq_active",bank,A,0,0,0,s->panel_active);
@@ -67,11 +67,12 @@ static void eqpanel_state_from_config_helper(int bank,eq_settings *s,
 
   int i;
   config_get_sigat("eq_active",bank,A,0,0,0,&s->panel_active);
-  gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->panel->subpanel_activebutton[0]),s->panel_active);
+  if(p)gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->panel->subpanel_activebutton[0]),s->panel_active);
 
   config_get_vector("eq_settings",bank,A,0,0,eq_freqs,s->settings);
-  for(i=0;i<eq_freqs;i++)
-    multibar_thumb_set(MULTIBAR(p->bars[i].slider),s->settings[i]*.1,0);
+  if(p)
+    for(i=0;i<eq_freqs;i++)
+      multibar_thumb_set(MULTIBAR(p->bars[i].slider),s->settings[i]*.1,0);
 
 }
 
@@ -221,7 +222,6 @@ void eqpanel_create_channel(postfish_mainpanel *mp,
 				 GtkWidget **windowbutton,
 				 GtkWidget **activebutton){
   int i;
-  channel_panel=malloc(input_ch*sizeof(*channel_panel));
 
   /* a panel for each channel */
   for(i=0;i<input_ch;i++){

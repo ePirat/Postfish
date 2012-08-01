@@ -101,7 +101,7 @@ typedef struct multi_panel_state{
 } multi_panel_state;
 
 static multi_panel_state *master_panel;
-static multi_panel_state **channel_panel;
+static multi_panel_state *channel_panel[MAX_INPUT_CHANNELS];
 
 
 static void compandpanel_state_to_config_helper(int bank,multicompand_settings *s,int A){
@@ -148,7 +148,7 @@ static void compandpanel_state_from_config_helper(int bank,multicompand_settings
 
   int i;
   config_get_sigat("multicompand_active",bank,A,0,0,0,&s->panel_active);
-  gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->panel->subpanel_activebutton[0]),s->panel_active);
+  if(p)gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->panel->subpanel_activebutton[0]),s->panel_active);
 
   config_get_sigat("multicompand_freqbank",bank,A,0,0,0,&s->active_bank);
   for(i=0;i<multicomp_banks;i++){
@@ -157,65 +157,73 @@ static void compandpanel_state_from_config_helper(int bank,multicompand_settings
   }
 
   config_get_sigat("multicompand_over_set",bank,A,0,0,0,&s->over_mode);
-  if(s->over_mode)
-    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->over_peak),1);
-  else
-    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->over_rms),1);
+  if(p){
+    if(s->over_mode)
+      gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->over_peak),1);
+    else
+      gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->over_rms),1);
+  }
 
   config_get_sigat("multicompand_over_set",bank,A,0,0,1,&s->over_softknee);
-  gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->over_softknee),s->over_softknee);
+  if(p)gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->over_softknee),s->over_softknee);
   config_get_sigat("multicompand_over_set",bank,A,0,0,2,&s->over_ratio);
-  multibar_thumb_set(p->over_compand.s,1000./s->over_ratio,0);
+  if(p)multibar_thumb_set(p->over_compand.s,1000./s->over_ratio,0);
   config_get_sigat("multicompand_over_set",bank,A,0,0,3,&s->over_attack);
-  multibar_thumb_set(p->over_timing.s,s->over_attack*.1,0);
+  if(p)multibar_thumb_set(p->over_timing.s,s->over_attack*.1,0);
   config_get_sigat("multicompand_over_set",bank,A,0,0,4,&s->over_decay);
-  multibar_thumb_set(p->over_timing.s,s->over_decay*.1,1);
+  if(p)multibar_thumb_set(p->over_timing.s,s->over_decay*.1,1);
   config_get_sigat("multicompand_over_set",bank,A,0,0,5,&s->over_lookahead);
-  multibar_thumb_set(p->over_lookahead.s,s->over_lookahead*.1,0);
+  if(p)multibar_thumb_set(p->over_lookahead.s,s->over_lookahead*.1,0);
 
   config_get_sigat("multicompand_under_set",bank,A,0,0,0,&s->under_mode);
-  if(s->under_mode)
-    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->under_peak),1);
-  else
-    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->under_rms),1);
+  if(p){
+    if(s->under_mode)
+      gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->under_peak),1);
+    else
+      gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->under_rms),1);
+  }
 
   config_get_sigat("multicompand_under_set",bank,A,0,0,1,&s->under_softknee);
-  gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->under_softknee),s->under_softknee);
+  if(p)gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->under_softknee),s->under_softknee);
   config_get_sigat("multicompand_under_set",bank,A,0,0,2,&s->under_ratio);
-  multibar_thumb_set(p->under_compand.s,1000./s->under_ratio,0);
+  if(p)multibar_thumb_set(p->under_compand.s,1000./s->under_ratio,0);
   config_get_sigat("multicompand_under_set",bank,A,0,0,3,&s->under_attack);
-  multibar_thumb_set(p->under_timing.s,s->under_attack*.1,0);
+  if(p)multibar_thumb_set(p->under_timing.s,s->under_attack*.1,0);
   config_get_sigat("multicompand_under_set",bank,A,0,0,4,&s->under_decay);
-  multibar_thumb_set(p->under_timing.s,s->under_decay*.1,1);
+  if(p)multibar_thumb_set(p->under_timing.s,s->under_decay*.1,1);
   config_get_sigat("multicompand_under_set",bank,A,0,0,5,&s->under_lookahead);
-  multibar_thumb_set(p->under_lookahead.s,s->under_lookahead*.1,0);
+  if(p)multibar_thumb_set(p->under_lookahead.s,s->under_lookahead*.1,0);
 
   config_get_sigat("multicompand_base_set",bank,A,0,0,0,&s->base_mode);
-  if(s->base_mode)
-    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->base_peak),1);
-  else
-    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->base_rms),1);
+  if(p){
+    if(s->base_mode)
+      gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->base_peak),1);
+    else
+      gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->base_rms),1);
+  }
   config_get_sigat("multicompand_base_set",bank,A,0,0,2,&s->base_ratio);
-  multibar_thumb_set(p->base_compand.s,1000./s->base_ratio,0);
+  if(p)multibar_thumb_set(p->base_compand.s,1000./s->base_ratio,0);
   config_get_sigat("multicompand_base_set",bank,A,0,0,3,&s->base_attack);
-  multibar_thumb_set(p->base_timing.s,s->base_attack*.1,0);
+  if(p)multibar_thumb_set(p->base_timing.s,s->base_attack*.1,0);
   config_get_sigat("multicompand_base_set",bank,A,0,0,4,&s->base_decay);
-  multibar_thumb_set(p->base_timing.s,s->base_decay*.1,1);
+  if(p)multibar_thumb_set(p->base_timing.s,s->base_decay*.1,1);
 
   propogate_bank_changes_full(s,s->active_bank);
   /* setting the active bank also redisplays all the sliders */
-  gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->octave[s->active_bank]),1);
-  /* safe to call blindly; if the above already triggered the work, this is a no op */
-  switch(s->active_bank){  
-  case 0:
-    static_octave(0,&p->octave_full);
-    break;
-  case 1:
-    static_octave(0,&p->octave_half);
-    break;
-  case 2:
-    static_octave(0,&p->octave_two);
-    break;
+  if(p){
+    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->octave[s->active_bank]),1);
+    /* safe to call blindly; if the above already triggered the work, this is a no op */
+    switch(s->active_bank){  
+    case 0:
+      static_octave(0,&p->octave_full);
+      break;
+    case 1:
+      static_octave(0,&p->octave_half);
+      break;
+    case 2:
+      static_octave(0,&p->octave_two);
+      break;
+    }
   }
 }
 
@@ -1034,8 +1042,6 @@ void compandpanel_create_channel(postfish_mainpanel *mp,
 				 GtkWidget **activebutton){
   int i;
   
-  channel_panel=calloc(input_ch,sizeof(*channel_panel));
-
   /* a panel for each channel */
   for(i=0;i<input_ch;i++){
     subpanel_generic *panel;

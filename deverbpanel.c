@@ -71,23 +71,28 @@ void deverbpanel_state_from_config(int bank){
   int i;
 
   config_get_vector("deverbpanel_active",bank,0,0,0,input_ch,deverb_channel_set.active);
-  for(i=0;i<input_ch;i++)
-    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(channel_panel->panel->subpanel_activebutton[i]),
-				 deverb_channel_set.active[i]);
+  if(channel_panel)
+    for(i=0;i<input_ch;i++)
+      gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(channel_panel->panel->subpanel_activebutton[i]),
+                                   deverb_channel_set.active[i]);
 
   config_get_vector("deverbpanel_ratio",bank,0,0,0,deverb_freqs,deverb_channel_set.ratio);
-  for(i=0;i<deverb_freqs;i++)
-    multibar_thumb_set(MULTIBAR(channel_panel->bars[i].cslider),
-		       1000./deverb_channel_set.ratio[i],0);
+  if(channel_panel)
+    for(i=0;i<deverb_freqs;i++)
+      multibar_thumb_set(MULTIBAR(channel_panel->bars[i].cslider),
+                         1000./deverb_channel_set.ratio[i],0);
 
   config_get_sigat("deverbpanel_set",bank,0,0,0,0,&deverb_channel_set.linkp);
-  gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(channel_panel->link),deverb_channel_set.linkp);
+  if(channel_panel)
+    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(channel_panel->link),deverb_channel_set.linkp);
   
   config_get_sigat("deverbpanel_set",bank,0,0,0,1,&deverb_channel_set.smooth);
-  multibar_thumb_set(MULTIBAR(channel_panel->timing.s),deverb_channel_set.smooth*.1,0);
+  if(channel_panel)
+    multibar_thumb_set(MULTIBAR(channel_panel->timing.s),deverb_channel_set.smooth*.1,0);
 
   config_get_sigat("deverbpanel_set",bank,0,0,0,3,&deverb_channel_set.release);
-  multibar_thumb_set(MULTIBAR(channel_panel->timing.s),deverb_channel_set.release*.1,1);
+  if(channel_panel)
+    multibar_thumb_set(MULTIBAR(channel_panel->timing.s),deverb_channel_set.release*.1,1);
 }
 
 static void compand_change(GtkWidget *w,gpointer in){

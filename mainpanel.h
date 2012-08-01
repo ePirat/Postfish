@@ -86,4 +86,5 @@ struct postfish_mainpanel{
 };
 
 extern void mainpanel_go(int n,char *list[],int ch);
+extern void mainpanel_state_from_config(int bank);
 extern void save_state();

@@ -48,16 +48,16 @@ void limitpanel_state_to_config(int bank){
 
 void limitpanel_state_from_config(int bank){
   config_get_sigat("limit_active",bank,0,0,0,0,&limit_active);
-  gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(active),limit_active);
+  if(active)gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(active),limit_active);
 
   config_get_sigat("limit_set",bank,0,0,0,0,&limitset.thresh);
-  multibar_thumb_set(MULTIBAR(t_slider),limitset.thresh*.1,0);
+  if(t_slider)multibar_thumb_set(MULTIBAR(t_slider),limitset.thresh*.1,0);
 
   config_get_sigat("limit_set",bank,0,0,0,1,&limitset.depth);
-  multibar_thumb_set(MULTIBAR(k_slider),limitset.depth*.1,0);
+  if(k_slider)multibar_thumb_set(MULTIBAR(k_slider),limitset.depth*.1,0);
 
   config_get_sigat("limit_set",bank,0,0,0,2,&limitset.decay);
-  multibar_thumb_set(MULTIBAR(d_slider),limitset.decay*.1,0);
+  if(d_slider)multibar_thumb_set(MULTIBAR(d_slider),limitset.decay*.1,0);
 }
 
 static void limit_change(GtkWidget *w,gpointer in){

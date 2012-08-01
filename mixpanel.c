@@ -67,7 +67,7 @@ typedef struct {
 } mix_panelsave;
 
 static atten_panelsave atten_panel;
-static mix_panelsave **mix_panels;
+static mix_panelsave *mix_panels[MAX_INPUT_CHANNELS];
 
 static void mixblock_state_to_config(int bank, mix_settings *s,int A,int B){
   config_set_vector("mixblock_source",bank,A,B,0,3,s->insert_source[B]);
@@ -103,24 +103,26 @@ void mixpanel_state_to_config(int bank){
 static void mixblock_state_from_config(int bank, mix_settings *s,mix_panelsave *p,int A,int B){
   int i;
   config_get_vector("mixblock_source",bank,A,B,0,3,s->insert_source[B]);
-  for(i=0;i<3;i++)
-    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->insert_source[B][i]),
-				 s->insert_source[B][i]);
+  if(p)
+    for(i=0;i<3;i++)
+      gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->insert_source[B][i]),
+                                   s->insert_source[B][i]);
 
   config_get_sigat("mixblock_set",bank,A,B,0,0,&s->insert_invert[B]);
-  gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->insert_invert[B]),
-			       s->insert_invert[B]);
+  if(p)gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->insert_invert[B]),
+                                    s->insert_invert[B]);
   
   config_get_sigat("mixblock_set",bank,A,B,0,1,&s->insert_att[B]);
-  multibar_thumb_set(MULTIBAR(p->insert_att[B]->s),s->insert_att[B]*.1,0);
+  if(p)multibar_thumb_set(MULTIBAR(p->insert_att[B]->s),s->insert_att[B]*.1,0);
   
   config_get_sigat("mixblock_set",bank,A,B,0,2,&s->insert_delay[B]);
-  multibar_thumb_set(MULTIBAR(p->insert_del[B]->s),s->insert_delay[B]*.01,0);
+  if(p)multibar_thumb_set(MULTIBAR(p->insert_del[B]->s),s->insert_delay[B]*.01,0);
   
   config_get_vector("mixblock_dest",bank,A,B,0,OUTPUT_CHANNELS,s->insert_dest[B]);
-  for(i=0;i<OUTPUT_CHANNELS;i++)
-    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->insert_dest[B][i]),
-				 s->insert_dest[B][i]);
+  if(p)
+    for(i=0;i<OUTPUT_CHANNELS;i++)
+      gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->insert_dest[B][i]),
+                                   s->insert_dest[B][i]);
 }
 
 static void mixdown_state_from_config(int bank, mix_settings *s, mix_panelsave *p, int A){
@@ -131,13 +133,15 @@ static void mixdown_state_from_config(int bank, mix_settings *s, mix_panelsave *
   config_get_sigat("mixplace_set",bank,A,0,0,1,&s->placer_att);
   config_get_sigat("mixplace_set",bank,A,0,0,2,&s->placer_delay);
 
-  for(i=0;i<OUTPUT_CHANNELS;i++){
-    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->destA[i]),s->placer_destA[i]);
-    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->destB[i]),s->placer_destB[i]);
+  if(p){
+    for(i=0;i<OUTPUT_CHANNELS;i++){
+      gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->destA[i]),s->placer_destA[i]);
+      gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->destB[i]),s->placer_destB[i]);
+    }
+    multibar_thumb_set(MULTIBAR(p->place_AB->s),s->placer_place,0);
+    multibar_thumb_set(MULTIBAR(p->place_atten->s),s->placer_att*.1,0);
+    multibar_thumb_set(MULTIBAR(p->place_delay->s),s->placer_delay*.01,0);
   }
-  multibar_thumb_set(MULTIBAR(p->place_AB->s),s->placer_place,0);
-  multibar_thumb_set(MULTIBAR(p->place_atten->s),s->placer_att*.1,0);
-  multibar_thumb_set(MULTIBAR(p->place_delay->s),s->placer_delay*.01,0);
 
   for(i=0;i<MIX_BLOCKS;i++)
     mixblock_state_from_config(bank,s,p,A,i);
@@ -148,14 +152,17 @@ void mixpanel_state_from_config(int bank){
   config_get_vector("mixdown_active",bank,0,0,0,input_ch,mixpanel_active);
 
   for(i=0;i<input_ch;i++){
-    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(atten_panel.panel->subpanel_activebutton[i]),
-						   mixpanel_active[i]);
+    if(atten_panel.panel)
+      gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(atten_panel.panel->subpanel_activebutton[i]),
+                                   mixpanel_active[i]);
 
     config_get_sigat("mixdown_master_attenuate",bank,0,0,0,i,&mix_set[i].master_att);
     config_get_sigat("mixdown_master_delay",bank,0,0,0,i,&mix_set[i].master_delay);
 
-    multibar_thumb_set(MULTIBAR(atten_panel.att[i]->s),mix_set[i].master_att*.1,0);
-    multibar_thumb_set(MULTIBAR(atten_panel.del[i]->s),mix_set[i].master_delay*.01,0);
+    if(atten_panel.att)
+      multibar_thumb_set(MULTIBAR(atten_panel.att[i]->s),mix_set[i].master_att*.1,0);
+    if(atten_panel.del)
+      multibar_thumb_set(MULTIBAR(atten_panel.del[i]->s),mix_set[i].master_delay*.01,0);
 
     mixdown_state_from_config(bank,mix_set+i,mix_panels[i],i);
   }
@@ -527,7 +534,6 @@ void mixpanel_create_channel(postfish_mainpanel *mp,
 			    GtkWidget **windowbutton,
 			    GtkWidget **activebutton){
   int i;
-  mix_panels=malloc(input_ch*sizeof(*mix_panels));
   
   /* a panel for each channel */
   for(i=0;i<input_ch;i++){

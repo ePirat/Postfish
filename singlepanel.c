@@ -84,7 +84,7 @@ typedef struct singlecomp_panel_state{
 } singlecomp_panel_state;
 
 static singlecomp_panel_state *master_panel;
-static singlecomp_panel_state **channel_panel;
+static singlecomp_panel_state *channel_panel[MAX_INPUT_CHANNELS];
 
 static void singlepanel_state_to_config_helper(int bank,singlecomp_settings *s,int A){
   config_set_integer("singlecompand_active",bank,A,0,0,0,s->panel_active);
@@ -122,58 +122,64 @@ static void singlepanel_state_from_config_helper(int bank,singlecomp_settings *s
 						 singlecomp_panel_state *p,int A){
 
   config_get_sigat("singlecompand_active",bank,A,0,0,0,&s->panel_active);
-  gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->panel->subpanel_activebutton[0]),s->panel_active);
+  if(p)gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->panel->subpanel_activebutton[0]),s->panel_active);
 
   config_get_sigat("singlecompand_thresh",bank,A,0,0,0,&s->u_thresh);
-  multibar_thumb_set(MULTIBAR(p->bar.slider),s->u_thresh,0);
+  if(p)multibar_thumb_set(MULTIBAR(p->bar.slider),s->u_thresh,0);
   config_get_sigat("singlecompand_thresh",bank,A,0,0,1,&s->o_thresh);
-  multibar_thumb_set(MULTIBAR(p->bar.slider),s->o_thresh,1);
+  if(p)multibar_thumb_set(MULTIBAR(p->bar.slider),s->o_thresh,1);
 
   config_get_sigat("singlecompand_over_set",bank,A,0,0,0,&s->o_mode);
-  if(s->o_mode)
-    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->o_peak),1);
-  else
-    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->o_rms),1);
+  if(p){
+    if(s->o_mode)
+      gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->o_peak),1);
+    else
+      gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->o_rms),1);
+  }
 
   config_get_sigat("singlecompand_over_set",bank,A,0,0,1,&s->o_softknee);
-  gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->o_knee),s->o_softknee);
+  if(p)gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->o_knee),s->o_softknee);
   config_get_sigat("singlecompand_over_set",bank,A,0,0,2,&s->o_ratio);
-  multibar_thumb_set(p->over_compand.s,1000./s->o_ratio,0);
+  if(p)multibar_thumb_set(p->over_compand.s,1000./s->o_ratio,0);
   config_get_sigat("singlecompand_over_set",bank,A,0,0,3,&s->o_attack);
-  multibar_thumb_set(p->over_timing.s,s->o_attack*.1,0);
+  if(p)multibar_thumb_set(p->over_timing.s,s->o_attack*.1,0);
   config_get_sigat("singlecompand_over_set",bank,A,0,0,4,&s->o_decay);
-  multibar_thumb_set(p->over_timing.s,s->o_decay*.1,1);
+  if(p)multibar_thumb_set(p->over_timing.s,s->o_decay*.1,1);
   config_get_sigat("singlecompand_over_set",bank,A,0,0,5,&s->o_lookahead);
-  multibar_thumb_set(p->over_lookahead.s,s->o_lookahead*.1,0);
+  if(p)multibar_thumb_set(p->over_lookahead.s,s->o_lookahead*.1,0);
 
   config_get_sigat("singlecompand_under_set",bank,A,0,0,0,&s->u_mode);
-  if(s->u_mode)
-    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->u_peak),1);
-  else
-    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->u_rms),1);
+  if(p){
+    if(s->u_mode)
+      gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->u_peak),1);
+    else
+      gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->u_rms),1);
+  }
 
   config_get_sigat("singlecompand_under_set",bank,A,0,0,1,&s->u_softknee);
-  gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->u_knee),s->u_softknee);
+  if(p)gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->u_knee),s->u_softknee);
   config_get_sigat("singlecompand_under_set",bank,A,0,0,2,&s->u_ratio);
-  multibar_thumb_set(p->under_compand.s,1000./s->u_ratio,0);
+  if(p)multibar_thumb_set(p->under_compand.s,1000./s->u_ratio,0);
   config_get_sigat("singlecompand_under_set",bank,A,0,0,3,&s->u_attack);
-  multibar_thumb_set(p->under_timing.s,s->u_attack*.1,0);
+  if(p)multibar_thumb_set(p->under_timing.s,s->u_attack*.1,0);
   config_get_sigat("singlecompand_under_set",bank,A,0,0,4,&s->u_decay);
-  multibar_thumb_set(p->under_timing.s,s->u_decay*.1,1);
+  if(p)multibar_thumb_set(p->under_timing.s,s->u_decay*.1,1);
   config_get_sigat("singlecompand_under_set",bank,A,0,0,5,&s->u_lookahead);
-  multibar_thumb_set(p->under_lookahead.s,s->u_lookahead*.1,0);
+  if(p)multibar_thumb_set(p->under_lookahead.s,s->u_lookahead*.1,0);
 
   config_get_sigat("singlecompand_base_set",bank,A,0,0,0,&s->b_mode);
-  if(s->b_mode)
-    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->b_peak),1);
-  else
-    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->b_rms),1);
+  if(p){
+    if(s->b_mode)
+      gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->b_peak),1);
+    else
+      gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->b_rms),1);
+  }
   config_get_sigat("singlecompand_base_set",bank,A,0,0,2,&s->b_ratio);
-  multibar_thumb_set(p->base_compand.s,1000./s->b_ratio,0);
+  if(p)multibar_thumb_set(p->base_compand.s,1000./s->b_ratio,0);
   config_get_sigat("singlecompand_base_set",bank,A,0,0,3,&s->b_attack);
-  multibar_thumb_set(p->base_timing.s,s->b_attack*.1,0);
+  if(p)multibar_thumb_set(p->base_timing.s,s->b_attack*.1,0);
   config_get_sigat("singlecompand_base_set",bank,A,0,0,4,&s->b_decay);
-  multibar_thumb_set(p->base_timing.s,s->b_decay*.1,1);
+  if(p)multibar_thumb_set(p->base_timing.s,s->b_decay*.1,1);
 
 }
 
@@ -745,8 +751,6 @@ void singlepanel_create_channel(postfish_mainpanel *mp,
 				GtkWidget **windowbutton,
 				GtkWidget **activebutton){
   int i;
-  
-  channel_panel=calloc(input_ch,sizeof(*channel_panel));
   
   /* a panel for each channel */
   for(i=0;i<input_ch;i++){
