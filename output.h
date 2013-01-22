@@ -38,13 +38,13 @@ typedef struct {
 } output_settings;
 
 typedef struct {
-  int type;
+  int driver;
   char *name;
   char *file;
 } output_monitor_entry;
 
 extern int output_stdout_available;
-extern int output_stdout_device;
+extern int output_stdout_ao;
 extern int output_monitor_available;
 extern output_monitor_entry *monitor_list;
 extern int monitor_entries;

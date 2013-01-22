@@ -37,7 +37,7 @@ OBJ = main.o mainpanel.o multibar.o readout.o input.o output.o clippanel.o \
 	limit.o limitpanel.o mute.o mixpanel.o mix.o freeverb.o reverbpanel.o \
 	outpanel.o config.o window.o follower.o linkage.o
 
-GCF = -DETCDIR=\\\"$(ETCDIR)\\\" `pkg-config --cflags gtk+-2.0`
+GCF = -DETCDIR=\\\"$(ETCDIR)\\\" `pkg-config --cflags gtk+-2.0 ao \> 1.2`
 
 all:	
 	$(MAKE) target CFLAGS="-O2 -ffast-math -fomit-frame-pointer $(GCF) $(ADD_DEF)"
@@ -46,7 +46,7 @@ debug:
 	$(MAKE) target CFLAGS="-g -Wall -W -Wno-unused-parameter -D__NO_MATH_INLINES $(GCF) $(ADD_DEF)"
 
 profile:
-	$(MAKE) target CFLAGS="-pg -g -O2 -ffast-math $(GCF) $(ADD_DEF)" LIBS="-lgprof-helper "
+	$(MAKE) target CFLAGS="-pg -g -O2 -ffast-math $(GCF) $(ADD_DEF)" 
 
 clean:
 	rm -f $(OBJ) *.d *.d.* gmon.out postfish
@@ -76,7 +76,7 @@ endif
 
 target:  $(OBJ) postfish-wisdomrc
 	./touch-version
-	$(LD) $(OBJ) $(CFLAGS) -o postfish $(LIBS) `pkg-config --libs gtk+-2.0` -lpthread -lfftw3f -lm
+	$(LD) $(OBJ) $(CFLAGS) -o postfish $(LIBS) `pkg-config --libs gtk+-2.0 ao \> 1.2` -lpthread -lfftw3f -lm
 
 install: target
 	$(INSTALL) -d -m 0755 $(BINDIR)

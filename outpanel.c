@@ -297,7 +297,7 @@ void outpanel_create(postfish_mainpanel *mp,
 					     &state.monitor);
   GtkWidget *stdout_panel=outpanel_subpanel(mp,panel,&outset.stdout,
 					    " standard output ",
-					    output_stdout_device,
+					    output_stdout_ao,
 					    output_stdout_available,
 					    &state.stdout);
   

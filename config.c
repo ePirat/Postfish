@@ -248,7 +248,7 @@ void config_save(char *filename){
     configentry *c=config_list+i;
     if(c->string)
       fprintf(f,"(%s bank%d A%d B%d C%d l%d \"%s\" )\n",
-	      c->key,c->bank,c->A,c->B,c->C,strlen(c->string),c->string);
+	      c->key,c->bank,c->A,c->B,c->C,(int)strlen(c->string),c->string);
     if(c->vec){
       fprintf(f,"[%s bank%d A%d B%d C%d v%d ",
 	      c->key,c->bank,c->A,c->B,c->C,c->vals);

@@ -26,13 +26,13 @@
    reusable code.  It's monolithic, inflexible, and designed that way
    on purpose. */
 
-/* sound playback code is OSS-specific for now */
 #include "postfish.h"
 #include <signal.h>
 #include <getopt.h>
 #include <fenv.h>  // Thank you C99!
 #include <fftw3.h>
 #include <gtk/gtk.h>
+#include <ao/ao.h>
 #include "input.h"
 #include "output.h"
 #include "declip.h"
@@ -76,6 +76,7 @@ void clean_exit(int sig){
       main_looping=0;
       gtk_main_quit();
     }
+    ao_shutdown();
     exit(0);
 
   }
@@ -331,6 +332,7 @@ int main(int argc, char **argv){
   }
 
   /* probe outputs */
+  ao_initialize();
   if(setvbuf(stdout, NULL, _IONBF , 0))
     fprintf(stderr,"Unable to remove block buffering on stdout; continuing\n");
   
@@ -338,10 +340,16 @@ int main(int argc, char **argv){
   if(!batch) output_probe_monitor();
 
   /* open all the input files */
-  if(input_load())exit(1);
+  if(input_load()){
+    ao_shutdown();
+    exit(1);
+  }
 
   /* load config file */
-  if(config_load(configfile))exit(1);
+  if(config_load(configfile)){
+    ao_shutdown();
+    exit(1);
+  }
 
   /* set up filter chains */
   if(declip_load())exit(1);
@@ -359,7 +367,7 @@ int main(int argc, char **argv){
   if(pipe(eventpipe)){
     fprintf(stderr,"Unable to open event pipe:\n"
             "  %s\n",strerror(errno));
-    
+    ao_shutdown();
     exit(1);
   }
 
@@ -378,6 +386,7 @@ int main(int argc, char **argv){
   }else
     mainpanel_go(argc,argv,input_ch);
 
+  ao_shutdown();
   return(0);
 }
 
