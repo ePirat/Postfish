@@ -48,7 +48,7 @@
 #include "config.h"
 #include "mainpanel.h"
 
-int eventpipe[2];
+int eventpipe[2]={-1,-1};
 sig_atomic_t main_looping;
 char *configfile="postfish-staterc";
 char *version;
@@ -70,19 +70,20 @@ void clean_exit(int sig){
 	    "-- monty@xiph.org, Postfish revision %s\n\n",sig,version);
     configfile="postfish-staterc-crashsave";
 
-    save_state();
-    
-    if(main_looping){
-      main_looping=0;
-      gtk_main_quit();
-    }
-    ao_shutdown();
-    exit(0);
+    if(!batch){
+      save_state();
 
+      if(main_looping){
+        main_looping=0;
+        gtk_main_quit();
+      }
+      ao_shutdown();
+    }
+    exit(0);
   }
 
   /* otherwise inform the UI thread that we've requested shutdown */
-  write(eventpipe[1],"\001",1);
+  if(eventpipe[1]!=-1) write(eventpipe[1],"\001",1);
 
 }
 
@@ -364,7 +365,7 @@ int main(int argc, char **argv){
 
   /* easiest way to inform gtk of changes and not deal with locking
      issues around the UI */
-  if(pipe(eventpipe)){
+  if(!batch && pipe(eventpipe)){
     fprintf(stderr,"Unable to open event pipe:\n"
             "  %s\n",strerror(errno));
     ao_shutdown();
@@ -375,7 +376,8 @@ int main(int argc, char **argv){
 
   main_looping=0;
 
-  signal(SIGINT,clean_exit);
+  if(!batch)
+    signal(SIGINT,clean_exit);
   signal(SIGSEGV,clean_exit);
 
   if(batch){

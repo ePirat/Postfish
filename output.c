@@ -67,13 +67,15 @@ void output_reset(void){
 }
 
 void pipeline_reset(){
-  int flags=fcntl(eventpipe[0],F_GETFL);
-  char buf[1];
-  /* drain the event pipe */
-  if(fcntl(eventpipe[0],F_SETFL,O_NONBLOCK))
-    fprintf(stderr,"Unable to set O_NONBLOCK on event pipe.\n");
-  while(read(eventpipe[0],buf,1)>0);
-  fcntl(eventpipe[0],F_SETFL,flags);
+  if(eventpipe[0]>-1){
+    int flags=fcntl(eventpipe[0],F_GETFL);
+    char buf[1];
+    /* drain the event pipe */
+    if(fcntl(eventpipe[0],F_SETFL,O_NONBLOCK))
+      fprintf(stderr,"Unable to set O_NONBLOCK on event pipe.\n");
+    while(read(eventpipe[0],buf,1)>0);
+    fcntl(eventpipe[0],F_SETFL,flags);
+  }
 
   input_reset();  /* clear any persistent lapping state */
   declip_reset();  /* clear any persistent lapping state */
@@ -1070,26 +1072,28 @@ void *playback_thread(void *dummy){
       }
 
       /* feedback */
-      memset(rms,0,sizeof(*rms)*OUTPUT_CHANNELS);
-      memset(peak,0,sizeof(*peak)*OUTPUT_CHANNELS);
-      
-      for(j=0;j<OUTPUT_CHANNELS;j++){
-	if(!mute_channel_muted(link->active,j))
-	  for(i=0;i<link->samples;i++){
-	    float dval=link->data[j][i];
-	    dval*=dval;
-	    if(dval>peak[j])peak[j]=dval;
-	    rms[j]+= dval;
-	  }
+      if(eventpipe[1]>-1){
+        memset(rms,0,sizeof(*rms)*OUTPUT_CHANNELS);
+        memset(peak,0,sizeof(*peak)*OUTPUT_CHANNELS);
+
+        for(j=0;j<OUTPUT_CHANNELS;j++){
+          if(!mute_channel_muted(link->active,j))
+            for(i=0;i<link->samples;i++){
+              float dval=link->data[j][i];
+              dval*=dval;
+              if(dval>peak[j])peak[j]=dval;
+              rms[j]+= dval;
+            }
+        }
+
+        for(j=0;j<OUTPUT_CHANNELS;j++)
+          rms[j]/=link->samples;
+
+        /* inform Lord Vader his shuttle is ready */
+        push_output_feedback(peak,rms);
+
+        write(eventpipe[1],"",1);
       }
-
-      for(j=0;j<OUTPUT_CHANNELS;j++)
-	rms[j]/=link->samples;
-
-      /* inform Lord Vader his shuttle is ready */
-      push_output_feedback(peak,rms);
-      
-      write(eventpipe[1],"",1);
     }
   }
 
@@ -1113,7 +1117,7 @@ void *playback_thread(void *dummy){
   playback_exit=0;
   if(audiobuf)free(audiobuf);
 
-  write(eventpipe[1],"",1);
+  if(eventpipe[i]>-1) write(eventpipe[1],"",1);
   return(NULL);
 }
 
