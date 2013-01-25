@@ -572,7 +572,8 @@ static ao_device *playback_startup(int driver,char *device, int rate, int *ch, i
      until one works */
   while(local_ch || local_bits>16){
     ao_sample_format format;
-    ao_option opt1={"dev",localdevice,0};
+    ao_option opt2={"buffer_time","50",0};
+    ao_option opt1={"dev",localdevice,&opt2};
     ao_option opt={"client_name","postfish",&opt1};
     if(!device)opt.next=0;
 
