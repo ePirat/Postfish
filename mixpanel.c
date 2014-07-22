@@ -359,8 +359,8 @@ static mix_panelsave *mixpanel_create_helper(postfish_mainpanel *mp,
       ps->destB[i]=bB;
     }
 
-    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(ps->destA[0]),1);
-    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(ps->destB[1]),1);
+    /*gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(ps->destA[0]),1);
+      gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(ps->destB[1]),1);*/
     
     gtk_table_attach(GTK_TABLE(table),lA,0,2,6,7,
 		     0,0,0,0);
@@ -523,6 +523,9 @@ static mix_panelsave *mixpanel_create_helper(postfish_mainpanel *mp,
 
 
   }
+
+  gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(ps->insert_source[0][0]),1);
+  gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(ps->insert_dest[0][thisch]),1);
 
   gtk_box_pack_start(GTK_BOX(panel->subpanel_box),table,1,1,4);
   subpanel_show_all_but_toplevel(panel);
