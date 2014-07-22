@@ -331,24 +331,60 @@ int input_load(void){
 	  unsigned int chunklen;
 
 	  if(find_chunk(f,"fmt ",&chunklen,0)){
-	    int ltype;
-	    int lch;
-	    int lrate;
-	    int lbits;
-	    unsigned char *buf=alloca(chunklen);
-	    
-	    fread(buf,1,chunklen,f);
-	    
-	    ltype = READ_U16_LE(buf); 
-	    lch =   READ_U16_LE(buf+2); 
+	    unsigned int ltype;
+	    unsigned int lch;
+	    unsigned int lrate;
+	    unsigned int lbits;
+	    unsigned char *buf=NULL;
+
+            if(chunklen < 16){
+              fprintf(stderr, "%s: Unrecognised format chunk in WAV header\n",fname);
+              return 1;
+            }
+
+            /* A common error is to have a format chunk that is not 16, 18 or
+             * 40 bytes in size.  This is incorrect, but not fatal, so we only
+             * warn about it instead of refusing to work with the file.
+             * Please, if you have a program that's creating format chunks of
+             * sizes other than 16 or 18 bytes in size, report a bug to the
+             * author.
+             */
+            if(chunklen!=16 && chunklen!=18 && chunklen!=40)
+              fprintf(stderr,
+                      "%s: INVALID format chunk in WAV header.\n"
+                      " Trying to read anyway (may not work)...\n",fname);
+
+            if(chunklen>40)chunklen=40;
+
+            buf=alloca(chunklen);
+
+            if(fread(buf,1,chunklen,f) < chunklen){
+              fprintf(stderr,"%s: Unexpected EOF in reading WAV header\n",fname);
+              return 1;
+            }
+
+	    ltype = READ_U16_LE(buf);
+	    lch =   READ_U16_LE(buf+2);
 	    lrate = READ_U32_LE(buf+4);
 	    lbits = READ_U16_LE(buf+14);
-	    
-	    if(ltype!=1){
-	      fprintf(stderr,"%s:\n\tWAVE file not PCM.\n",fname);
-	      return 1;
-	    }
-	      
+
+
+            if(ltype == 0xfffe){ /* WAVE_FORMAT_EXTENSIBLE */
+
+              if(chunklen<40){
+                fprintf(stderr,"%s: Extended WAV format header invalid (too small)\n",fname);
+                return 1;
+              }
+
+              ltype = READ_U16_LE(buf+24);
+            }
+
+            if(ltype!=1 ||
+               !(lbits==32 || lbits == 24 || lbits == 16 || lbits == 8)){
+              fprintf(stderr,"%s: Unsupported PCM format\n",fname);
+              return 1;
+            }
+
 	    fe->bytes=(lbits+7)/8;
 	    fe->signp=0;
 	    fe->endian=0;
@@ -451,7 +487,6 @@ int input_load(void){
 	  lrate = (int)read_IEEE80(buffer+8);
 
 	  fe->endian = 1; // default
-	      
 	  fe->bytes=(lbits+7)/8;
 	  fe->signp=1;
 	    
