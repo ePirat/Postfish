@@ -523,6 +523,21 @@ static void output_probe_monitor_pulse(){
   }
 }
 
+static void output_probe_monitor_macosx(){
+  /* does this AO even have macosx output? */
+  int id = ao_driver_id("macosx");
+  if(id>=0){
+    /* test open; format doesn't matter */
+    ao_sample_format format={16,48000,2,AO_FMT_NATIVE,NULL};
+    ao_device *test=ao_open_live(id, &format, NULL);
+
+    if(test){
+      add_monitor(NULL,"macosx",id);
+      ao_close(test);
+    }
+  }
+}
+
 static int moncomp(const void *a, const void *b){
   output_monitor_entry *ma=(output_monitor_entry *)a;
   output_monitor_entry *mb=(output_monitor_entry *)b;
@@ -534,6 +549,8 @@ int output_probe_monitor(void ){
     output_monitor_available=0;
     return 0;
   }
+
+  output_probe_monitor_macosx();
 
   output_probe_monitor_pulse();
   {
