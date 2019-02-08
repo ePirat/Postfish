@@ -229,6 +229,8 @@ void sigill_handler(int sig){
 int main(int argc, char **argv){
   int wisdom=0;
 
+  /* Init sub-components */
+  feedback_init();
   version=strstr(VERSION,"version.h");
   if(version){
     char *versionend=strchr(version,' ');

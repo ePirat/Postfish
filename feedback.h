@@ -31,6 +31,8 @@ typedef struct feedback_generic_pool{
   feedback_generic *feedback_pool;
 } feedback_generic_pool;
 
+extern void feedback_init();
+
 extern feedback_generic *feedback_new(feedback_generic_pool *pool,
 				      feedback_generic *(*constructor)(void));
 extern void feedback_push(feedback_generic_pool *pool,
