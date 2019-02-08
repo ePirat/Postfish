@@ -21,6 +21,8 @@
  * 
  */
 
+extern void input_init();
+
 extern void input_Acursor_set(off_t c);
 extern void input_Bcursor_set(off_t c);
 extern off_t input_time_to_cursor(const char *t);
