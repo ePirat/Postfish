@@ -231,6 +231,7 @@ int main(int argc, char **argv){
 
   /* Init sub-components */
   feedback_init();
+  window_init();
   version=strstr(VERSION,"version.h");
   if(version){
     char *versionend=strchr(version,' ');
