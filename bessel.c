@@ -27,6 +27,7 @@
 
 #include "postfish.h"
 #include "bessel.h"
+#include "compat.h"
 
 typedef struct { 
   double re, im;

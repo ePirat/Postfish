@@ -40,6 +40,7 @@
 #include "mute.h"
 #include "mix.h"
 #include "freeverb.h"
+#include "compat.h"
 
 output_settings outset;
 
