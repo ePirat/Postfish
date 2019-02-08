@@ -36,7 +36,8 @@ int input_rate;
 int input_ch;
 int input_size;
 
-pthread_mutex_t input_mutex=PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
+pthread_mutex_t input_mutex;
+pthread_mutexattr_t input_mutex_attr;
 
 typedef struct {
   FILE *f;
@@ -76,6 +77,12 @@ typedef struct input_feedback{
 static feedback_generic_pool feedpool;
 
 static time_linkage out;
+
+void input_init() {
+  pthread_mutexattr_init(&input_mutex_attr);
+  pthread_mutexattr_settype(&input_mutex_attr, PTHREAD_MUTEX_RECURSIVE);
+  pthread_mutex_init(&input_mutex, &input_mutex_attr);
+}
 
 void input_Acursor_set(off_t c){
   pthread_mutex_lock(&input_mutex);

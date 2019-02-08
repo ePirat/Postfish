@@ -26,6 +26,7 @@
 #include "window.h"
 #include "subband.h"
 #include "lpc.h"
+#include "compat.h"
 
 extern int input_size;
 extern int input_rate;

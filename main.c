@@ -229,6 +229,11 @@ void sigill_handler(int sig){
 int main(int argc, char **argv){
   int wisdom=0;
 
+  /* Init sub-components */
+  feedback_init();
+  window_init();
+  input_init();
+
   version=strstr(VERSION,"version.h");
   if(version){
     char *versionend=strchr(version,' ');
@@ -251,6 +256,7 @@ int main(int argc, char **argv){
      its better to ignore other traps in production than to crash the
      app.  Please inform the FPU of this. */
 
+/*
 #ifndef DEBUG
   fedisableexcept(FE_INVALID);
   fedisableexcept(FE_INEXACT);
@@ -262,6 +268,7 @@ int main(int argc, char **argv){
   feenableexcept(FE_UNDERFLOW);
   feenableexcept(FE_OVERFLOW);
 #endif 
+*/
 
   /* Linux Altivec support has a very annoying problem; by default,
      math on denormalized floats will simply crash the program.  FFTW3

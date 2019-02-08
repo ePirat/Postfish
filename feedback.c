@@ -24,7 +24,14 @@
 #include "postfish.h"
 #include "feedback.h"
 
-static pthread_mutex_t feedback_mutex=PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
+static pthread_mutex_t feedback_mutex;
+static pthread_mutexattr_t feedback_mutex_attr;
+
+void feedback_init() {
+  pthread_mutexattr_init(&feedback_mutex_attr);
+  pthread_mutexattr_settype(&feedback_mutex_attr, PTHREAD_MUTEX_RECURSIVE);
+  pthread_mutex_init(&feedback_mutex, &feedback_mutex_attr);
+}
 
 feedback_generic *feedback_new(feedback_generic_pool *pool,
 			       feedback_generic *(*constructor)(void)){

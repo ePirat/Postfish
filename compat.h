@@ -2,7 +2,7 @@
  *
  *  postfish
  *    
- *      Copyright (C) 2002-2005 Monty
+ *      Copyright (C) 2018 Xiph.Org
  *
  *  Postfish is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -21,17 +21,12 @@
  * 
  */
 
-extern void input_init();
+/* Work around M_PIl only being available in libc */
+#ifndef M_PIl
+# define M_PIl      3.141592653589793238462643383279502884L
+#endif
 
-extern void input_Acursor_set(off_t c);
-extern void input_Bcursor_set(off_t c);
-extern off_t input_time_to_cursor(const char *t);
-extern void input_cursor_to_time(off_t cursor,char *t);
-extern void time_fix(char *buffer);
-extern off_t input_seek(off_t pos);
-extern time_linkage *input_read(void);
-extern void input_parse(char *filename,int newgroup);
-extern int input_load(void);
-extern int pull_input_feedback(float *peak,float *rms,off_t *cursor);
-extern void input_reset(void);
-extern off_t input_time_seek_rel(float s);
+/* Work-around lack of PATH_MAX */
+#ifndef PATH_MAX
+# define PATH_MAX 1024
+#endif

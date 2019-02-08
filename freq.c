@@ -28,6 +28,7 @@
 #include "freq.h"
 #include "lpc.h"
 #include "window.h"
+#include "compat.h"
 
 extern int input_rate;
 extern int input_size;

@@ -1,0 +1,5 @@
+*.d
+*.o
+postfish-staterc
+postfish-wisdomrc
+postfish

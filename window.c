@@ -23,8 +23,10 @@
 
 #include "postfish.h"
 #include "window.h"
+#include "compat.h"
 
-static pthread_mutex_t window_mutex=PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
+static pthread_mutex_t window_mutex;
+static pthread_mutexattr_t window_mutex_attr;
 static float ***window_func=0; /* sin(), sin()^2, sin(sin()^2),sin(sin^2)^2 
 				  
 				  1,2,4,8,16,32,64,128,256,512,1024,
@@ -43,6 +45,12 @@ static int ilog(long x){
     ret++;
   }
   return ret;
+}
+
+void window_init() {
+  pthread_mutexattr_init(&window_mutex_attr);
+  pthread_mutexattr_settype(&window_mutex_attr, PTHREAD_MUTEX_RECURSIVE);
+  pthread_mutex_init(&window_mutex, &window_mutex_attr);
 }
 
 float *window_get(int type,int n){
