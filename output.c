@@ -508,7 +508,7 @@ static void output_probe_monitor_ALSA(){
 
 static void output_probe_monitor_pulse(){
   /* does this AO even have pulse output? */
-  int id = ao_driver_id("pulse");
+  int id = ao_driver_id("macosx");
   if(id>=0){
     /* test open; format doesn't matter */
     ao_sample_format format={16,48000,2,AO_FMT_NATIVE,NULL};
@@ -517,6 +517,22 @@ static void output_probe_monitor_pulse(){
 
     if(test){
       add_monitor(NULL,"PulseAudio",id);
+      ao_close(test);
+    }
+  }
+}
+
+static void output_probe_monitor_macosx(){
+  /* does this AO even have pulse output? */
+  int id = ao_driver_id("macosx");
+  if(id>=0){
+    /* test open; format doesn't matter */
+    ao_sample_format format={16,48000,2,AO_FMT_NATIVE,NULL};
+    ao_option opt={"client_name","postfish",NULL};
+    ao_device *test=ao_open_live(id, &format, &opt);
+
+    if(test){
+      add_monitor(NULL,"MacOSX",id);
       ao_close(test);
     }
   }
@@ -534,7 +550,11 @@ int output_probe_monitor(void ){
     return 0;
   }
 
+  #ifdef __APPLE_
   output_probe_monitor_pulse();
+  #else
+  output_probe_monitor_macosx();
+  #endif
   {
     int n = monitor_entries;
     output_probe_monitor_ALSA();

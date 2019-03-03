@@ -140,6 +140,19 @@ static inline void underguard(float *x){
 
 #endif
 
+/* on OSX, there is no long double version of M_PI */
+#ifndef M_PIl
+#define M_PIl M_PI
+#endif
+
+#ifndef PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP
+#define PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP PTHREAD_RECURSIVE_MUTEX_INITIALIZER
+#endif
+
+#ifndef PATH_MAX
+#define PATH_MAX 8192
+#endif
+
 #ifndef max
 #define max(x,y) ((x)>(y)?(x):(y))
 #endif
