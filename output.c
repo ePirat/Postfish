@@ -508,7 +508,7 @@ static void output_probe_monitor_ALSA(){
 
 static void output_probe_monitor_pulse(){
   /* does this AO even have pulse output? */
-  int id = ao_driver_id("macosx");
+  int id = ao_driver_id("pulse");
   if(id>=0){
     /* test open; format doesn't matter */
     ao_sample_format format={16,48000,2,AO_FMT_NATIVE,NULL};
