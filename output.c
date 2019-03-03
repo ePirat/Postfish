@@ -522,6 +522,22 @@ static void output_probe_monitor_pulse(){
   }
 }
 
+static void output_probe_monitor_macosx(){
+  /* does this AO even have pulse output? */
+  int id = ao_driver_id("macosx");
+  if(id>=0){
+    /* test open; format doesn't matter */
+    ao_sample_format format={16,48000,2,AO_FMT_NATIVE,NULL};
+    ao_option opt={"client_name","postfish",NULL};
+    ao_device *test=ao_open_live(id, &format, &opt);
+
+    if(test){
+      add_monitor(NULL,"MacOSX",id);
+      ao_close(test);
+    }
+  }
+}
+
 static int moncomp(const void *a, const void *b){
   output_monitor_entry *ma=(output_monitor_entry *)a;
   output_monitor_entry *mb=(output_monitor_entry *)b;
@@ -534,7 +550,11 @@ int output_probe_monitor(void ){
     return 0;
   }
 
+  #ifdef __APPLE__
+  output_probe_monitor_macosx();
+  #else
   output_probe_monitor_pulse();
+  #endif
   {
     int n = monitor_entries;
     output_probe_monitor_ALSA();

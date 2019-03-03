@@ -251,6 +251,7 @@ int main(int argc, char **argv){
      its better to ignore other traps in production than to crash the
      app.  Please inform the FPU of this. */
 
+#ifndef __APPLE__
 #ifndef DEBUG
   fedisableexcept(FE_INVALID);
   fedisableexcept(FE_INEXACT);
@@ -262,6 +263,7 @@ int main(int argc, char **argv){
   feenableexcept(FE_UNDERFLOW);
   feenableexcept(FE_OVERFLOW);
 #endif 
+#endif
 
   /* Linux Altivec support has a very annoying problem; by default,
      math on denormalized floats will simply crash the program.  FFTW3
