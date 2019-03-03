@@ -550,10 +550,10 @@ int output_probe_monitor(void ){
     return 0;
   }
 
-  #ifdef __APPLE_
-  output_probe_monitor_pulse();
-  #else
+  #ifdef __APPLE__
   output_probe_monitor_macosx();
+  #else
+  output_probe_monitor_pulse();
   #endif
   {
     int n = monitor_entries;
