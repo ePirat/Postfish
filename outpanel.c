@@ -191,15 +191,15 @@ static GtkWidget *outpanel_subpanel(postfish_mainpanel *mp,
 
   {
     int i;
-    GtkWidget *menu=gtk_combo_box_new_text();
+    GtkWidget *menu=gtk_combo_box_text_new();
     
     if(devp){
       /* device selection */
       for(i=0;i<monitor_entries;i++)
-	gtk_combo_box_append_text (GTK_COMBO_BOX (menu), monitor_list[i].name);
+        gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT (menu), monitor_list[i].name);
       
       if(i==0)
-	gtk_combo_box_append_text (GTK_COMBO_BOX (menu), "stdout");
+        gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT (menu), "stdout");
 
       g_signal_connect (G_OBJECT (menu), "changed",
 			G_CALLBACK (menuchange), &set->device);
@@ -213,15 +213,13 @@ static GtkWidget *outpanel_subpanel(postfish_mainpanel *mp,
       char *formats[]={"WAV","AIFF-C","raw (little endian)","raw (big endian)"};
       
       for(i=0;i<4;i++)
-	gtk_combo_box_append_text (GTK_COMBO_BOX (menu), formats[i]);
+        gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT (menu), formats[i]);
 
       g_signal_connect (G_OBJECT (menu), "changed",
 			G_CALLBACK (menuchange), &set->format);
       os->format=menu;
       os->device=0;
     }
-
-    gtk_combo_box_set_active(GTK_COMBO_BOX(menu),0);
     
     gtk_box_pack_start(GTK_BOX(b2),menu,1,1,0);
 
@@ -234,13 +232,11 @@ static GtkWidget *outpanel_subpanel(postfish_mainpanel *mp,
   {
     /* channels selection */
     int i;
-    GtkWidget *menu=gtk_combo_box_new_text();
+    GtkWidget *menu=gtk_combo_box_text_new();
     char *formats[]={"auto","1","2","4","6","8"};
     
     for(i=0;i<6;i++)
-      gtk_combo_box_append_text (GTK_COMBO_BOX (menu), formats[i]);
-
-    gtk_combo_box_set_active(GTK_COMBO_BOX(menu),0);
+      gtk_combo_box_text_append_text (GTK_COMBO_BOX_TEXT (menu), formats[i]);
     
     gtk_box_pack_start(GTK_BOX(b3),menu,1,1,0);
     gtk_widget_set_sensitive(menu,active);
@@ -254,13 +250,11 @@ static GtkWidget *outpanel_subpanel(postfish_mainpanel *mp,
   {
     /* bit depth selection */
     int i;
-    GtkWidget *menu=gtk_combo_box_new_text();
+    GtkWidget *menu=gtk_combo_box_text_new();
     char *formats[]={"auto","8","16","24"};
     
     for(i=0;i<4;i++)
-      gtk_combo_box_append_text (GTK_COMBO_BOX (menu), formats[i]);
-
-    gtk_combo_box_set_active(GTK_COMBO_BOX(menu),0);
+      gtk_combo_box_text_append_text (GTK_COMBO_BOX_TEXT (menu), formats[i]);
     
     gtk_box_pack_start(GTK_BOX(b4),menu,1,1,0);
     gtk_widget_set_sensitive(menu,active);
