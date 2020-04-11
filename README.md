@@ -282,18 +282,18 @@ an afternoon of playing around:
 
 Postfish is in Xiph.Org's Subversion repository.  Get the source using:
 
-    svn co http://svn.xiph.org/trunk/postfish postfish
+    $ git clone https://gitlab.xiph.org/xiph/postfish.git
 
 Edit the Makefile to select the proper 'ADD_DEF' line.  LinuxPPC
 users want the first, almost everyone else wants the second.  It
 should be self explanatory given text in the Makefile.
 
-    cd postfish
-    make
+    $ cd postfish
+    $ make
 
 and as root,
 
-    make install
+    # make install
 
 Happy hacking (and mixing),
 
