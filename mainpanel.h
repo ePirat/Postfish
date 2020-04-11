@@ -38,12 +38,10 @@ typedef struct postfish_mainpanel postfish_mainpanel;
 
 struct postfish_mainpanel{
   GtkWidget *twirlimage;
-  GdkPixmap *ff[19];
-  GdkBitmap *fb[19];
+  GdkPixbuf *ff[19];
 
   GtkWidget *playimage;
-  GdkPixmap *pf[2];
-  GdkBitmap *pb[2];
+  GdkPixbuf *pf[19];
 
   /* we need these widgets */
   GtkAccelGroup *group;

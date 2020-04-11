@@ -206,9 +206,7 @@ static int reanimate_fish(postfish_mainpanel *p){
     p->fishframe++;
     if(p->fishframe>=12)p->fishframe=0;
 
-    gtk_image_set_from_pixmap(GTK_IMAGE(p->twirlimage),
-			      p->ff[p->fishframe],
-			      p->fb[p->fishframe]);
+    gtk_image_set_from_pixbuf(GTK_IMAGE(p->twirlimage), p->ff[p->fishframe]);
 
     if(p->fishframe==0 && !playback_active){
       /* reschedule to blink */
@@ -221,9 +219,7 @@ static int reanimate_fish(postfish_mainpanel *p){
     if(p->fishframe<=1)p->fishframe=12;
     if(p->fishframe>=19)p->fishframe=0;
 
-    gtk_image_set_from_pixmap(GTK_IMAGE(p->twirlimage),
-			      p->ff[p->fishframe],
-			      p->fb[p->fishframe]);
+    gtk_image_set_from_pixbuf(GTK_IMAGE(p->twirlimage), p->ff[p->fishframe]);
 
 
     if(p->fishframe==12){
@@ -295,9 +291,7 @@ static void action_entryb(GtkWidget *widget,postfish_mainpanel *p){
   }else
     loop_active=0;
   
-  gtk_image_set_from_pixmap(GTK_IMAGE(p->playimage),
-			    p->pf[loop_active],
-			    p->pb[loop_active]);
+  gtk_image_set_from_pixbuf(GTK_IMAGE(p->playimage), p->pf[loop_active]);
     
 }
 
@@ -656,6 +650,8 @@ void mainpanel_create(postfish_mainpanel *panel,char **chlabels){
   int i;
   GdkPixmap *xpm_bar[7];
   GdkBitmap *xbm_bar[7];
+
+  GdkPixbuf *pixbuf_bar[7];
   GtkWidget *gim_bar[7];
 
   GtkWidget *topplace,*topal,*topalb;
@@ -735,35 +731,25 @@ void mainpanel_create(postfish_mainpanel *panel,char **chlabels){
   
 
   for(i=0;i<19;i++)
-    panel->ff[i]=gdk_pixmap_create_from_xpm_d(root,
-					      panel->fb+i,NULL,ff_xpm[i]);
+    panel->ff[i] = gdk_pixbuf_new_from_xpm_data(ff_xpm[i]);
 
-  xpm_bar[0]=gdk_pixmap_create_from_xpm_d(root,
-					  xbm_bar,NULL,bar_home_xpm);
-  xpm_bar[1]=gdk_pixmap_create_from_xpm_d(root,
-					  xbm_bar+1,NULL,bar_bb_xpm);
-  xpm_bar[2]=gdk_pixmap_create_from_xpm_d(root,
-					  xbm_bar+2,NULL,bar_b_xpm);
-  xpm_bar[3]=gdk_pixmap_create_from_xpm_d(root,
-					  xbm_bar+3,NULL,bar_p_xpm);
-  xpm_bar[4]=gdk_pixmap_create_from_xpm_d(root,
-					  xbm_bar+4,NULL,bar_f_xpm);
-  xpm_bar[5]=gdk_pixmap_create_from_xpm_d(root,
-					  xbm_bar+5,NULL,bar_ff_xpm);
-  xpm_bar[6]=gdk_pixmap_create_from_xpm_d(root,
-					  xbm_bar+6,NULL,bar_end_xpm);
+  pixbuf_bar[0] = gdk_pixbuf_new_from_xpm_data(bar_home_xpm);
+  pixbuf_bar[1] = gdk_pixbuf_new_from_xpm_data(bar_bb_xpm);
+  pixbuf_bar[2] = gdk_pixbuf_new_from_xpm_data(bar_b_xpm);
+  pixbuf_bar[3] = gdk_pixbuf_new_from_xpm_data(bar_p_xpm);
+  pixbuf_bar[4] = gdk_pixbuf_new_from_xpm_data(bar_f_xpm);
+  pixbuf_bar[5] = gdk_pixbuf_new_from_xpm_data(bar_ff_xpm);
+  pixbuf_bar[6] = gdk_pixbuf_new_from_xpm_data(bar_end_xpm);
 
+  panel->pf[0]=pixbuf_bar[3];
 
-  panel->pf[0]=xpm_bar[3];
-  panel->pb[0]=xbm_bar[3];
-  panel->pf[1]=gdk_pixmap_create_from_xpm_d(root,
-					    panel->pb+1,NULL,bar_l_xpm);
+  panel->pf[1]=gdk_pixbuf_new_from_xpm_data(bar_l_xpm);
 
-  for(i=0;i<7;i++)
-    gim_bar[i]=gtk_image_new_from_pixmap(xpm_bar[i],xbm_bar[i]);
+  for (i = 0; i < 7; i++)
+    gim_bar[i] = gtk_image_new_from_pixbuf(pixbuf_bar[i]);
   panel->playimage=gim_bar[3];
 
-  panel->twirlimage=gtk_image_new_from_pixmap(panel->ff[0],panel->fb[0]);
+  panel->twirlimage = gtk_image_new_from_pixbuf(panel->ff[0]);
 
   gtk_container_set_border_width (GTK_CONTAINER (topframe), 3);
   gtk_container_set_border_width (GTK_CONTAINER (mainbox), 3);

@@ -1,4 +1,4 @@
-static char *ff_xpm[19][66] = {
+static const char *ff_xpm[19][66] = {
   /* 0 */
   {
     "40 40 23 1",
