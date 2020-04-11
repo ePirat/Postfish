@@ -116,9 +116,8 @@ static void windowbutton_draw_indicator (GtkCheckButton *check_button,
   gint focus_pad;
   gboolean interior_focus;
   
-  if (GTK_WIDGET_DRAWABLE (check_button)){
-    
-    widget = GTK_WIDGET (check_button);
+  widget = GTK_WIDGET (check_button);
+  if (gtk_widget_is_drawable (widget)){
     button = GTK_BUTTON (check_button);
     toggle_button = GTK_TOGGLE_BUTTON (check_button);
     
@@ -135,7 +134,7 @@ static void windowbutton_draw_indicator (GtkCheckButton *check_button,
       (widget->allocation.height - indicator_size) / 2;
     
     child = GTK_BIN (check_button)->child;
-    if (!interior_focus || !(child && GTK_WIDGET_VISIBLE (child)))
+    if (!interior_focus || !(child && gtk_widget_get_visible (child)))
       x += focus_width + focus_pad;      
     
     if (toggle_button->inconsistent)
@@ -149,7 +148,7 @@ static void windowbutton_draw_indicator (GtkCheckButton *check_button,
       state_type = GTK_STATE_ACTIVE;
     else if (button->in_button)
       state_type = GTK_STATE_PRELIGHT;
-    else if (!GTK_WIDGET_IS_SENSITIVE (widget)){
+    else if (!gtk_widget_is_sensitive (widget)){
       state_type = GTK_STATE_INSENSITIVE;
       shadow_type = GTK_SHADOW_ETCHED_IN;
     }else

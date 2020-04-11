@@ -577,10 +577,10 @@ static void draw_and_expose(GtkWidget *widget){
   Multibar *m=MULTIBAR(widget);
   if(!GDK_IS_DRAWABLE(m->backing))return;
   draw(widget,m->bars);
-  if(!GTK_WIDGET_DRAWABLE(widget))return;
+  if(!gtk_widget_is_drawable(widget))return;
   if(!GDK_IS_DRAWABLE(widget->window))return;
   gdk_draw_drawable(widget->window,
-		    widget->style->fg_gc[GTK_WIDGET_STATE (widget)],
+		    widget->style->fg_gc[gtk_widget_get_state(widget)],
 		    m->backing,
 		    0, 0,
 		    0, 0,
@@ -591,7 +591,7 @@ static void draw_and_expose(GtkWidget *widget){
 static gboolean expose( GtkWidget *widget, GdkEventExpose *event ){
   Multibar *m=MULTIBAR(widget);
   gdk_draw_drawable(widget->window,
-		    widget->style->fg_gc[GTK_WIDGET_STATE (widget)],
+		    widget->style->fg_gc[gtk_widget_get_state(widget)],
 		    m->backing,
 		    event->area.x, event->area.y,
 		    event->area.x, event->area.y,
@@ -1120,7 +1120,7 @@ GtkWidget* multibar_new (int n, char **labels, float *levels, int thumbs,
   if(thumbs<0)thumbs=0;
   if(thumbs>3)thumbs=3;
   m->thumbs=thumbs;
-  if(m->thumbs!=0)  GTK_WIDGET_SET_FLAGS (m, GTK_CAN_FOCUS);
+  if(m->thumbs!=0)  gtk_widget_set_can_focus(GTK_WIDGET(m), TRUE);
 
   {
     int events=gtk_widget_get_events(ret);

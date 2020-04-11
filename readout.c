@@ -65,10 +65,10 @@ static void draw_and_expose(GtkWidget *widget){
   Readout *r=READOUT(widget);
   if(!GDK_IS_DRAWABLE(r->backing))return;
   draw(widget);
-  if(!GTK_WIDGET_DRAWABLE(widget))return;
+  if(!gtk_widget_is_drawable(widget))return;
   if(!GDK_IS_DRAWABLE(widget->window))return;
   gdk_draw_drawable(widget->window,
-                    widget->style->fg_gc[GTK_WIDGET_STATE (widget)],
+                    widget->style->fg_gc[gtk_widget_get_state (widget)],
                     r->backing,
                     0, 0,
                     0, 0,
@@ -79,7 +79,7 @@ static void draw_and_expose(GtkWidget *widget){
 static gboolean expose( GtkWidget *widget, GdkEventExpose *event ){
   Readout *r=READOUT(widget);
   gdk_draw_drawable(widget->window,
-                    widget->style->fg_gc[GTK_WIDGET_STATE (widget)],
+                    widget->style->fg_gc[gtk_widget_get_state (widget)],
                     r->backing,
                     event->area.x, event->area.y,
                     event->area.x, event->area.y,
