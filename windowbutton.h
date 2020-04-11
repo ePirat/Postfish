@@ -28,7 +28,7 @@
 #include <time.h>
 #include <glib.h>
 #include <glib-object.h>
-#include <gtk/gtkcheckbutton.h>
+#include <gtk/gtk.h>
 
 G_BEGIN_DECLS
 
