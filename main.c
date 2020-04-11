@@ -47,6 +47,8 @@
 #include "version.h"
 #include "config.h"
 #include "mainpanel.h"
+#include "feedback.h"
+#include "window.h"
 
 int eventpipe[2]={-1,-1};
 sig_atomic_t main_looping;
