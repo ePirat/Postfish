@@ -76,7 +76,7 @@ endif
 
 target:  $(OBJ) postfish-wisdomrc
 	./touch-version
-	$(LD) $(OBJ) $(CFLAGS) -o postfish $(LIBS) `pkg-config --libs gtk+-2.0 ao \> 1.2` -lpthread -lfftw3f -lm
+	$(LD) $(OBJ) $(CFLAGS) -o postfish $(LIBS) `pkg-config --libs gtk+-2.0 \>= 2.24 ao \> 1.2` -lpthread -lfftw3f -lm
 
 install: target
 	$(INSTALL) -d -m 0755 $(BINDIR)
