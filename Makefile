@@ -16,6 +16,12 @@ ADD_DEF= -DUGLY_IEEE754_FLOAT32_HACK=1
 
 # ADD_DEF=
 
+# GTK deprecations
+ADD_DEF += -DGTK_DISABLE_SINGLE_INCLUDES # Disable individual header includes
+ADD_DEF += -DGTK_DISABLE_DEPRECATED # Remove all deprecated APIs
+ADD_DEF += -DGSEAL_ENABLE # Seal struct members to prevent direct access where not allowed
+# TODO: Enable -DGDK_DISABLE_DEPRECATED once no more deprecated GDK APIs are used
+
 CC=gcc 
 LD=gcc
 INSTALL=install

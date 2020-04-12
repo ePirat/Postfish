@@ -21,6 +21,10 @@
  * 
  */
 
+// Opt out of struct sealing for now, fixing all cases
+// here requires more work
+#undef GSEAL_ENABLE
+
 #include <stdlib.h>
 #include <math.h>
 #include <string.h>
