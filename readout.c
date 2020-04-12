@@ -27,15 +27,17 @@
 static GtkDrawingAreaClass *parent_class = NULL;
 
 static void draw(GtkWidget *widget){
+  GtkAllocation allocation;
   Readout *r=READOUT(widget);
 
-  int width=widget->allocation.width;
-  int height=widget->allocation.height;
+  gtk_widget_get_allocation(widget, &allocation);
+  int width=allocation.width;
+  int height=allocation.height;
   int px,py;
-  GdkGC *gc=widget->style->bg_gc[0];
-  GdkGC *text_gc=widget->style->text_gc[0];
-  GdkGC *light_gc=widget->style->light_gc[0];
-  GdkGC *dark_gc=widget->style->dark_gc[0];
+  GdkGC *gc=gtk_widget_get_style(widget)->bg_gc[0];
+  GdkGC *text_gc=gtk_widget_get_style(widget)->text_gc[0];
+  GdkGC *light_gc=gtk_widget_get_style(widget)->light_gc[0];
+  GdkGC *dark_gc=gtk_widget_get_style(widget)->dark_gc[0];
 
   /* blank pane */
   
@@ -62,24 +64,26 @@ static void draw(GtkWidget *widget){
 }
 
 static void draw_and_expose(GtkWidget *widget){
+  GtkAllocation allocation;
   Readout *r=READOUT(widget);
   if(!GDK_IS_DRAWABLE(r->backing))return;
   draw(widget);
   if(!gtk_widget_is_drawable(widget))return;
-  if(!GDK_IS_DRAWABLE(widget->window))return;
-  gdk_draw_drawable(widget->window,
-                    widget->style->fg_gc[gtk_widget_get_state (widget)],
+  if(!GDK_IS_DRAWABLE(gtk_widget_get_window(widget)))return;
+  gtk_widget_get_allocation(widget, &allocation);
+  gdk_draw_drawable(gtk_widget_get_window(widget),
+                    gtk_widget_get_style(widget)->fg_gc[gtk_widget_get_state (widget)],
                     r->backing,
                     0, 0,
                     0, 0,
-                    widget->allocation.width,             
-                    widget->allocation.height);
+                    allocation.width,             
+                    allocation.height);
 }
 
 static gboolean expose( GtkWidget *widget, GdkEventExpose *event ){
   Readout *r=READOUT(widget);
-  gdk_draw_drawable(widget->window,
-                    widget->style->fg_gc[gtk_widget_get_state (widget)],
+  gdk_draw_drawable(gtk_widget_get_window(widget),
+                    gtk_widget_get_style(widget)->fg_gc[gtk_widget_get_state (widget)],
                     r->backing,
                     event->area.x, event->area.y,
                     event->area.x, event->area.y,
@@ -100,14 +104,16 @@ static void size_request (GtkWidget *widget,GtkRequisition *requisition){
 }
 
 static gboolean configure(GtkWidget *widget, GdkEventConfigure *event){
+  GtkAllocation allocation;
   Readout *r=READOUT(widget);
   
   if (r->backing)
     g_object_unref(r->backing);
   
-  r->backing = gdk_pixmap_new(widget->window,
-                              widget->allocation.width,
-                              widget->allocation.height,
+  gtk_widget_get_allocation(widget, &allocation);
+  r->backing = gdk_pixmap_new(gtk_widget_get_window(widget),
+                              allocation.width,
+                              allocation.height,
                               -1);
   draw_and_expose(widget);
 

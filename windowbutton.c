@@ -109,6 +109,7 @@ static void windowbutton_draw_indicator (GtkCheckButton *check_button,
   GtkToggleButton *toggle_button;
   GtkStateType state_type;
   GtkShadowType shadow_type;
+  GtkAllocation allocation;
   gint x, y;
   gint indicator_size;
   gint indicator_spacing;
@@ -128,37 +129,34 @@ static void windowbutton_draw_indicator (GtkCheckButton *check_button,
     windowbutton_get_props (check_button, &indicator_size, 
 				 &indicator_spacing);
     
-    x = widget->allocation.x + 
-      indicator_spacing + GTK_CONTAINER (widget)->border_width;
-    y = widget->allocation.y + 
-      (widget->allocation.height - indicator_size) / 2;
+    gtk_widget_get_allocation(widget, &allocation);
+    x = allocation.x + 
+      indicator_spacing + gtk_container_get_border_width(GTK_CONTAINER(widget));
+    y = allocation.y + 
+      (allocation.height - indicator_size) / 2;
     
-    child = GTK_BIN (check_button)->child;
+    child = gtk_bin_get_child(GTK_BIN (check_button));
     if (!interior_focus || !(child && gtk_widget_get_visible (child)))
       x += focus_width + focus_pad;      
     
-    if (toggle_button->inconsistent)
+    if (gtk_toggle_button_get_inconsistent(toggle_button))
       shadow_type = GTK_SHADOW_ETCHED_IN;
-    else if (toggle_button->active)
+    else if (gtk_toggle_button_get_active(toggle_button))
       shadow_type = GTK_SHADOW_IN;
     else
       shadow_type = GTK_SHADOW_OUT;
     
-    if (button->activate_timeout || (toggle_button->active))
-      state_type = GTK_STATE_ACTIVE;
-    else if (button->in_button)
-      state_type = GTK_STATE_PRELIGHT;
-    else if (!gtk_widget_is_sensitive (widget)){
-      state_type = GTK_STATE_INSENSITIVE;
+    state_type = gtk_widget_get_state(GTK_WIDGET(toggle_button));
+
+    if (state_type == GTK_STATE_INSENSITIVE) {
       shadow_type = GTK_SHADOW_ETCHED_IN;
-    }else
-      state_type = GTK_STATE_NORMAL;
-    
+    }
+
     if (gtk_widget_get_direction (widget) == GTK_TEXT_DIR_RTL)
-      x = widget->allocation.x + widget->allocation.width - 
-	(indicator_size + x - widget->allocation.x);
+      x = allocation.x + allocation.width - 
+	(indicator_size + x - allocation.x);
     
-    draw_triangle (widget->style, widget->window,
+    draw_triangle (gtk_widget_get_style(widget), gtk_widget_get_window(widget),
 		   state_type, shadow_type,
 		   x, y, indicator_size);
   }

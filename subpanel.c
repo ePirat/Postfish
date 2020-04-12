@@ -94,7 +94,7 @@ static gboolean rebind_space(GtkWidget *widget,
   if(event->keyval==GDK_space){
     subpanel_generic *p=in;
     GdkEvent copy=*(GdkEvent *)event;
-    copy.any.window=p->mainpanel->toplevel->window;
+    copy.any.window=gtk_widget_get_window(p->mainpanel->toplevel);
     gtk_main_do_event((GdkEvent *)(&copy));
     return TRUE;
   }
@@ -141,7 +141,7 @@ static gboolean forward_events(GtkWidget *widget,
     }
   }else{
     GdkEvent copy=*(GdkEvent *)event;
-    copy.any.window=p->mainpanel->toplevel->window;
+    copy.any.window=gtk_widget_get_window(p->mainpanel->toplevel);
     gtk_main_do_event((GdkEvent *)(&copy));
   }
   return TRUE;
