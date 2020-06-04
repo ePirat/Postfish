@@ -180,7 +180,7 @@ unsuitable for professional-quality work.
 ## What does the Postfish require?
 
 - Linux 2.x (ports come later) with OSS or ALSA OSS emulation
-- Libraries: FFTW3, pthreads, Gtk2
+- Libraries: FFTW3, pthreads, Gtk2, libao-dev
 - Gcc and gmake
 - A sound card or external USB/Firewire A/D/A
 - A video card, preferrably one with fast AGP
