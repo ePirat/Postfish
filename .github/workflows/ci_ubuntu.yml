@@ -1,0 +1,21 @@
+name: CI Ubuntu
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Update package index
+      run: sudo apt-get update
+    - name: Install deps
+      run: sudo apt-get install libgtk2.0 libgtk2.0-dev libfftw3-single3 libfftw3-dev libao4 libao-dev
+    - name: make
+      run: make
