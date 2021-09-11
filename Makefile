@@ -38,7 +38,7 @@ SRC = main.c mainpanel.c multibar.c readout.c input.c output.c clippanel.c \
 	outpanel.c config.c window.c follower.c linkage.c
 OBJ = $(SRC:.c=.o)
 
-GCF = -DETCDIR=\\\"$(ETCDIR)\\\" `pkg-config --cflags gtk+-2.0 ao \> 1.2`
+GCF = -DETCDIR=\\\"$(ETCDIR)\\\" `pkg-config --cflags gtk+-2.0 ao \> 1.2 fftw3f`
 
 all:	
 	$(MAKE) target CFLAGS="-O2 -ffast-math -fomit-frame-pointer $(GCF) $(ADD_DEF)"
@@ -77,7 +77,7 @@ endif
 
 target:  $(OBJ) postfish-wisdomrc
 	./touch-version
-	$(LD) $(OBJ) $(CFLAGS) -o postfish $(LIBS) `pkg-config --libs gtk+-2.0 \>= 2.24 ao \> 1.2` -lpthread -lfftw3f -lm
+	$(LD) $(OBJ) $(CFLAGS) -o postfish $(LIBS) `pkg-config --libs gtk+-2.0 \>= 2.24 ao \> 1.2 fftw3f` -lpthread -lm
 
 install: target
 	$(INSTALL) -d -m 0755 $(BINDIR)
