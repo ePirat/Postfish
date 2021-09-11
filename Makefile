@@ -36,12 +36,7 @@ SRC = main.c mainpanel.c multibar.c readout.c input.c output.c clippanel.c \
 	bessel.c deverbpanel.c deverb.c singlecomp.c singlepanel.c \
 	limit.c limitpanel.c mute.c mixpanel.c mix.c freeverb.c reverbpanel.c \
 	outpanel.c config.c window.c follower.c linkage.c
-OBJ = main.o mainpanel.o multibar.o readout.o input.o output.o clippanel.o \
-	declip.o reconstruct.o multicompand.o windowbutton.o subpanel.o \
-	feedback.o freq.o eq.o eqpanel.o compandpanel.o subband.o lpc.o \
-	bessel.o deverbpanel.o deverb.o singlecomp.o singlepanel.o \
-	limit.o limitpanel.o mute.o mixpanel.o mix.o freeverb.o reverbpanel.o \
-	outpanel.o config.o window.o follower.o linkage.o
+OBJ = $(SRC:.c=.o)
 
 GCF = -DETCDIR=\\\"$(ETCDIR)\\\" `pkg-config --cflags gtk+-2.0 ao \> 1.2`
 
